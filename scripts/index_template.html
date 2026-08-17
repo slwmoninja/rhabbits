@@ -344,6 +344,10 @@ img{max-width:100%; display:block;}
 }
 .reward-media img{width:100%; height:100%; object-fit:cover;}
 .reward-media .medallion{font-size:2.6rem;}
+.sprite-medallion{background-repeat:no-repeat; border-radius:10px; background-color:var(--parchment); margin:0 auto;}
+.reward-media .sprite-medallion{width:64px; height:64px;}
+.medallion-lg.sprite-medallion{width:140px; height:140px;}
+.medallion-lg.sprite-medallion.locked{filter:grayscale(1); opacity:.55;}
 .reward-body{padding:10px 12px 12px;}
 .reward-title{font-weight:700; color:var(--wood-dark); font-size:.86rem; margin-bottom:3px;}
 .reward-desc{color:var(--wood); font-size:.72rem; line-height:1.4; margin-bottom:6px;}
@@ -480,7 +484,7 @@ var REWARDS = [
     title: "1 Tracked Habit",
     desc: "You started your very first habit-garden.",
     starter: true,
-    medallion: "🌱"
+    spriteTile: 74 // the ship's wheel tile in sightings_sprite.webp
   },
   {
     id: "second_garden",
@@ -527,6 +531,21 @@ var STARTER_REASON = "Reward issued: Starting to use the app!";
 // separate embedded images, both for file size and because a single shared
 // asset compresses far better than 100 tiny ones. Each tile is displayed via
 // CSS background-position math in sightingTileStyle() below.
+// Shared pirate-chest SVG (no chest emoji exists in Unicode) -- used by the
+// bottom-nav Rewards tab and anywhere else "rewards" needs an icon, at
+// whatever size is passed in.
+function chestIconSvg(size){
+  size = size || "1.15em";
+  return '<svg viewBox="0 0 24 24" width="'+size+'" height="'+size+'" style="vertical-align:-2px" aria-hidden="true">' +
+    '<path d="M3 11 C3 6 6 4 12 4 C18 4 21 6 21 11 Z" fill="#6b4526" stroke="#3e2714" stroke-width="0.8"/>' +
+    '<rect x="3" y="11" width="18" height="8" rx="1.5" fill="#6b4526" stroke="#3e2714" stroke-width="0.8"/>' +
+    '<rect x="6.4" y="4" width="1.7" height="15" fill="#c6992f"/>' +
+    '<rect x="15.9" y="4" width="1.7" height="15" fill="#c6992f"/>' +
+    '<rect x="3" y="10.4" width="18" height="1.4" fill="#c6992f"/>' +
+    '<rect x="10.1" y="9.2" width="3.8" height="4.4" rx="1" fill="#c6992f" stroke="#3e2714" stroke-width="0.5"/>' +
+  '</svg>';
+}
+
 var SIGHTINGS_TOTAL = 100;
 var SIGHTINGS_COLS = 10;
 var SIGHTINGS_ROWS = 10;
@@ -641,11 +660,13 @@ function evaluateRewards(){
 
 // Island Sightings: an open-ended collectible track, separate from the
 // structured REWARDS chain above. One random not-yet-discovered sighting
-// unlocks at every 7-carrot milestone *after* the first (the first is spent
-// on the Second Habit-Garden reward) -- 14, 21, 28 carrots, and so on.
+// unlocks at every 7-carrot milestone, in step with the REWARDS chain's own
+// carrot-gated reward (Second Habit-Garden) rather than waiting for it --
+// both unlock together in the very first batch at 7 carrots, then every 7
+// after that (14, 21, 28...).
 function evaluateSightings(){
-  if(!state.onboarded || !state.unlocks.second_garden) return;
-  var eligible = Math.min(SIGHTINGS_TOTAL, Math.floor(state.carrots/7) - 1);
+  if(!state.onboarded) return;
+  var eligible = Math.min(SIGHTINGS_TOTAL, Math.floor(state.carrots/7));
   var unlockedAny = false;
   while(state.sightings.length < eligible){
     var remaining = [];
@@ -702,7 +723,7 @@ function renderOnboarding(){
       '<div class="onb-screen">' +
         '<h2 style="color:var(--parchment-hi)">The story so far&hellip;</h2>' +
         '<img class="story-home" src="'+ASSET.home_scene+'" alt="Your island home">' +
-        '<p class="onb-copy">Your Castaway is marooned on a remote island. To keep motivated, your Castaway keeps a logbook, earning 1 carrot for each daily activity completed.</p>' +
+        '<p class="onb-copy">Your Castaway is marooned on a remote island. To keep motivated, your Castaway keeps a logbook, earning 1 carrot for each completed activity.</p>' +
         '<p class="onb-copy">Help your Castaway by adding activities to track.</p>' +
         '<button class="btn mt" data-action="onb-next">Continue</button>' +
       '</div>'
@@ -896,6 +917,7 @@ function renderRewardsScreen(){
     html += '<div class="reward-card" data-action="show-reward-detail" data-id="'+r.id+'">';
     html += '<div class="reward-media">';
     if(r.image){ html += '<img src="'+r.image(state)+'" alt="">'; }
+    else if(r.spriteTile!=null){ html += '<div class="medallion sprite-medallion" style="'+sightingTileStyle(r.spriteTile)+'"></div>'; }
     else { html += '<div class="medallion">'+r.medallion+'</div>'; }
     html += '</div>';
     html += r.starter ? '<div class="reward-ribbon">Starter</div>' : '<div class="reward-ribbon">Unlocked</div>';
@@ -909,15 +931,15 @@ function renderRewardsScreen(){
   });
 
   var chainNext = nextLockedReward();
-  var sightingsActive = !!state.unlocks.second_garden && state.sightings.length < SIGHTINGS_TOTAL;
+  var sightingsActive = state.sightings.length < SIGHTINGS_TOTAL;
   if(chainNext || sightingsActive){
     html += '<div class="reward-card locked" '+(chainNext ? 'data-action="show-reward-detail" data-id="'+chainNext.id+'"' : '')+'>';
-    html += '<div class="reward-media"><div class="medallion">🎁</div></div>';
+    html += '<div class="reward-media"><div class="medallion">'+chestIconSvg("2.6rem")+'</div></div>';
     html += '<div class="reward-lock">🔒</div>';
     html += '<div class="reward-body">';
     html += '<div class="reward-title">Next Rewards</div>';
     html += '<ul class="next-rewards-list">';
-    if(chainNext){ html += '<li>🎁 '+chainNext.title+'</li>'; }
+    if(chainNext){ html += '<li>'+chestIconSvg("0.8rem")+' '+chainNext.title+'</li>'; }
     if(sightingsActive){ html += '<li>🔭 New Island Sighting</li>'; }
     html += '</ul>';
     html += '<div class="carrot-counter">🥕 '+(state.carrots%7)+'/7</div>';
@@ -934,8 +956,7 @@ var SIGHTINGS_FAVORITE_MAX = 5;
 function renderIslandSightings(){
   var html = '<div class="section-label" style="margin-top:22px;">Island Sightings</div>';
   if(state.sightings.length===0){
-    var nextThreshold = Math.max(14, 2*7);
-    html += '<p class="sightings-teaser">🔭 Keep logging habits — your first island sighting unlocks at '+nextThreshold+' carrots.</p>';
+    html += '<p class="sightings-teaser">🔭 Keep logging habits — your first island sighting unlocks at 7 carrots.</p>';
     return html;
   }
   var showingFavorites = state.sightingsFilter==="favorites";
@@ -954,7 +975,7 @@ function renderIslandSightings(){
     html += '</div>';
   }
   if(state.sightings.length < SIGHTINGS_TOTAL){
-    var nextThreshold = Math.max(14, (state.sightings.length+2)*7);
+    var nextThreshold = (state.sightings.length+1)*7;
     html += '<p class="sightings-footer">'+state.sightings.length+' / '+SIGHTINGS_TOTAL+' discovered — next at '+nextThreshold+' carrots.</p>';
   } else {
     html += '<p class="sightings-footer">All '+SIGHTINGS_TOTAL+' island sightings discovered!</p>';
@@ -970,6 +991,7 @@ function renderRewardDetailModal(id){
   html += '<div class="modal reward-detail">';
   html += '<button class="modal-close" data-action="close-modal">✕</button>';
   if(r.image){ html += '<img class="reward-hero" src="'+r.image(state)+'" alt="">'; }
+  else if(r.spriteTile!=null){ html += '<div class="medallion-lg sprite-medallion '+(unlocked?'':'locked')+'" style="'+sightingTileStyle(r.spriteTile)+'"></div>'; }
   else { html += '<div class="medallion-lg '+(unlocked?'':'locked')+'">'+r.medallion+'</div>'; }
   html += '<h3>'+r.title+'</h3>';
   html += '<p>'+r.desc+'</p>';
@@ -1048,7 +1070,7 @@ function renderProfileModal(){
   html += '<button class="story-link" data-action="show-story"><span class="story-icon" style="'+sightingTileStyle(80)+'"></span><span>The Story So Far</span></button>';
   html += '<div class="profile-stats">';
   html += '<div class="profile-stat"><b>'+state.carrots+'</b><span>Carrots</span></div>';
-  html += '<div class="profile-stat"><b>'+daysSince(state.startDate)+'</b><span>Days Ashore</span></div>';
+  html += '<div class="profile-stat"><b>'+(daysSince(state.startDate)+1)+'</b><span>Days Ashore</span></div>';
   html += '<div class="profile-stat"><b>'+state.habits.length+'</b><span>Habit-Gardens</span></div>';
   html += '</div>';
   html += '<div class="profile-actions">';
@@ -1076,7 +1098,7 @@ function renderStoryModal(){
   html += '<button class="modal-close" data-action="close-modal">✕</button>';
   html += '<h3 style="color:var(--wood-dark);">The story so far&hellip;</h3>';
   html += '<img class="story-home" src="'+ASSET.home_scene+'" alt="Your island home">';
-  html += '<p style="color:var(--wood); font-size:.92rem; line-height:1.5; text-align:left;">Your Castaway is marooned on a remote island. To keep motivated, your Castaway keeps a logbook, earning 1 carrot for each daily activity completed.</p>';
+  html += '<p style="color:var(--wood); font-size:.92rem; line-height:1.5; text-align:left;">Your Castaway is marooned on a remote island. To keep motivated, your Castaway keeps a logbook, earning 1 carrot for each completed activity.</p>';
   html += '<p style="color:var(--wood); font-size:.92rem; line-height:1.5; text-align:left;">Help your Castaway by adding activities to track.</p>';
   html += '</div></div>';
   return html;
@@ -1089,6 +1111,7 @@ function renderCelebrationModal(r){
   html += '<div class="confetti">🎉🥕✨</div>';
   html += '<h3>New Reward Unlocked!</h3>';
   if(r.image){ html += '<img class="reward-hero" src="'+r.image(state)+'" alt="">'; }
+  else if(r.spriteTile!=null){ html += '<div class="medallion-lg sprite-medallion" style="'+sightingTileStyle(r.spriteTile)+'"></div>'; }
   else { html += '<div class="medallion-lg">'+r.medallion+'</div>'; }
   html += '<h4>'+r.title+'</h4>';
   html += '<p>'+r.desc+'</p>';
