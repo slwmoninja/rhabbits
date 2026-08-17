@@ -122,10 +122,11 @@ img{max-width:100%; display:block;}
 
 .field{width:100%; max-width:340px; text-align:left; margin:0 auto 16px;}
 .field label{display:block; color:var(--parchment-edge); font-size:.78rem; text-transform:uppercase; letter-spacing:.1em; margin-bottom:6px;}
-.field input[type=text]{
+.field input[type=text], .field textarea{
   width:100%; padding:13px 14px; border-radius:10px; border:1px solid var(--parchment-edge);
-  background:var(--parchment-hi); color:var(--ink); font-size:1rem;
+  background:var(--parchment-hi); color:var(--ink); font-size:1rem; font-family:inherit;
 }
+.field textarea{resize:vertical; min-height:52px;}
 .emoji-picker{display:flex; flex-wrap:wrap; gap:8px; max-width:340px; margin:0 auto 18px; justify-content:center;}
 .emoji-opt{
   width:42px; height:42px; border-radius:10px; border:2px solid transparent;
@@ -273,6 +274,16 @@ img{max-width:100%; display:block;}
 .habit-head{display:flex; align-items:center; gap:10px; margin-bottom:14px;}
 .habit-emoji{font-size:1.4rem;}
 .habit-name{flex:1; font-weight:700; color:var(--wood-dark); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.habit-name-input{
+  flex:1; min-width:0; border:none; border-bottom:1px dashed transparent; background:transparent;
+  font-weight:700; color:var(--wood-dark); font-size:1rem; font-family:inherit; padding:2px 0;
+}
+.habit-name-input:focus{outline:none; border-bottom-color:var(--carrot);}
+.habit-desc-input{
+  width:100%; border:1px solid var(--parchment-edge); border-radius:8px; background:var(--parchment-hi);
+  color:var(--wood); font-size:.82rem; font-family:inherit; padding:8px 10px; margin-bottom:12px;
+  resize:vertical; min-height:44px;
+}
 .habit-type-badge{
   font-size:.62rem; text-transform:uppercase; letter-spacing:.08em; font-weight:700;
   color:var(--leaf-deep); background:rgba(92,122,63,.15); padding:3px 7px; border-radius:6px;
@@ -297,6 +308,28 @@ img{max-width:100%; display:block;}
 
 /* ---------- Rewards screen ---------- */
 .reward-grid{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+
+/* ---------- Island Sightings (open-ended collectible track) ---------- */
+.sightings-teaser{color:var(--parchment-edge); font-size:.85rem; line-height:1.5;}
+.sightings-grid{display:grid; grid-template-columns:repeat(5, 1fr); gap:8px;}
+.sighting-tile{
+  border-radius:8px; border:1px solid var(--parchment-edge); box-shadow:var(--shadow);
+  background-repeat:no-repeat; width:100%; aspect-ratio:1/1; position:relative; padding:0;
+}
+.sighting-tile.favorited{border:2px solid var(--gold); box-shadow:0 0 0 1px var(--gold), var(--shadow);}
+.sighting-star{position:absolute; top:-6px; right:-6px; font-size:.85rem; filter:drop-shadow(0 1px 2px rgba(0,0,0,.6));}
+.favorites-link{
+  display:inline-block; background:rgba(198,153,47,.15); border:1px solid var(--gold); color:var(--gold);
+  font-size:.75rem; font-weight:700; border-radius:20px; padding:5px 12px; margin-bottom:10px;
+}
+.sightings-footer{color:var(--parchment-edge); font-size:.78rem; margin-top:10px;}
+
+.story-link{
+  width:100%; display:flex; align-items:center; gap:10px; text-align:left;
+  background:rgba(107,69,38,.08); border:1px solid var(--parchment-edge); border-radius:9px;
+  padding:8px 12px; margin:2px 0 14px; color:var(--wood-dark); font-weight:700; font-size:.85rem;
+}
+.story-icon{width:36px; height:36px; flex-shrink:0; border-radius:6px; background-repeat:no-repeat; border:1px solid var(--parchment-edge);}
 .reward-card{
   background:linear-gradient(180deg, var(--parchment-hi), var(--parchment));
   border-radius:12px; border:1px solid var(--parchment-edge); box-shadow:var(--shadow);
@@ -313,6 +346,7 @@ img{max-width:100%; display:block;}
 .reward-body{padding:10px 12px 12px;}
 .reward-title{font-weight:700; color:var(--wood-dark); font-size:.86rem; margin-bottom:3px;}
 .reward-desc{color:var(--wood); font-size:.72rem; line-height:1.4; margin-bottom:6px;}
+.next-rewards-list{list-style:none; padding:0; margin:0; font-size:.72rem; color:var(--wood-dark); font-weight:700; line-height:1.6;}
 .reward-status{font-size:.68rem; font-weight:700;}
 .reward-status.unlocked{color:var(--leaf-deep);}
 .reward-status.locked{color:#8a7a5c;}
@@ -406,7 +440,8 @@ var ASSET = {
   home_scene: "__HOME_SCENE__",
   home_icon: "__HOME_ICON__",
   cutout_male: "__CUTOUT_MALE__",
-  cutout_female: "__CUTOUT_FEMALE__"
+  cutout_female: "__CUTOUT_FEMALE__",
+  sightings_sprite: "__SIGHTINGS_SPRITE__"
 };
 
 var STORAGE_KEY = "rhabbits_state_v1";
@@ -420,8 +455,8 @@ var EMOJI_CHOICES = ["🌱","🌴","☀️","🌊","🥥","🥕","⛵","🏴‍�
 var REWARDS = [
   {
     id: "portrait",
-    title: "rHabbit Portrait",
-    desc: "Your very own castaway, full body.",
+    title: "Castaway Portrait",
+    desc: "Your very own castaway.",
     starter: true,
     image: function(state){ return state.avatar === "female" ? ASSET.cutout_female : ASSET.cutout_male; }
   },
@@ -434,7 +469,7 @@ var REWARDS = [
   },
   {
     id: "first_habit",
-    title: "1 Tracked rHabbit",
+    title: "1 Tracked Habit",
     desc: "You started your very first habit-garden.",
     starter: true,
     medallion: "🌱"
@@ -477,6 +512,27 @@ var REWARDS = [
   }
 ];
 var STARTER_REASON = "Reward issued: Starting to use the app!";
+
+// "Island Sightings" -- a separate, open-ended collectible track alongside
+// the structured REWARDS chain above. SIGHTINGS_SPRITE is one combined
+// 10x10 grid image (see scripts/build_sightings_sprite.py) rather than 100
+// separate embedded images, both for file size and because a single shared
+// asset compresses far better than 100 tiny ones. Each tile is displayed via
+// CSS background-position math in sightingTileStyle() below.
+var SIGHTINGS_TOTAL = 100;
+var SIGHTINGS_COLS = 10;
+var SIGHTINGS_ROWS = 10;
+// Percentage-based background-position/-size (the standard responsive-CSS-
+// sprite formula) rather than fixed pixels, so a tile fills whatever size
+// its container (a responsive grid cell, or a larger detail view) actually
+// renders at, instead of a hardcoded 96px clashing with the grid's own
+// column width.
+function sightingTileStyle(index){
+  var col = index % SIGHTINGS_COLS, row = Math.floor(index / SIGHTINGS_COLS);
+  var posX = (col/(SIGHTINGS_COLS-1))*100, posY = (row/(SIGHTINGS_ROWS-1))*100;
+  return 'background-image:url('+ASSET.sightings_sprite+');' +
+    'background-size:'+(SIGHTINGS_COLS*100)+'% '+(SIGHTINGS_ROWS*100)+'%; background-position:'+posX+'% '+posY+'%;';
+}
 
 function onceoffCompletedCount(state){
   return state.habits.filter(function(h){ return h.type==="onceoff" && h.completions.length>0; }).length;
@@ -523,10 +579,13 @@ function defaultState(){
     carrots:0,
     habits:[],
     unlocks:{},
+    sightings:[],
+    favoriteSightings:[],
+    sightingsFilter:"all",
     screen:"logbook",
     pendingCelebration:null,
     toast:null,
-    _draft:{ name:"", emoji:"🌱", type:"daily" },
+    _draft:{ name:"", emoji:"🌱", type:"daily", description:"" },
     _detailHabitId:null,
     _detailRewardId:null,
     // Install-state bookkeeping -- see isInstalled()/triggerInstall() below.
@@ -568,6 +627,25 @@ function evaluateRewards(){
       state.pendingCelebration = r.id;
     }
   }
+  evaluateSightings();
+}
+
+// Island Sightings: an open-ended collectible track, separate from the
+// structured REWARDS chain above. One random not-yet-discovered sighting
+// unlocks at every 7-carrot milestone *after* the first (the first is spent
+// on the Second Habit-Garden reward) -- 14, 21, 28 carrots, and so on.
+function evaluateSightings(){
+  if(!state.onboarded || !state.unlocks.second_garden) return;
+  var eligible = Math.min(SIGHTINGS_TOTAL, Math.floor(state.carrots/7) - 1);
+  var unlockedAny = false;
+  while(state.sightings.length < eligible){
+    var remaining = [];
+    for(var i=0;i<SIGHTINGS_TOTAL;i++){ if(state.sightings.indexOf(i)===-1) remaining.push(i); }
+    if(remaining.length===0) break;
+    state.sightings.push(remaining[Math.floor(Math.random()*remaining.length)]);
+    unlockedAny = true;
+  }
+  if(unlockedAny){ showToast("🔭 New Island Sighting discovered!"); }
 }
 
 function unlockStarterRewards(){
@@ -592,7 +670,7 @@ function renderOnboarding(){
       '<div class="onb-screen">' +
         '<div class="onb-logo"><img src="'+ASSET.home_icon+'" alt=""></div>' +
         '<h1 class="onb-title">rHabbits</h1>' +
-        '<p class="onb-copy">Build better habits (<b>rHabbits</b>) by tracking progress. Earn carrots to unlock features. Start with one rHabbit to track.</p>' +
+        '<p class="onb-copy">Build better habits (<b>rHabbits</b>) by tracking progress. Earn carrots to unlock features. Start with one habit to track.</p>' +
         '<button class="btn mt" data-action="onb-next">Get Started</button>' +
         '<button class="btn-ghost mt" data-action="restore-backup" style="margin-top:14px;">Already used rHabbits? Restore backup</button>' +
         '<input type="file" id="onbRestoreInput" accept="application/json,.json" class="hidden">' +
@@ -604,8 +682,8 @@ function renderOnboarding(){
       '<div class="onb-screen">' +
         '<h2 style="color:var(--parchment-hi)">Choose your castaway</h2>' +
         '<div class="avatar-choice">' +
-          '<button class="avatar-option" data-action="pick-avatar" data-gender="male"><img src="'+ASSET.avatar_male+'" alt="Male rHabbit"></button>' +
-          '<button class="avatar-option" data-action="pick-avatar" data-gender="female"><img src="'+ASSET.avatar_female+'" alt="Female rHabbit"></button>' +
+          '<button class="avatar-option" data-action="pick-avatar" data-gender="male"><img src="'+ASSET.avatar_male+'" alt="Male Castaway"></button>' +
+          '<button class="avatar-option" data-action="pick-avatar" data-gender="female"><img src="'+ASSET.avatar_female+'" alt="Female Castaway"></button>' +
         '</div>' +
       '</div>'
     );
@@ -615,8 +693,8 @@ function renderOnboarding(){
       '<div class="onb-screen">' +
         '<h2 style="color:var(--parchment-hi)">The story so far&hellip;</h2>' +
         '<img class="story-home" src="'+ASSET.home_scene+'" alt="Your island home">' +
-        '<p class="onb-copy">Your castaway rHabbit is marooned on a remote island. To keep motivated, your rHabbit keeps a logbook, earning 1 carrot for each daily activity completed.</p>' +
-        '<p class="onb-copy">Help your rHabbit by adding a daily activity you\'d like to track now.</p>' +
+        '<p class="onb-copy">Your Castaway is marooned on a remote island. To keep motivated, your Castaway keeps a logbook, earning 1 carrot for each daily activity completed.</p>' +
+        '<p class="onb-copy">Help your Castaway by adding a daily activity you\'d like to track now.</p>' +
         '<button class="btn mt" data-action="onb-next">Continue</button>' +
       '</div>'
     );
@@ -625,8 +703,9 @@ function renderOnboarding(){
   return (
     '<div class="onb-screen">' +
       '<h2 style="color:var(--parchment-hi)">Let\'s get started!</h2>' +
-      '<p class="onb-copy">Choose one rHabbit you\'d like to track daily. (Later you can unlock monthly and once-off tasks too.) After you earn 7 carrots, you\'ll unlock your next reward.</p>' +
+      '<p class="onb-copy">Choose one habit you\'d like to track daily. (Later you can unlock monthly and once-off tasks too.) After you earn 7 carrots, you\'ll unlock your next reward.</p>' +
       '<div class="field"><label>Habit name</label><input type="text" id="firstHabitName" maxlength="40" placeholder="e.g. Drink 8 glasses of water" value="'+escapeAttr(d.name)+'"></div>' +
+      '<div class="field"><label>Habit description (optional)</label><textarea id="firstHabitDescription" maxlength="140" placeholder="e.g. A big glass with breakfast, lunch, and dinner">'+escapeHtml(d.description)+'</textarea></div>' +
       '<div class="emoji-picker">'+EMOJI_CHOICES.map(function(e){return '<button class="emoji-opt '+(d.emoji===e?'selected':'')+'" data-action="pick-emoji" data-emoji="'+e+'">'+e+'</button>';}).join('')+'</div>' +
       '<button class="btn mt" data-action="finish-onboarding" '+(d.name.trim()?'':'disabled')+'>Start Tracking 🌱</button>' +
     '</div>'
@@ -671,6 +750,12 @@ function nextLockedReward(){
   return null;
 }
 
+function carrotPipsHtml(filled, total){
+  var html = '';
+  for(var i=1;i<=total;i++){ html += '<span class="pip '+(filled>=i?'filled':'')+'">🥕</span>'; }
+  return html;
+}
+
 function renderLogbookScreen(){
   var html = '<section class="screen">';
   var next = nextLockedReward();
@@ -678,11 +763,8 @@ function renderLogbookScreen(){
   html += '<span class="plaque-rivet tl"></span><span class="plaque-rivet tr"></span><span class="plaque-rivet bl"></span><span class="plaque-rivet br"></span>';
   html += '<div class="plaque-label">Carrots earned</div>';
   if(next){
-    var target = next.id==="second_garden" ? 7 : null;
-    if(target){
-      var pips='';
-      for(var i=1;i<=7;i++){ pips += '<span class="pip '+(state.carrots>=i?'filled':'')+'">🥕</span>'; }
-      html += '<div class="pip-row">'+pips+'</div>';
+    if(next.id==="second_garden"){
+      html += '<div class="pip-row">'+carrotPipsHtml(state.carrots,7)+'</div>';
     }
     html += '<div class="plaque-progress-text">Next: '+next.title+' — '+next.progress(state)+'</div>';
   } else {
@@ -744,7 +826,8 @@ function renderHabitDetailModal(id){
   var html = '<div class="modal-backdrop" data-backdrop="habit-detail">';
   html += '<div class="modal">';
   html += '<button class="modal-close" data-action="close-modal">✕</button>';
-  html += '<div class="habit-head"><span class="habit-emoji">'+h.emoji+'</span><span class="habit-name">'+escapeHtml(h.name)+'</span><span class="habit-type-badge">'+badge+'</span></div>';
+  html += '<div class="habit-head"><span class="habit-emoji">'+h.emoji+'</span><input type="text" class="habit-name-input" id="habitDetailName" maxlength="40" value="'+escapeAttr(h.name)+'"><span class="habit-type-badge">'+badge+'</span></div>';
+  html += '<textarea class="habit-desc-input" id="habitDetailDescription" maxlength="140" placeholder="Add a description (optional)">'+escapeHtml(h.description||"")+'</textarea>';
 
   if(h.type==="daily"){
     var today = todayStr();
@@ -794,38 +877,78 @@ function renderRewardsScreen(){
   html += '<h2 style="color:var(--parchment-hi); margin-bottom:4px;">Your Rewards</h2>';
   html += '<p style="color:var(--parchment-edge); font-size:.85rem; margin-bottom:16px;">A growing collection from life on the island. More rewards to come!</p>';
   html += '<div class="reward-grid">';
-  // Only ever show ONE locked card at a time -- the single next reward the
-  // user is working toward -- rather than the whole future chain. Seeing
-  // "Monthly & Once-off Tasks" or "Bucket List Buccaneer" as locked cards on
-  // day one is just clutter/overwhelm before they're even relevant; each one
-  // appears in turn as the prior reward is earned.
-  var next = nextLockedReward();
-  var visible = REWARDS.filter(function(r){ return !!state.unlocks[r.id] || (next && r.id===next.id); });
-  visible.forEach(function(r){
-    var unlocked = !!state.unlocks[r.id];
-    html += '<div class="reward-card '+(unlocked?'':'locked')+'" data-action="show-reward-detail" data-id="'+r.id+'">';
+  // Unlocked rewards each get their own real card. Everything still locked
+  // is folded into a single combined "Next Rewards" teaser card below rather
+  // than shown individually -- seeing "Monthly & Once-off Tasks" or "Bucket
+  // List Buccaneer" spelled out as their own locked cards on day one is just
+  // clutter/overwhelm before they're even relevant.
+  REWARDS.filter(function(r){ return !!state.unlocks[r.id]; }).forEach(function(r){
+    html += '<div class="reward-card" data-action="show-reward-detail" data-id="'+r.id+'">';
     html += '<div class="reward-media">';
-    if(r.image){
-      html += '<img src="'+r.image(state)+'" alt="">';
-    } else {
-      html += '<div class="medallion">'+r.medallion+'</div>';
-    }
+    if(r.image){ html += '<img src="'+r.image(state)+'" alt="">'; }
+    else { html += '<div class="medallion">'+r.medallion+'</div>'; }
     html += '</div>';
-    if(!unlocked){ html += '<div class="reward-lock">🔒</div>'; }
-    else if(r.starter){ html += '<div class="reward-ribbon">Starter</div>'; }
-    else { html += '<div class="reward-ribbon">Unlocked</div>'; }
+    html += r.starter ? '<div class="reward-ribbon">Starter</div>' : '<div class="reward-ribbon">Unlocked</div>';
     html += '<div class="reward-body">';
     html += '<div class="reward-title">'+r.title+'</div>';
     html += '<div class="reward-desc">'+r.desc+'</div>';
-    if(unlocked){
-      var u = state.unlocks[r.id];
-      html += '<div class="reward-status unlocked">'+(u.reason?u.reason:'Unlocked '+u.unlockedAt)+'</div>';
-    } else {
-      html += '<div class="reward-status locked">'+r.progress(state)+'</div>';
-    }
+    var u = state.unlocks[r.id];
+    html += '<div class="reward-status unlocked">'+(u.reason?u.reason:'Unlocked '+u.unlockedAt)+'</div>';
     html += '</div></div>';
   });
-  html += '</div></section>';
+
+  var chainNext = nextLockedReward();
+  var sightingsActive = !!state.unlocks.second_garden && state.sightings.length < SIGHTINGS_TOTAL;
+  if(chainNext || sightingsActive){
+    html += '<div class="reward-card locked" '+(chainNext ? 'data-action="show-reward-detail" data-id="'+chainNext.id+'"' : '')+'>';
+    html += '<div class="reward-media"><div class="medallion">🥕</div></div>';
+    html += '<div class="reward-lock">🔒</div>';
+    html += '<div class="reward-body">';
+    html += '<div class="reward-title">Next Rewards</div>';
+    html += '<div class="reward-desc">Track habits 7x to earn rewards</div>';
+    html += '<ul class="next-rewards-list">';
+    if(chainNext){ html += '<li>🥕 '+chainNext.title+'</li>'; }
+    if(sightingsActive){ html += '<li>🔭 New Island Sighting</li>'; }
+    html += '</ul>';
+    html += '<div class="pip-row" style="justify-content:flex-start; margin-top:6px;">'+carrotPipsHtml(state.carrots%7,7)+'</div>';
+    html += '</div></div>';
+  }
+  html += '</div>';
+  html += renderIslandSightings();
+  html += '</section>';
+  return html;
+}
+
+var SIGHTINGS_FAVORITE_MAX = 5;
+
+function renderIslandSightings(){
+  var html = '<div class="section-label" style="margin-top:22px;">Island Sightings</div>';
+  if(state.sightings.length===0){
+    var nextThreshold = Math.max(14, 2*7);
+    html += '<p class="sightings-teaser">🔭 Keep logging habits — your first island sighting unlocks at '+nextThreshold+' carrots.</p>';
+    return html;
+  }
+  var showingFavorites = state.sightingsFilter==="favorites";
+  html += '<button class="favorites-link" data-action="toggle-sightings-filter">'+
+    (showingFavorites ? '📖 Show all' : '⭐ Favorites ('+state.favoriteSightings.length+'/'+SIGHTINGS_FAVORITE_MAX+')') +
+    '</button>';
+  var shown = showingFavorites ? state.sightings.filter(function(idx){ return state.favoriteSightings.indexOf(idx)!==-1; }) : state.sightings;
+  if(showingFavorites && shown.length===0){
+    html += '<p class="sightings-teaser">No favorites yet — tap a sighting below to save it here (up to '+SIGHTINGS_FAVORITE_MAX+').</p>';
+  } else {
+    html += '<div class="sightings-grid">';
+    shown.forEach(function(idx){
+      var fav = state.favoriteSightings.indexOf(idx)!==-1;
+      html += '<div class="sighting-tile '+(fav?'favorited':'')+'" data-action="toggle-favorite-sighting" data-id="'+idx+'" style="'+sightingTileStyle(idx)+'">'+(fav?'<span class="sighting-star">⭐</span>':'')+'</div>';
+    });
+    html += '</div>';
+  }
+  if(state.sightings.length < SIGHTINGS_TOTAL){
+    var nextThreshold = Math.max(14, (state.sightings.length+2)*7);
+    html += '<p class="sightings-footer">'+state.sightings.length+' / '+SIGHTINGS_TOTAL+' discovered — next at '+nextThreshold+' carrots.</p>';
+  } else {
+    html += '<p class="sightings-footer">All '+SIGHTINGS_TOTAL+' island sightings discovered!</p>';
+  }
   return html;
 }
 
@@ -856,6 +979,7 @@ function renderModals(){
   if(state.screen==="profile-modal"){ html += renderProfileModal(); }
   if(state.screen==="habit-detail-modal"){ html += renderHabitDetailModal(state._detailHabitId); }
   if(state.screen==="reward-detail-modal"){ html += renderRewardDetailModal(state._detailRewardId); }
+  if(state.screen==="story-modal"){ html += renderStoryModal(); }
   if(state.pendingCelebration){ html += renderCelebrationModal(REWARDS.filter(function(r){return r.id===state.pendingCelebration;})[0]); }
   if(state.toast){ html += '<div class="toast">'+state.toast+'</div>'; }
   return html;
@@ -879,6 +1003,7 @@ function renderAddHabitModal(){
   html += '<button class="modal-close" data-action="close-modal">✕</button>';
   html += '<h3>Add a Habit</h3>';
   html += '<div class="field"><label>Name</label><input type="text" id="addHabitName" maxlength="40" placeholder="e.g. Stretch for 5 minutes" value="'+escapeAttr(d.name)+'"></div>';
+  html += '<div class="field"><label>Habit description (optional)</label><textarea id="addHabitDescription" maxlength="140" placeholder="e.g. Right after brushing my teeth">'+escapeHtml(d.description)+'</textarea></div>';
   html += '<div class="emoji-picker">'+EMOJI_CHOICES.map(function(e){return '<button class="emoji-opt '+(d.emoji===e?'selected':'')+'" data-action="pick-emoji" data-emoji="'+e+'">'+e+'</button>';}).join('')+'</div>';
   html += '<div class="type-picker">';
   html += typeOptRow("daily","Daily", dailyCount+"/"+dailyMax+" habit-gardens used", d.type==="daily", dailyDisabled);
@@ -906,17 +1031,18 @@ function renderProfileModal(){
   // confirm state, so it switches to an inert "Installed" line instead of
   // disappearing. Same row as the heading, matching the topbar's own layout.
   html += '<div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px;">';
-  html += '  <h3 style="margin:0;">Your rHabbit</h3>';
+  html += '  <h3 style="margin:0;">Your Castaway</h3>';
   html += '  <div style="display:flex; align-items:center; gap:10px; flex-shrink:0;">'+installTopbarBtnHtml(true)+'<button class="modal-close" data-action="close-modal" style="float:none; margin:0;">✕</button></div>';
   html += '</div>';
   html += '<img class="profile-cutout" src="'+cutoutImg+'" alt="">';
+  html += '<button class="story-link" data-action="show-story"><span class="story-icon" style="'+sightingTileStyle(80)+'"></span><span>The Story So Far</span></button>';
   html += '<div class="profile-stats">';
   html += '<div class="profile-stat"><b>'+state.carrots+'</b><span>Carrots</span></div>';
   html += '<div class="profile-stat"><b>'+daysSince(state.startDate)+'</b><span>Days Ashore</span></div>';
   html += '<div class="profile-stat"><b>'+state.habits.length+'</b><span>Habit-Gardens</span></div>';
   html += '</div>';
   html += '<div class="profile-actions">';
-  html += '<button class="btn btn-wood" data-action="switch-avatar">Switch rHabbit</button>';
+  html += '<button class="btn btn-wood" data-action="switch-avatar">Switch Castaway</button>';
   html += '<button class="btn btn-wood" data-action="backup-now">Back up data now</button>';
   html += '<button class="btn btn-ghost" data-action="restore-backup">Restore from backup&hellip;</button>';
   html += '<input type="file" id="profileRestoreInput" accept="application/json,.json" class="hidden">';
@@ -927,6 +1053,21 @@ function renderProfileModal(){
   html += '</div>';
   var diag = latestDiagEntry();
   if(diag){ html += '<div style="margin-top:8px; font-size:.66rem; color:var(--wood); opacity:.75; line-height:1.4;">'+escapeHtml(diag.message)+'</div>'; }
+  html += '</div></div>';
+  return html;
+}
+
+// Reachable any time from Profile's "The Story So Far" (message-in-a-bottle
+// icon) link -- same copy as onboarding step 2, so revisiting the narrative
+// doesn't require resetting progress.
+function renderStoryModal(){
+  var html = '<div class="modal-backdrop" data-backdrop="story">';
+  html += '<div class="modal" style="text-align:center;">';
+  html += '<button class="modal-close" data-action="close-modal">✕</button>';
+  html += '<h3 style="color:var(--wood-dark);">The story so far&hellip;</h3>';
+  html += '<img class="story-home" src="'+ASSET.home_scene+'" alt="Your island home">';
+  html += '<p style="color:var(--wood); font-size:.92rem; line-height:1.5; text-align:left;">Your Castaway is marooned on a remote island. To keep motivated, your Castaway keeps a logbook, earning 1 carrot for each daily activity completed.</p>';
+  html += '<p style="color:var(--wood); font-size:.92rem; line-height:1.5; text-align:left;">Help your Castaway by adding a daily activity you\'d like to track now.</p>';
   html += '</div></div>';
   return html;
 }
@@ -991,6 +1132,10 @@ function wireEvents(){
       if(btn) btn.disabled = !state._draft.name.trim();
     });
   }
+  var firstDescInput = root.querySelector("#firstHabitDescription");
+  if(firstDescInput){
+    firstDescInput.addEventListener("input", function(e){ state._draft.description = e.target.value; });
+  }
   var addNameInput = root.querySelector("#addHabitName");
   if(addNameInput){
     addNameInput.addEventListener("input", function(e){
@@ -999,6 +1144,32 @@ function wireEvents(){
       if(btn) btn.disabled = !e.target.value.trim();
     });
     addNameInput.focus();
+  }
+  var addDescInput = root.querySelector("#addHabitDescription");
+  if(addDescInput){
+    addDescInput.addEventListener("input", function(e){ state._draft.description = e.target.value; });
+  }
+  // Habit-detail edit fields write straight to the habit object (not a
+  // _draft) and only save(), never render() -- re-rendering on every
+  // keystroke would rebuild the input out from under itself and drop focus/
+  // cursor position mid-edit, same reasoning as the name inputs above.
+  var detailNameInput = root.querySelector("#habitDetailName");
+  if(detailNameInput){
+    detailNameInput.addEventListener("input", function(e){
+      var h = findHabit(state._detailHabitId);
+      if(h){ h.name = e.target.value; save(); }
+    });
+    detailNameInput.addEventListener("blur", function(e){
+      var h = findHabit(state._detailHabitId);
+      if(h && !h.name.trim()){ h.name = "Untitled habit"; e.target.value = h.name; save(); }
+    });
+  }
+  var detailDescInput = root.querySelector("#habitDetailDescription");
+  if(detailDescInput){
+    detailDescInput.addEventListener("input", function(e){
+      var h = findHabit(state._detailHabitId);
+      if(h){ h.description = e.target.value; save(); }
+    });
   }
   // Backup restore <input type=file> -- lives inside whichever screen
   // rendered it (onboarding step 0, or Profile), so it's safe to wire from
@@ -1053,7 +1224,7 @@ function onAction(e){
       break;
     case "open-add-habit":
       navigateTo(function(){
-        state._draft = { name:"", emoji:"🌱", type: countActive(state,"daily")<maxDailySlots(state) ? "daily" : (state.unlocks.new_task_types ? "monthly":"daily") };
+        state._draft = { name:"", emoji:"🌱", type: countActive(state,"daily")<maxDailySlots(state) ? "daily" : (state.unlocks.new_task_types ? "monthly":"daily"), description:"" };
         state.screen = "add-habit-modal";
       });
       break;
@@ -1068,6 +1239,26 @@ function onAction(e){
         state._detailRewardId = el.getAttribute("data-id");
         state.screen = "reward-detail-modal";
       });
+      break;
+    case "show-story":
+      navigateTo(function(){ state.screen = "story-modal"; });
+      break;
+    case "toggle-sightings-filter":
+      state.sightingsFilter = state.sightingsFilter==="favorites" ? "all" : "favorites";
+      save(); render();
+      break;
+    case "toggle-favorite-sighting":
+      var sightingIdx = parseInt(el.getAttribute("data-id"), 10);
+      var favIdx = state.favoriteSightings.indexOf(sightingIdx);
+      if(favIdx!==-1){
+        state.favoriteSightings.splice(favIdx,1);
+      } else if(state.favoriteSightings.length < SIGHTINGS_FAVORITE_MAX){
+        state.favoriteSightings.push(sightingIdx);
+      } else {
+        showToast("You can favorite up to "+SIGHTINGS_FAVORITE_MAX+" — remove one first.");
+        break;
+      }
+      save(); render();
       break;
     case "close-modal":
       closeModal();
@@ -1125,6 +1316,7 @@ function finishOnboarding(){
   state.startDate = todayStr();
   state.habits.push({
     id: uid(), name:name, emoji: state._draft.emoji, type:"daily",
+    description: state._draft.description.trim(),
     createdAt: todayStr(), completions:[]
   });
   unlockStarterRewards();
@@ -1147,7 +1339,7 @@ function addHabit(){
   var d = state._draft;
   var name = d.name.trim();
   if(!name) return;
-  state.habits.push({ id:uid(), name:name, emoji:d.emoji, type:d.type, createdAt:todayStr(), completions:[] });
+  state.habits.push({ id:uid(), name:name, emoji:d.emoji, type:d.type, description:d.description.trim(), createdAt:todayStr(), completions:[] });
   save();
   // Pops the add-habit-modal's history entry (pushed by navigateTo() when it
   // was opened) rather than setting state.screen directly -- keeps the
