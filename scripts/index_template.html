@@ -255,6 +255,7 @@ img{max-width:100%; display:block;}
 .pip-row{display:flex; gap:6px; justify-content:center; flex-wrap:wrap; margin-top:10px;}
 .pip{font-size:1.15rem; opacity:.28; filter:grayscale(1);}
 .pip.filled{opacity:1; filter:none;}
+.carrot-counter{font-size:.78rem; font-weight:700; color:var(--wood-dark); margin-top:6px;}
 .plaque-progress-text{text-align:center; color:var(--parchment-edge); font-size:.76rem; margin-top:8px;}
 
 /* ---------- Habit rows (compact, tap for detail) ---------- */
@@ -362,6 +363,13 @@ img{max-width:100%; display:block;}
   font-size:.6rem; font-weight:800; text-transform:uppercase; letter-spacing:.06em;
   padding:3px 7px; border-radius:6px; box-shadow:0 2px 4px rgba(0,0,0,.35);
 }
+.reward-heart{
+  position:absolute; top:6px; right:6px; background:rgba(20,20,20,.45); border:none;
+  width:26px; height:26px; border-radius:50%; font-size:.85rem; line-height:1;
+  display:flex; align-items:center; justify-content:center; filter:grayscale(1); opacity:.75;
+}
+.reward-heart.favorited{filter:none; opacity:1; background:rgba(20,20,20,.3);}
+.reward-heart:active{transform:translateY(1px);}
 
 /* ---------- Modals ---------- */
 .modal-backdrop{
@@ -581,6 +589,7 @@ function defaultState(){
     unlocks:{},
     sightings:[],
     favoriteSightings:[],
+    favoriteRewards:[],
     sightingsFilter:"all",
     screen:"logbook",
     pendingCelebration:null,
@@ -694,7 +703,7 @@ function renderOnboarding(){
         '<h2 style="color:var(--parchment-hi)">The story so far&hellip;</h2>' +
         '<img class="story-home" src="'+ASSET.home_scene+'" alt="Your island home">' +
         '<p class="onb-copy">Your Castaway is marooned on a remote island. To keep motivated, your Castaway keeps a logbook, earning 1 carrot for each daily activity completed.</p>' +
-        '<p class="onb-copy">Help your Castaway by adding a daily activity you\'d like to track now.</p>' +
+        '<p class="onb-copy">Help your Castaway by adding activities to track.</p>' +
         '<button class="btn mt" data-action="onb-next">Continue</button>' +
       '</div>'
     );
@@ -772,7 +781,7 @@ function renderLogbookScreen(){
   }
   html += '</div></div>';
 
-  html += renderHabitGroup("daily","Daily Habit-Gardens");
+  html += renderHabitGroup("daily","Habit Gardens: Activity Tracking");
   if(state.unlocks.new_task_types || countActive(state,"monthly")>0){
     html += renderHabitGroup("monthly","Monthly Habits");
   }
@@ -833,7 +842,7 @@ function renderHabitDetailModal(id){
     var today = todayStr();
     var doneToday = h.completions.indexOf(today) !== -1;
     var pips = '';
-    for(var i=6;i>=0;i--){
+    for(var i=0;i<=6;i++){
       var d = new Date(); d.setDate(d.getDate()-i);
       var ds = d.toISOString().slice(0,10);
       var done = h.completions.indexOf(ds)!==-1;
@@ -883,12 +892,14 @@ function renderRewardsScreen(){
   // List Buccaneer" spelled out as their own locked cards on day one is just
   // clutter/overwhelm before they're even relevant.
   REWARDS.filter(function(r){ return !!state.unlocks[r.id]; }).forEach(function(r){
+    var favorited = state.favoriteRewards.indexOf(r.id)!==-1;
     html += '<div class="reward-card" data-action="show-reward-detail" data-id="'+r.id+'">';
     html += '<div class="reward-media">';
     if(r.image){ html += '<img src="'+r.image(state)+'" alt="">'; }
     else { html += '<div class="medallion">'+r.medallion+'</div>'; }
     html += '</div>';
     html += r.starter ? '<div class="reward-ribbon">Starter</div>' : '<div class="reward-ribbon">Unlocked</div>';
+    html += '<button class="reward-heart '+(favorited?'favorited':'')+'" data-action="toggle-favorite-reward" data-id="'+r.id+'" aria-label="Favorite">'+(favorited?'❤️':'🤍')+'</button>';
     html += '<div class="reward-body">';
     html += '<div class="reward-title">'+r.title+'</div>';
     html += '<div class="reward-desc">'+r.desc+'</div>';
@@ -901,16 +912,15 @@ function renderRewardsScreen(){
   var sightingsActive = !!state.unlocks.second_garden && state.sightings.length < SIGHTINGS_TOTAL;
   if(chainNext || sightingsActive){
     html += '<div class="reward-card locked" '+(chainNext ? 'data-action="show-reward-detail" data-id="'+chainNext.id+'"' : '')+'>';
-    html += '<div class="reward-media"><div class="medallion">🥕</div></div>';
+    html += '<div class="reward-media"><div class="medallion">🎁</div></div>';
     html += '<div class="reward-lock">🔒</div>';
     html += '<div class="reward-body">';
     html += '<div class="reward-title">Next Rewards</div>';
-    html += '<div class="reward-desc">Track habits 7x to earn rewards</div>';
     html += '<ul class="next-rewards-list">';
-    if(chainNext){ html += '<li>🥕 '+chainNext.title+'</li>'; }
+    if(chainNext){ html += '<li>🎁 '+chainNext.title+'</li>'; }
     if(sightingsActive){ html += '<li>🔭 New Island Sighting</li>'; }
     html += '</ul>';
-    html += '<div class="pip-row" style="justify-content:flex-start; margin-top:6px;">'+carrotPipsHtml(state.carrots%7,7)+'</div>';
+    html += '<div class="carrot-counter">🥕 '+(state.carrots%7)+'/7</div>';
     html += '</div></div>';
   }
   html += '</div>';
@@ -1067,7 +1077,7 @@ function renderStoryModal(){
   html += '<h3 style="color:var(--wood-dark);">The story so far&hellip;</h3>';
   html += '<img class="story-home" src="'+ASSET.home_scene+'" alt="Your island home">';
   html += '<p style="color:var(--wood); font-size:.92rem; line-height:1.5; text-align:left;">Your Castaway is marooned on a remote island. To keep motivated, your Castaway keeps a logbook, earning 1 carrot for each daily activity completed.</p>';
-  html += '<p style="color:var(--wood); font-size:.92rem; line-height:1.5; text-align:left;">Help your Castaway by adding a daily activity you\'d like to track now.</p>';
+  html += '<p style="color:var(--wood); font-size:.92rem; line-height:1.5; text-align:left;">Help your Castaway by adding activities to track.</p>';
   html += '</div></div>';
   return html;
 }
@@ -1258,6 +1268,16 @@ function onAction(e){
         showToast("You can favorite up to "+SIGHTINGS_FAVORITE_MAX+" — remove one first.");
         break;
       }
+      save(); render();
+      break;
+    case "toggle-favorite-reward":
+      // Nested inside the reward-card's own show-reward-detail element --
+      // stop the click from also bubbling up and opening the detail modal.
+      e.stopPropagation();
+      var rewardId = el.getAttribute("data-id");
+      var rIdx = state.favoriteRewards.indexOf(rewardId);
+      if(rIdx!==-1){ state.favoriteRewards.splice(rIdx,1); }
+      else { state.favoriteRewards.push(rewardId); }
       save(); render();
       break;
     case "close-modal":
