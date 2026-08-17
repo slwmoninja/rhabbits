@@ -334,7 +334,8 @@ img{max-width:100%; display:block;}
   background:rgba(107,69,38,.08); border:1px solid var(--parchment-edge); border-radius:9px;
   padding:8px 12px; margin:2px 0 14px; color:var(--wood-dark); font-weight:700; font-size:.85rem;
 }
-.story-icon{width:36px; height:36px; flex-shrink:0; border-radius:6px; background-repeat:no-repeat; border:1px solid var(--parchment-edge);}
+.story-icon{width:36px; height:36px; flex-shrink:0; display:flex; align-items:center; justify-content:center;}
+.story-icon img{width:100%; height:100%; object-fit:contain;}
 .reward-card{
   background:linear-gradient(180deg, var(--parchment-hi), var(--parchment));
   border-radius:12px; border:1px solid var(--parchment-edge); box-shadow:var(--shadow);
@@ -460,7 +461,8 @@ var ASSET = {
   cutout_male: "__CUTOUT_MALE__",
   cutout_female: "__CUTOUT_FEMALE__",
   sightings_sprite: "__SIGHTINGS_SPRITE__",
-  chest: "__CHEST__"
+  chest: "__CHEST__",
+  bottle: "__BOTTLE__"
 };
 
 var STORAGE_KEY = "rhabbits_state_v1";
@@ -1130,7 +1132,7 @@ function renderProfileModal(){
   html += '  <div style="display:flex; align-items:center; gap:10px; flex-shrink:0;">'+installTopbarBtnHtml(true)+'<button class="modal-close" data-action="close-modal" style="float:none; margin:0;">✕</button></div>';
   html += '</div>';
   html += '<img class="profile-cutout" src="'+cutoutImg+'" alt="">';
-  html += '<button class="story-link" data-action="show-story"><span class="story-icon" style="'+sightingTileStyle(80)+'"></span><span>The Story So Far</span></button>';
+  html += '<button class="story-link" data-action="show-story"><span class="story-icon"><img src="'+ASSET.bottle+'" alt=""></span><span>The Story So Far</span></button>';
   html += '<div class="profile-stats">';
   html += '<div class="profile-stat"><b>'+state.carrots+'</b><span>Carrots</span></div>';
   html += '<div class="profile-stat"><b>'+(daysSince(state.startDate)+1)+'</b><span>Days Ashore</span></div>';

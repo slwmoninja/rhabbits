@@ -23,6 +23,7 @@ ASSETS = {
     "__CUTOUT_FEMALE__": b64("cutout_female.webp", "image/webp"),
     "__SIGHTINGS_SPRITE__": b64("sightings_sprite.webp", "image/webp"),
     "__CHEST__": b64("chest.webp", "image/webp"),
+    "__BOTTLE__": b64("bottle.webp", "image/webp"),
 }
 
 template = (ROOT / "scripts" / "index_template.html").read_text(encoding="utf-8")
