@@ -98,6 +98,10 @@ img{max-width:100%; display:block;}
   box-shadow:0 4px 0 var(--wood-darker), var(--shadow);
   transition:transform .12s ease, box-shadow .12s ease;
 }
+.btn-icon-wheel{
+  display:inline-block; width:1.3em; height:1.3em; border-radius:4px;
+  vertical-align:-6px; margin-left:2px; background-repeat:no-repeat;
+}
 .btn:active{transform:translateY(3px); box-shadow:0 1px 0 var(--wood-darker);}
 .btn:disabled{opacity:.4; filter:grayscale(.4); box-shadow:0 4px 0 var(--wood-darker);}
 .btn:disabled:active{transform:none;}
@@ -344,10 +348,20 @@ img{max-width:100%; display:block;}
 }
 .reward-media img{width:100%; height:100%; object-fit:cover;}
 .reward-media .medallion{font-size:2.6rem;}
-.sprite-medallion{background-repeat:no-repeat; border-radius:10px; background-color:var(--parchment); margin:0 auto;}
-.reward-media .sprite-medallion{width:64px; height:64px;}
-.medallion-lg.sprite-medallion{width:140px; height:140px;}
-.medallion-lg.sprite-medallion.locked{filter:grayscale(1); opacity:.55;}
+/* Square variant for the Island Sightings summary card -- its thumbnail is
+   a sprite-sheet tile (background-position math assumes a 1:1 element,
+   unlike the other cards' real <img> which can object-fit:cover a
+   non-square box). */
+.reward-media.square{height:auto; aspect-ratio:1/1;}
+.sighting-hero{width:100%; height:100%; background-repeat:no-repeat;}
+.icon-tile{
+  border-radius:10px; background-color:var(--parchment); margin:0 auto;
+  display:flex; align-items:center; justify-content:center;
+}
+.reward-media .icon-tile{width:64px; height:64px;}
+.icon-tile.lg{width:140px; height:140px;}
+.icon-tile.locked{filter:grayscale(1); opacity:.55;}
+.sprite-medallion{background-repeat:no-repeat;}
 .reward-body{padding:10px 12px 12px;}
 .reward-title{font-weight:700; color:var(--wood-dark); font-size:.86rem; margin-bottom:3px;}
 .reward-desc{color:var(--wood); font-size:.72rem; line-height:1.4; margin-bottom:6px;}
@@ -482,9 +496,11 @@ var REWARDS = [
   {
     id: "first_habit",
     title: "1 Tracked Habit",
-    desc: "You started your very first habit-garden.",
+    desc: "Alternative portrait option.",
     starter: true,
-    spriteTile: 74 // the ship's wheel tile in sightings_sprite.webp
+    // The road not taken -- a glimpse of the *other* castaway look, as a
+    // small surprise alongside your own chosen portrait.
+    image: function(state){ return state.avatar === "female" ? ASSET.cutout_male : ASSET.cutout_female; }
   },
   {
     id: "second_garden",
@@ -737,7 +753,7 @@ function renderOnboarding(){
       '<div class="field"><label>Habit name</label><input type="text" id="firstHabitName" maxlength="40" placeholder="e.g. Drink 8 glasses of water" value="'+escapeAttr(d.name)+'"></div>' +
       '<div class="field"><label>Habit description (optional)</label><textarea id="firstHabitDescription" maxlength="140" placeholder="e.g. A big glass with breakfast, lunch, and dinner">'+escapeHtml(d.description)+'</textarea></div>' +
       '<div class="emoji-picker">'+EMOJI_CHOICES.map(function(e){return '<button class="emoji-opt '+(d.emoji===e?'selected':'')+'" data-action="pick-emoji" data-emoji="'+e+'">'+e+'</button>';}).join('')+'</div>' +
-      '<button class="btn mt" data-action="finish-onboarding" '+(d.name.trim()?'':'disabled')+'>Start Tracking 🌱</button>' +
+      '<button class="btn mt" data-action="finish-onboarding" '+(d.name.trim()?'':'disabled')+'>Start Tracking <span class="btn-icon-wheel" style="'+sightingTileStyle(74)+'"></span></button>' +
     '</div>'
   );
 }
@@ -792,11 +808,15 @@ function renderLogbookScreen(){
   html += '<div class="plaque-wrap"><div class="plaque">';
   html += '<span class="plaque-rivet tl"></span><span class="plaque-rivet tr"></span><span class="plaque-rivet bl"></span><span class="plaque-rivet br"></span>';
   html += '<div class="plaque-label">Carrots earned</div>';
-  if(next){
-    if(next.id==="second_garden"){
+  var sightingsActiveLB = state.sightings.length < SIGHTINGS_TOTAL;
+  if(next || sightingsActiveLB){
+    if(next && next.id==="second_garden"){
       html += '<div class="pip-row">'+carrotPipsHtml(state.carrots,7)+'</div>';
     }
-    html += '<div class="plaque-progress-text">Next: '+next.title+' — '+next.progress(state)+'</div>';
+    var nextParts = [];
+    if(next){ nextParts.push(next.title); }
+    if(sightingsActiveLB){ nextParts.push("Island Sightings"); }
+    html += '<div class="plaque-progress-text">Next: '+nextParts.join(' + ')+'</div>';
   } else {
     html += '<div class="plaque-progress-text">All rewards unlocked — more coming soon!</div>';
   }
@@ -917,7 +937,6 @@ function renderRewardsScreen(){
     html += '<div class="reward-card" data-action="show-reward-detail" data-id="'+r.id+'">';
     html += '<div class="reward-media">';
     if(r.image){ html += '<img src="'+r.image(state)+'" alt="">'; }
-    else if(r.spriteTile!=null){ html += '<div class="medallion sprite-medallion" style="'+sightingTileStyle(r.spriteTile)+'"></div>'; }
     else { html += '<div class="medallion">'+r.medallion+'</div>'; }
     html += '</div>';
     html += r.starter ? '<div class="reward-ribbon">Starter</div>' : '<div class="reward-ribbon">Unlocked</div>';
@@ -930,11 +949,27 @@ function renderRewardsScreen(){
     html += '</div></div>';
   });
 
+  // Island Sightings gets one summary card here (not its own inline section)
+  // -- "?" placeholder until the first discovery, then the most recently
+  // discovered sighting as its thumbnail. Tapping it opens the full gallery
+  // (or, pre-discovery, just "No discoveries yet").
+  html += '<div class="reward-card" data-action="show-sightings-gallery">';
+  if(state.sightings.length===0){
+    html += '<div class="reward-media"><div class="medallion">❓</div></div>';
+  } else {
+    var latestIdx = state.sightings[state.sightings.length-1];
+    html += '<div class="reward-media square"><div class="sighting-hero" style="'+sightingTileStyle(latestIdx)+'"></div></div>';
+  }
+  html += '<div class="reward-body">';
+  html += '<div class="reward-title">Island Sightings</div>';
+  html += '<div class="reward-desc">'+(state.sightings.length===0 ? 'No discoveries yet.' : state.sightings.length+' / '+SIGHTINGS_TOTAL+' discovered.')+'</div>';
+  html += '</div></div>';
+
   var chainNext = nextLockedReward();
   var sightingsActive = state.sightings.length < SIGHTINGS_TOTAL;
   if(chainNext || sightingsActive){
     html += '<div class="reward-card locked" '+(chainNext ? 'data-action="show-reward-detail" data-id="'+chainNext.id+'"' : '')+'>';
-    html += '<div class="reward-media"><div class="medallion">'+chestIconSvg("2.6rem")+'</div></div>';
+    html += '<div class="reward-media"><div class="icon-tile">'+chestIconSvg("2.2rem")+'</div></div>';
     html += '<div class="reward-lock">🔒</div>';
     html += '<div class="reward-body">';
     html += '<div class="reward-title">Next Rewards</div>';
@@ -946,17 +981,24 @@ function renderRewardsScreen(){
     html += '</div></div>';
   }
   html += '</div>';
-  html += renderIslandSightings();
   html += '</section>';
   return html;
 }
 
 var SIGHTINGS_FAVORITE_MAX = 5;
 
-function renderIslandSightings(){
-  var html = '<div class="section-label" style="margin-top:22px;">Island Sightings</div>';
+// Reached by tapping the Island Sightings summary card on the Rewards
+// screen. Pre-discovery this is just "No discoveries yet" -- the full
+// gallery (grid + favorites filter) only has anything to show from the
+// first unlock onward.
+function renderSightingsGalleryModal(){
+  var html = '<div class="modal-backdrop" data-backdrop="sightings-gallery">';
+  html += '<div class="modal">';
+  html += '<button class="modal-close" data-action="close-modal">✕</button>';
+  html += '<h3>Island Sightings</h3>';
   if(state.sightings.length===0){
-    html += '<p class="sightings-teaser">🔭 Keep logging habits — your first island sighting unlocks at 7 carrots.</p>';
+    html += '<p class="sightings-teaser">No discoveries yet. Keep logging habits — your first island sighting unlocks at 7 carrots.</p>';
+    html += '</div></div>';
     return html;
   }
   var showingFavorites = state.sightingsFilter==="favorites";
@@ -980,6 +1022,7 @@ function renderIslandSightings(){
   } else {
     html += '<p class="sightings-footer">All '+SIGHTINGS_TOTAL+' island sightings discovered!</p>';
   }
+  html += '</div></div>';
   return html;
 }
 
@@ -991,7 +1034,6 @@ function renderRewardDetailModal(id){
   html += '<div class="modal reward-detail">';
   html += '<button class="modal-close" data-action="close-modal">✕</button>';
   if(r.image){ html += '<img class="reward-hero" src="'+r.image(state)+'" alt="">'; }
-  else if(r.spriteTile!=null){ html += '<div class="medallion-lg sprite-medallion '+(unlocked?'':'locked')+'" style="'+sightingTileStyle(r.spriteTile)+'"></div>'; }
   else { html += '<div class="medallion-lg '+(unlocked?'':'locked')+'">'+r.medallion+'</div>'; }
   html += '<h3>'+r.title+'</h3>';
   html += '<p>'+r.desc+'</p>';
@@ -1011,6 +1053,7 @@ function renderModals(){
   if(state.screen==="profile-modal"){ html += renderProfileModal(); }
   if(state.screen==="habit-detail-modal"){ html += renderHabitDetailModal(state._detailHabitId); }
   if(state.screen==="reward-detail-modal"){ html += renderRewardDetailModal(state._detailRewardId); }
+  if(state.screen==="sightings-gallery-modal"){ html += renderSightingsGalleryModal(); }
   if(state.screen==="story-modal"){ html += renderStoryModal(); }
   if(state.pendingCelebration){ html += renderCelebrationModal(REWARDS.filter(function(r){return r.id===state.pendingCelebration;})[0]); }
   if(state.toast){ html += '<div class="toast">'+state.toast+'</div>'; }
@@ -1111,7 +1154,6 @@ function renderCelebrationModal(r){
   html += '<div class="confetti">🎉🥕✨</div>';
   html += '<h3>New Reward Unlocked!</h3>';
   if(r.image){ html += '<img class="reward-hero" src="'+r.image(state)+'" alt="">'; }
-  else if(r.spriteTile!=null){ html += '<div class="medallion-lg sprite-medallion" style="'+sightingTileStyle(r.spriteTile)+'"></div>'; }
   else { html += '<div class="medallion-lg">'+r.medallion+'</div>'; }
   html += '<h4>'+r.title+'</h4>';
   html += '<p>'+r.desc+'</p>';
@@ -1272,6 +1314,9 @@ function onAction(e){
         state._detailRewardId = el.getAttribute("data-id");
         state.screen = "reward-detail-modal";
       });
+      break;
+    case "show-sightings-gallery":
+      navigateTo(function(){ state.screen = "sightings-gallery-modal"; });
       break;
     case "show-story":
       navigateTo(function(){ state.screen = "story-modal"; });
