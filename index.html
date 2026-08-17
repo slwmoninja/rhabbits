@@ -336,6 +336,17 @@ img{max-width:100%; display:block;}
 }
 .story-icon{width:36px; height:36px; flex-shrink:0; display:flex; align-items:center; justify-content:center;}
 .story-icon img{width:100%; height:100%; object-fit:contain;}
+.log-entries{text-align:left; margin-bottom:14px;}
+.log-entry{
+  background:rgba(107,69,38,.07); border:1px solid var(--parchment-edge); border-radius:9px;
+  padding:10px 12px; margin-bottom:8px;
+}
+.log-entry-when{
+  display:block; font-size:.62rem; letter-spacing:.12em; text-transform:uppercase;
+  font-weight:800; color:var(--carrot-deep); margin-bottom:2px;
+}
+.log-entry-title{font-weight:700; color:var(--wood-dark); font-size:.86rem; margin-bottom:4px;}
+.log-entry-body{color:var(--wood); font-size:.8rem; line-height:1.5; font-style:italic;}
 .reward-card{
   background:linear-gradient(180deg, var(--parchment-hi), var(--parchment));
   border-radius:12px; border:1px solid var(--parchment-edge); box-shadow:var(--shadow);
@@ -572,6 +583,47 @@ function sightingTileStyle(index){
     'background-size:'+(SIGHTINGS_COLS*100)+'% '+(SIGHTINGS_ROWS*100)+'%; background-position:'+posX+'% '+posY+'%;';
 }
 
+// The Castaway's Log: weekly entries for the first month, then monthly,
+// unlocking as real days pass since state.startDate (Days Ashore). Oldest
+// first here; unlockedJournalEntries() reverses to newest-first for display.
+var JOURNAL = [
+  { when:"Week 1", title:"The Wreck (Boom!)", unlockDay:1,
+    body:"Woke up on the beach with no ship, soggy, and wondering if I should use less gunpowder next time. (Note to self: cannons are not for opening coconuts.) Built a leaky lean-to out of driftwood — it fell down twice before it stood up once. Found a barrel labeled CARROT JUICE that survived better than my ship did. Day one of my logbook: today I did NOT give up. That counts." },
+  { when:"Week 2", title:"Splinters", unlockDay:8,
+    body:"Tried to build a real shelter today. Hit my thumb with a rock (twice), tripped over the same root three times, and ate something purple that turned out to be totally fine, probably. Found an old treehouse frame already half-built in the palms — somebody beat me to it! Logged my first habit today just so I'd have ONE thing I did right." },
+  { when:"Week 3", title:"Knock Knock", unlockDay:15,
+    body:"Heard three knocks in the night. Told myself it was a coconut. Grabbed my (bent) cutlass and marched out anyway — it was a coconut. Still counts as brave! Sleeping better on the nights I actually DO the habit instead of just writing that I will. Getting the hang of this." },
+  { when:"Week 4", title:"Getting the Hang of It", unlockDay:22,
+    body:"A whole month?! I think. Lost count around day 19 and just started guessing. Fell out of the treehouse once (I'm fine). The knocking stopped, or I stopped noticing — either way, feels like progress. Starting to feel less like a disaster and more like an actual castaway. From here I'll write once a month instead of every week — steady as she goes, Captain Me." },
+  { when:"Month 2", title:"Two Gardens", unlockDay:50,
+    body:"Planted a second habit-garden today! Also fell in a tide pool trying to plant it. Worth it. Swear the treehouse grew an extra room since I last looked — either I'm losing it or something's helping me out here. Carrots are doing a LOT of the emotional heavy lifting on this island, not gonna lie." },
+  { when:"Month 3", title:"The Storm", unlockDay:78,
+    body:"Huge storm blew half my roof clean off. Kept the logbook dry by literally sitting on it. Did my habits out loud during the worst of it, because yelling into a hurricane felt like the right call. Found a rusty ship's wheel washed up after — don't have a ship, keeping it anyway. Might be a captain someday. A captain of nothing. It's fine." },
+  { when:"Month 4", title:"My Best Friend Is a Crab", unlockDay:106,
+    body:"Made a friend! A crab. It steals my stuff constantly. We're basically pirates together. Laughed so hard today I fell out of my hammock (again), and it was worth every bruise. Turns out doing the habits every day makes the falling-down days a lot less bad." },
+  { when:"Month 5", title:"The Map", unlockDay:134,
+    body:"Found half a burnt map stuffed in a crack in the treehouse wall. Someone left here in a HURRY. Spent three nights too spooked to sleep and three mornings doing my habits anyway, because that's just what I do now, apparently. This island has secrets. I intend to find every single one — preferably without falling in another tide pool." },
+  { when:"Month 6", title:"Halfway There", unlockDay:162,
+    body:"Six months! I've got MULTIPLE habit-gardens going now, which past-me (the one who blew up their own ship) would not believe. Still haven't figured out who built the treehouse. Starting to think some mysteries you don't solve — you just build a pretty good life right next to them." },
+  { when:"Month 7", title:"The Light", unlockDay:190,
+    body:"Saw a light out past the reef, three nights straight! Ship? Rescue? My eyes finally giving up? Didn't sleep a wink, did my habits anyway out of pure stubbornness. Turns out being stubborn is basically a superpower if you aim it the right way." },
+  { when:"Month 8", title:"Feathers, No Answers", unlockDay:218,
+    body:"The light's gone. No wreck, no note, no rescue — just a suspicious number of parrot feathers that definitely weren't here before. A year ago that would've kept me up a week. Now I just shrug, log my habits, and go to bed. Growth, probably." },
+  { when:"Month 9", title:"The Second Chest", unlockDay:246,
+    body:"Dug up ANOTHER sea chest today, buried even deeper than mine — older than me, older than the wheel, older than whoever drew that map. Someone survived out here way longer than a year. Suddenly my little logbook feels a lot less impressive and a lot more like a beginning." },
+  { when:"Month 10", title:"Actually Getting Good At This", unlockDay:274,
+    body:"Ten months of logbooks stacked up like the world's most boring treasure. Built a proper fire today — first try, no burnt eyebrows! Old me would've fallen in the fire pit. Hard days don't wreck me anymore. I just log them and keep going. That might be the real treasure. Don't tell the crab I said that." },
+  { when:"Month 11", title:"Something's Coming", unlockDay:302,
+    body:"Birds too loud, tide all wrong, and my crab is hoarding shells like it's the end of the world. Something's brewing out there. A year ago I'd have panicked. Instead I checked my shelter, did my habits, and went to bed on time like a very responsible pirate. Who even am I." },
+  { when:"Month 12", title:"One Year, One Very Determined Castaway", unlockDay:330,
+    body:"A full year on this rock! My wobbly lean-to is a real home now, and the habit-gardens have taken over the whole clearing. Still don't know who built the treehouse, what that light was, or where the second chest came from — and for once, that doesn't scare me, it just makes me curious. Whatever year two brings, I've got my logbook, my carrots, my crab, and a LOT more skill than the guy who washed up here soggy and confused. Bring it on." }
+];
+function daysAshore(state){ return daysSince(state.startDate) + 1; }
+function unlockedJournalEntries(state){
+  var d = daysAshore(state);
+  return JOURNAL.filter(function(e){ return d >= e.unlockDay; }).slice().reverse();
+}
+
 function onceoffCompletedCount(state){
   return state.habits.filter(function(h){ return h.type==="onceoff" && h.completions.length>0; }).length;
 }
@@ -686,7 +738,7 @@ function evaluateSightings(){
     state.sightings.push(remaining[Math.floor(Math.random()*remaining.length)]);
     unlockedAny = true;
   }
-  if(unlockedAny){ showToast("🔭 New Island Sighting discovered!"); }
+  if(unlockedAny){ showToast("🔭 New discovery!"); }
 }
 
 function unlockStarterRewards(){
@@ -922,7 +974,7 @@ function dailyStreak(h){
 function renderNextRewardsList(chainNext, sightingsActive){
   var html = '<ul class="next-rewards-list">';
   if(chainNext){ html += '<li>'+chestIconSvg("0.8rem")+' '+chainNext.title+'</li>'; }
-  if(sightingsActive){ html += '<li>🔭 New Island Sighting</li>'; }
+  if(sightingsActive){ html += '<li>🔭 New Discovery</li>'; }
   html += '</ul>';
   return html;
 }
@@ -1135,7 +1187,7 @@ function renderProfileModal(){
   html += '<button class="story-link" data-action="show-story"><span class="story-icon"><img src="'+ASSET.bottle+'" alt=""></span><span>The Story So Far</span></button>';
   html += '<div class="profile-stats">';
   html += '<div class="profile-stat"><b>'+state.carrots+'</b><span>Carrots</span></div>';
-  html += '<div class="profile-stat"><b>'+(daysSince(state.startDate)+1)+'</b><span>Days Ashore</span></div>';
+  html += '<div class="profile-stat"><b>'+daysAshore(state)+'</b><span>Days Ashore</span></div>';
   html += '<div class="profile-stat"><b>'+state.habits.length+'</b><span>Habit-Gardens</span></div>';
   html += '</div>';
   html += '<div class="profile-actions">';
@@ -1163,9 +1215,28 @@ function renderStoryModal(){
   html += '<button class="modal-close" data-action="close-modal">✕</button>';
   html += '<h3 style="color:var(--wood-dark);">The story so far&hellip;</h3>';
   html += '<img class="story-home" src="'+ASSET.home_scene+'" alt="Your island home">';
+  html += renderJournalEntries(state);
   html += '<p style="color:var(--wood); font-size:.92rem; line-height:1.5; text-align:left;">Your Castaway is marooned on a remote island. To keep motivated, your Castaway keeps a logbook, earning 1 carrot for each completed activity.</p>';
   html += '<p style="color:var(--wood); font-size:.92rem; line-height:1.5; text-align:left;">Help your Castaway by adding activities to track.</p>';
   html += '</div></div>';
+  return html;
+}
+
+// Journal entries render newest-first above the intro copy -- the intro
+// explains who the Castaway is, the log is what's happened to them lately,
+// so a returning user should see new entries before re-reading the premise.
+function renderJournalEntries(state){
+  var entries = unlockedJournalEntries(state);
+  if(!entries.length) return '';
+  var html = '<div class="log-entries">';
+  entries.forEach(function(e){
+    html += '<div class="log-entry">';
+    html += '<span class="log-entry-when">'+e.when+'</span>';
+    html += '<div class="log-entry-title">'+e.title+'</div>';
+    html += '<p class="log-entry-body">'+e.body+'</p>';
+    html += '</div>';
+  });
+  html += '</div>';
   return html;
 }
 
