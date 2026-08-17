@@ -134,7 +134,7 @@ img{max-width:100%; display:block;}
 .emoji-picker{display:flex; flex-wrap:wrap; gap:8px; max-width:340px; margin:0 auto 18px; justify-content:center;}
 .emoji-opt{
   width:42px; height:42px; border-radius:10px; border:2px solid transparent;
-  background:rgba(255,255,255,.08); font-size:1.3rem; display:flex; align-items:center; justify-content:center;
+  background:transparent; font-size:1.3rem; display:flex; align-items:center; justify-content:center;
 }
 .emoji-opt.selected{border-color:var(--gold); background:rgba(198,153,47,.25);}
 
@@ -346,7 +346,7 @@ img{max-width:100%; display:block;}
   height:118px; background:linear-gradient(160deg, var(--teal-glow), var(--teal-deep));
   display:flex; align-items:center; justify-content:center; overflow:hidden;
 }
-.reward-media img{width:100%; height:100%; object-fit:cover;}
+.reward-media img{width:100%; height:100%; object-fit:contain;}
 .reward-media .medallion{font-size:2.6rem;}
 /* Square variant for the Island Sightings summary card -- its thumbnail is
    a sprite-sheet tile (background-position math assumes a 1:1 element,
@@ -476,7 +476,7 @@ var STORAGE_KEY = "rhabbits_state_v1";
 // confirmed against what was actually deployed. Distinct from any
 // data-schema/localStorage version (this app has none yet).
 var APP_VERSION = "1.0.0";
-var EMOJI_CHOICES = ["🌱","🌴","☀️","🌊","🥥","🥕","⛵","🏴‍☠️","🧭","⚓","🦜","🐚","🌙","🗺️","🏝️"];
+var EMOJI_CHOICES = ["🌴","🌱","☀️","🌊","🥥","🥕","⛵","🏴‍☠️","🧭","⚓","🦜","🐚","🌙","🗺️","🏝️"];
 
 var REWARDS = [
   {
@@ -629,7 +629,7 @@ function defaultState(){
     screen:"logbook",
     pendingCelebration:null,
     toast:null,
-    _draft:{ name:"", emoji:"🌱", type:"daily", description:"" },
+    _draft:{ name:"", emoji:"🌴", type:"daily", description:"" },
     _detailHabitId:null,
     _detailRewardId:null,
     // Install-state bookkeeping -- see isInstalled()/triggerInstall() below.
@@ -927,27 +927,25 @@ function renderRewardsScreen(){
   html += '<h2 style="color:var(--parchment-hi); margin-bottom:4px;">Your Rewards</h2>';
   html += '<p style="color:var(--parchment-edge); font-size:.85rem; margin-bottom:16px;">A growing collection from life on the island. More rewards to come!</p>';
   html += '<div class="reward-grid">';
-  // Unlocked rewards each get their own real card. Everything still locked
-  // is folded into a single combined "Next Rewards" teaser card below rather
-  // than shown individually -- seeing "Monthly & Once-off Tasks" or "Bucket
-  // List Buccaneer" spelled out as their own locked cards on day one is just
-  // clutter/overwhelm before they're even relevant.
-  REWARDS.filter(function(r){ return !!state.unlocks[r.id]; }).forEach(function(r){
-    var favorited = state.favoriteRewards.indexOf(r.id)!==-1;
-    html += '<div class="reward-card" data-action="show-reward-detail" data-id="'+r.id+'">';
-    html += '<div class="reward-media">';
-    if(r.image){ html += '<img src="'+r.image(state)+'" alt="">'; }
-    else { html += '<div class="medallion">'+r.medallion+'</div>'; }
-    html += '</div>';
-    html += r.starter ? '<div class="reward-ribbon">Starter</div>' : '<div class="reward-ribbon">Unlocked</div>';
-    html += '<button class="reward-heart '+(favorited?'favorited':'')+'" data-action="toggle-favorite-reward" data-id="'+r.id+'" aria-label="Favorite">'+(favorited?'❤️':'🤍')+'</button>';
+
+  // "Next Rewards" always leads the grid -- it's the one card that answers
+  // "what am I working toward right now," so it shouldn't require scrolling
+  // past everything already earned to find.
+  var chainNext = nextLockedReward();
+  var sightingsActive = state.sightings.length < SIGHTINGS_TOTAL;
+  if(chainNext || sightingsActive){
+    html += '<div class="reward-card locked" '+(chainNext ? 'data-action="show-reward-detail" data-id="'+chainNext.id+'"' : '')+'>';
+    html += '<div class="reward-media"><div class="icon-tile">'+chestIconSvg("2.2rem")+'</div></div>';
+    html += '<div class="reward-lock">🔒</div>';
     html += '<div class="reward-body">';
-    html += '<div class="reward-title">'+r.title+'</div>';
-    html += '<div class="reward-desc">'+r.desc+'</div>';
-    var u = state.unlocks[r.id];
-    html += '<div class="reward-status unlocked">'+(u.reason?u.reason:'Unlocked '+u.unlockedAt)+'</div>';
+    html += '<div class="reward-title">Next Rewards</div>';
+    html += '<ul class="next-rewards-list">';
+    if(chainNext){ html += '<li>'+chestIconSvg("0.8rem")+' '+chainNext.title+'</li>'; }
+    if(sightingsActive){ html += '<li>🔭 New Island Sighting</li>'; }
+    html += '</ul>';
+    html += '<div class="carrot-counter">🥕 '+(state.carrots%7)+'/7</div>';
     html += '</div></div>';
-  });
+  }
 
   // Island Sightings gets one summary card here (not its own inline section)
   // -- "?" placeholder until the first discovery, then the most recently
@@ -965,21 +963,28 @@ function renderRewardsScreen(){
   html += '<div class="reward-desc">'+(state.sightings.length===0 ? 'No discoveries yet.' : state.sightings.length+' / '+SIGHTINGS_TOTAL+' discovered.')+'</div>';
   html += '</div></div>';
 
-  var chainNext = nextLockedReward();
-  var sightingsActive = state.sightings.length < SIGHTINGS_TOTAL;
-  if(chainNext || sightingsActive){
-    html += '<div class="reward-card locked" '+(chainNext ? 'data-action="show-reward-detail" data-id="'+chainNext.id+'"' : '')+'>';
-    html += '<div class="reward-media"><div class="icon-tile">'+chestIconSvg("2.2rem")+'</div></div>';
-    html += '<div class="reward-lock">🔒</div>';
+  // Unlocked rewards each get their own real card. Everything still locked
+  // beyond the "Next Rewards" teaser above is intentionally not spelled out
+  // individually -- seeing "Monthly & Once-off Tasks" or "Bucket List
+  // Buccaneer" as their own locked cards on day one is just clutter/overwhelm
+  // before they're even relevant.
+  REWARDS.filter(function(r){ return !!state.unlocks[r.id]; }).forEach(function(r){
+    var favorited = state.favoriteRewards.indexOf(r.id)!==-1;
+    html += '<div class="reward-card" data-action="show-reward-detail" data-id="'+r.id+'">';
+    html += '<div class="reward-media">';
+    if(r.image){ html += '<img src="'+r.image(state)+'" alt="">'; }
+    else { html += '<div class="medallion">'+r.medallion+'</div>'; }
+    html += '</div>';
+    html += r.starter ? '<div class="reward-ribbon">Starter</div>' : '<div class="reward-ribbon">Unlocked</div>';
+    html += '<button class="reward-heart '+(favorited?'favorited':'')+'" data-action="toggle-favorite-reward" data-id="'+r.id+'" aria-label="Favorite">'+(favorited?'❤️':'🤍')+'</button>';
     html += '<div class="reward-body">';
-    html += '<div class="reward-title">Next Rewards</div>';
-    html += '<ul class="next-rewards-list">';
-    if(chainNext){ html += '<li>'+chestIconSvg("0.8rem")+' '+chainNext.title+'</li>'; }
-    if(sightingsActive){ html += '<li>🔭 New Island Sighting</li>'; }
-    html += '</ul>';
-    html += '<div class="carrot-counter">🥕 '+(state.carrots%7)+'/7</div>';
+    html += '<div class="reward-title">'+r.title+'</div>';
+    html += '<div class="reward-desc">'+r.desc+'</div>';
+    var u = state.unlocks[r.id];
+    html += '<div class="reward-status unlocked">'+(u.reason?u.reason:'Unlocked '+u.unlockedAt)+'</div>';
     html += '</div></div>';
-  }
+  });
+
   html += '</div>';
   html += '</section>';
   return html;
@@ -1299,7 +1304,7 @@ function onAction(e){
       break;
     case "open-add-habit":
       navigateTo(function(){
-        state._draft = { name:"", emoji:"🌱", type: countActive(state,"daily")<maxDailySlots(state) ? "daily" : (state.unlocks.new_task_types ? "monthly":"daily"), description:"" };
+        state._draft = { name:"", emoji:"🌴", type: countActive(state,"daily")<maxDailySlots(state) ? "daily" : (state.unlocks.new_task_types ? "monthly":"daily"), description:"" };
         state.screen = "add-habit-modal";
       });
       break;
@@ -1858,7 +1863,7 @@ function validBackupShape(parsed){
 function applyRestoredState(parsed){
   var merged = Object.assign(defaultState(), parsed);
   merged.unlocks = Object.assign({}, parsed.unlocks || {});
-  merged._draft = { name:"", emoji:"🌱", type:"daily" };
+  merged._draft = { name:"", emoji:"🌴", type:"daily", description:"" };
   merged.toast = null;
   merged.pendingCelebration = null;
   merged.screen = "logbook";
