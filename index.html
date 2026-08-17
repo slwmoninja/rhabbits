@@ -98,10 +98,6 @@ img{max-width:100%; display:block;}
   box-shadow:0 4px 0 var(--wood-darker), var(--shadow);
   transition:transform .12s ease, box-shadow .12s ease;
 }
-.btn-icon-wheel{
-  display:inline-block; width:1.3em; height:1.3em; border-radius:4px;
-  vertical-align:-6px; margin-left:2px; background-repeat:no-repeat;
-}
 .btn:active{transform:translateY(3px); box-shadow:0 1px 0 var(--wood-darker);}
 .btn:disabled{opacity:.4; filter:grayscale(.4); box-shadow:0 4px 0 var(--wood-darker);}
 .btn:disabled:active{transform:none;}
@@ -800,7 +796,7 @@ function renderOnboarding(){
       '<div class="field"><label>Habit name</label><input type="text" id="firstHabitName" maxlength="40" placeholder="e.g. Drink 8 glasses of water" value="'+escapeAttr(d.name)+'"></div>' +
       '<div class="field"><label>Habit description (optional)</label><textarea id="firstHabitDescription" maxlength="140" placeholder="e.g. A big glass with breakfast, lunch, and dinner">'+escapeHtml(d.description)+'</textarea></div>' +
       '<div class="emoji-picker">'+EMOJI_CHOICES.map(function(e){return '<button class="emoji-opt '+(d.emoji===e?'selected':'')+'" data-action="pick-emoji" data-emoji="'+e+'">'+e+'</button>';}).join('')+'</div>' +
-      '<button class="btn mt" data-action="finish-onboarding" '+(d.name.trim()?'':'disabled')+'>Start Tracking <span class="btn-icon-wheel" style="'+sightingTileStyle(74)+'"></span></button>' +
+      '<button class="btn mt" data-action="finish-onboarding" '+(d.name.trim()?'':'disabled')+'>Start Tracking 🌴</button>' +
     '</div>'
   );
 }
