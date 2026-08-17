@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Builds sightings_sprite.webp: a single 10x10 grid combining the 100
-individual "Island Sightings" collectible icons from Rewards1.jpeg and
+individual "New Discovery" collectible icons from Rewards1.jpeg and
 Rewards2.jpeg (two 10x5 sprite sheets, https://.../rHabbits/Rewards1.jpeg /
 Rewards2.jpeg -- source design assets, not committed). Re-run this whenever
 those source sheets change, then re-run build_index.py to re-embed.

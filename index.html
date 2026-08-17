@@ -310,7 +310,7 @@ img{max-width:100%; display:block;}
 /* ---------- Rewards screen ---------- */
 .reward-grid{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
 
-/* ---------- Island Sightings (open-ended collectible track) ---------- */
+/* ---------- New Discovery (open-ended collectible track) ---------- */
 .sightings-teaser{color:var(--parchment-edge); font-size:.85rem; line-height:1.5;}
 .sightings-grid{display:grid; grid-template-columns:repeat(5, 1fr); gap:8px;}
 .sighting-tile{
@@ -356,7 +356,7 @@ img{max-width:100%; display:block;}
 }
 .reward-media img{width:100%; height:100%; object-fit:contain;}
 .reward-media .medallion{font-size:2.6rem;}
-/* Square variant for the Island Sightings summary card -- its thumbnail is
+/* Square variant for the New Discovery summary card -- its thumbnail is
    a sprite-sheet tile (background-position math assumes a 1:1 element,
    unlike the other cards' real <img> which can object-fit:cover a
    non-square box). */
@@ -543,7 +543,7 @@ var REWARDS = [
 ];
 var STARTER_REASON = "Reward issued: Starting to use the app!";
 
-// "Island Sightings" -- a separate, open-ended collectible track alongside
+// "New Discovery" -- a separate, open-ended collectible track alongside
 // the structured REWARDS chain above. SIGHTINGS_SPRITE is one combined
 // 10x10 grid image (see scripts/build_sightings_sprite.py) rather than 100
 // separate embedded images, both for file size and because a single shared
@@ -717,7 +717,7 @@ function evaluateRewards(){
   evaluateSightings();
 }
 
-// Island Sightings: an open-ended collectible track, separate from the
+// New Discovery: an open-ended collectible track, separate from the
 // structured REWARDS chain above. One random not-yet-discovered sighting
 // unlocks at every 7-carrot milestone, in step with the REWARDS chain's own
 // carrot-gated reward (Second Habit-Garden) rather than waiting for it --
@@ -858,7 +858,7 @@ function renderLogbookScreen(){
     }
     var nextParts = [];
     if(next){ nextParts.push(next.title); }
-    if(sightingsActiveLB){ nextParts.push("Island Sightings"); }
+    if(sightingsActiveLB){ nextParts.push("New Discovery"); }
     html += '<div class="plaque-progress-text">Next: '+nextParts.join(' + ')+'</div>';
   } else {
     html += '<div class="plaque-progress-text">All rewards unlocked — more coming soon!</div>';
@@ -1011,7 +1011,7 @@ function renderRewardsScreen(){
     html += '</div></div>';
   }
 
-  // Island Sightings gets one summary card here (not its own inline section)
+  // New Discovery gets one summary card here (not its own inline section)
   // -- "?" placeholder until the first discovery, then the most recently
   // discovered sighting as its thumbnail. Tapping it opens the full gallery
   // (or, pre-discovery, just "No discoveries yet").
@@ -1023,7 +1023,7 @@ function renderRewardsScreen(){
     html += '<div class="reward-media square"><div class="sighting-hero" style="'+sightingTileStyle(latestIdx)+'"></div></div>';
   }
   html += '<div class="reward-body">';
-  html += '<div class="reward-title">Island Sightings</div>';
+  html += '<div class="reward-title">New Discovery</div>';
   html += '<div class="reward-desc">'+(state.sightings.length===0 ? 'No discoveries yet.' : state.sightings.length+' / '+SIGHTINGS_TOTAL+' discovered.')+'</div>';
   html += '</div></div>';
 
@@ -1056,7 +1056,7 @@ function renderRewardsScreen(){
 
 var SIGHTINGS_FAVORITE_MAX = 5;
 
-// Reached by tapping the Island Sightings summary card on the Rewards
+// Reached by tapping the New Discovery summary card on the Rewards
 // screen. Pre-discovery this is just "No discoveries yet" -- the full
 // gallery (grid + favorites filter) only has anything to show from the
 // first unlock onward.
@@ -1064,7 +1064,7 @@ function renderSightingsGalleryModal(){
   var html = '<div class="modal-backdrop" data-backdrop="sightings-gallery">';
   html += '<div class="modal">';
   html += '<button class="modal-close" data-action="close-modal">✕</button>';
-  html += '<h3>Island Sightings</h3>';
+  html += '<h3>New Discovery</h3>';
   if(state.sightings.length===0){
     html += '<p class="sightings-teaser">No discoveries yet. Keep logging habits — your first island sighting unlocks at 7 carrots.</p>';
     html += '</div></div>';
