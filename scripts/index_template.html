@@ -1,0 +1,1835 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>rHabbits</title>
+<meta name="description" content="Build better habits (rHabbits) by tracking daily progress and earning carrots.">
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" href="./icon-192.png">
+<!-- iOS Safari reads this tag (not manifest.json) for the Home Screen icon.
+     The ?v= hash must be kept in sync with icon-192.png's content by hand for
+     now -- scripts/sync_icon_version.py only stamps manifest.json today, not
+     this tag or index_template.html. Recompute (sha256 of icon-192.png,
+     first 8 hex chars) and bump this whenever icon-192.png's bytes change,
+     or iPhone installs will keep showing a stale icon after an update. -->
+<link rel="apple-touch-icon" href="./icon-192.png?v=b5dea59f">
+<meta name="theme-color" content="#0E3634">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="rHabbits">
+<style>
+:root{
+  --ink:#241a10;
+  --teal-deep:#0e3634;
+  --teal-glow:#1b534e;
+  --teal-glow2:#123f3c;
+  --parchment:#f1e4c2;
+  --parchment-hi:#f8efd8;
+  --parchment-edge:#d9c48f;
+  --wood:#6b4526;
+  --wood-dark:#3e2714;
+  --wood-darker:#2a1a0d;
+  --carrot:#e07b2e;
+  --carrot-deep:#b85a1b;
+  --leaf:#5c7a3f;
+  --leaf-deep:#3f5a2a;
+  --gold:#c6992f;
+  --danger:#a33a2c;
+  --shadow: 0 6px 18px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html,body{height:100%;}
+body{
+  margin:0;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  color:var(--ink);
+  background:
+    radial-gradient(ellipse at 50% -10%, var(--teal-glow) 0%, transparent 60%),
+    linear-gradient(180deg, var(--teal-glow2) 0%, var(--teal-deep) 55%, #082523 100%);
+  background-attachment:fixed;
+  min-height:100%;
+}
+h1,h2,h3,h4{
+  font-family:Georgia,"Iowan Old Style","Palatino Linotype",serif;
+  margin:0 0 .4em;
+  letter-spacing:.02em;
+}
+button{font-family:inherit; cursor:pointer;}
+img{max-width:100%; display:block;}
+#app{max-width:480px; margin:0 auto; min-height:100%; padding-bottom:96px; position:relative;}
+.hidden{display:none !important;}
+
+/* ---------- Onboarding ---------- */
+.onb-screen{
+  min-height:100vh;
+  min-height:100dvh;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  padding:36px 24px;
+  text-align:center;
+  animation:fadeIn .4s ease;
+}
+@keyframes fadeIn{from{opacity:0; transform:translateY(8px);} to{opacity:1; transform:none;}}
+.onb-logo img{width:132px; height:132px; object-fit:contain; margin:0 auto 18px; filter:drop-shadow(0 10px 16px rgba(0,0,0,.45));}
+.onb-title{
+  color:var(--parchment-hi);
+  font-size:2.5rem;
+  text-shadow:0 3px 0 var(--wood-darker), 0 8px 18px rgba(0,0,0,.5);
+}
+.onb-sub{color:var(--parchment-edge); font-size:.85rem; letter-spacing:.16em; text-transform:uppercase; margin-bottom:20px;}
+.onb-copy{
+  color:var(--parchment-hi);
+  font-size:1.02rem;
+  line-height:1.6;
+  max-width:38ch;
+  margin:0 auto 14px;
+}
+.onb-copy b{color:var(--gold);}
+.story-home{width:min(78vw,300px); margin:0 auto 18px; filter:drop-shadow(0 14px 20px rgba(0,0,0,.5));}
+.btn{
+  appearance:none; border:none; border-radius:14px;
+  padding:15px 30px;
+  font-size:1.05rem; font-weight:700; letter-spacing:.02em;
+  background:linear-gradient(180deg, var(--carrot), var(--carrot-deep));
+  color:#fff7ea;
+  box-shadow:0 4px 0 var(--wood-darker), var(--shadow);
+  transition:transform .12s ease, box-shadow .12s ease;
+}
+.btn:active{transform:translateY(3px); box-shadow:0 1px 0 var(--wood-darker);}
+.btn:disabled{opacity:.4; filter:grayscale(.4); box-shadow:0 4px 0 var(--wood-darker);}
+.btn:disabled:active{transform:none;}
+.btn-wood{background:linear-gradient(180deg, var(--wood), var(--wood-dark)); color:var(--parchment-hi);}
+.btn-ghost{
+  background:transparent; color:var(--parchment-edge);
+  box-shadow:none; border:1px solid var(--parchment-edge);
+  padding:10px 20px; font-size:.9rem; font-weight:600;
+}
+.btn-danger{background:linear-gradient(180deg,#c0503b,var(--danger)); color:#fff2ec;}
+.btn-block{width:100%;}
+.mt{margin-top:22px;}
+
+.avatar-choice{display:flex; gap:18px; margin:8px 0 26px;}
+.avatar-option{
+  border:3px solid transparent; border-radius:50%; padding:4px;
+  background:rgba(0,0,0,.15);
+  transition:border-color .15s ease, transform .15s ease;
+}
+.avatar-option img{width:128px; height:128px; border-radius:50%;}
+.avatar-option.selected{border-color:var(--gold); transform:translateY(-4px);}
+.avatar-option-label{color:var(--parchment-edge); font-size:.8rem; margin-top:6px; text-transform:uppercase; letter-spacing:.1em;}
+
+.field{width:100%; max-width:340px; text-align:left; margin:0 auto 16px;}
+.field label{display:block; color:var(--parchment-edge); font-size:.78rem; text-transform:uppercase; letter-spacing:.1em; margin-bottom:6px;}
+.field input[type=text]{
+  width:100%; padding:13px 14px; border-radius:10px; border:1px solid var(--parchment-edge);
+  background:var(--parchment-hi); color:var(--ink); font-size:1rem;
+}
+.emoji-picker{display:flex; flex-wrap:wrap; gap:8px; max-width:340px; margin:0 auto 18px; justify-content:center;}
+.emoji-opt{
+  width:42px; height:42px; border-radius:10px; border:2px solid transparent;
+  background:rgba(255,255,255,.08); font-size:1.3rem; display:flex; align-items:center; justify-content:center;
+}
+.emoji-opt.selected{border-color:var(--gold); background:rgba(198,153,47,.25);}
+
+/* ---------- App shell ---------- */
+.topbar{
+  position:sticky; top:0; z-index:20;
+  padding:12px 16px;
+  background:linear-gradient(180deg, rgba(14,54,52,.96), rgba(14,54,52,.85));
+  backdrop-filter:blur(6px);
+  border-bottom:1px solid rgba(198,153,47,.35);
+}
+.topbar-row1{display:flex; align-items:center; justify-content:space-between;}
+/* Only rendered when the Install pill has something to show (installTopbarBtnHtml
+   returns non-empty) -- see renderTopbar(). Keeps the icon/wordmark row above
+   untouched once installed, when there's nothing left to show here at all. */
+.topbar-row2{display:flex; justify-content:flex-end; margin-top:8px;}
+.icon-btn{background:none; border:none; padding:0;}
+.home-thumb, .avatar-thumb{
+  width:44px; height:44px; border-radius:50%; object-fit:cover;
+  border:2px solid var(--gold); box-shadow:var(--shadow);
+}
+.home-thumb{object-fit:cover; object-position:50% 30%;}
+.wordmark{
+  color:var(--parchment-hi); font-size:1.35rem; text-align:center;
+  text-shadow:0 2px 0 var(--wood-darker);
+}
+
+/* ---------- Install pill (topbar + Profile) ---------- */
+.topbar-install-btn{
+  flex-shrink:0; border:none; border-radius:20px; padding:7px 16px;
+  font-size:.78rem; font-weight:700; letter-spacing:.02em;
+  color:#fff7ea; background:linear-gradient(180deg, var(--carrot), var(--carrot-deep));
+  box-shadow:0 2px 0 var(--wood-darker);
+}
+.topbar-install-btn:active{transform:translateY(1px); box-shadow:0 1px 0 var(--wood-darker);}
+.topbar-install-btn.installed{
+  background:var(--parchment); color:var(--wood); border:1px solid var(--parchment-edge);
+  box-shadow:none; font-weight:600;
+}
+
+/* ---------- Bottom nav (persistent app chrome -- lives outside #app,
+   see initBottombar()/syncBottombarUI() -- not rebuilt by render()) ---------- */
+.bottombar{
+  position:fixed; left:0; right:0; bottom:0; z-index:25; display:flex;
+  background:linear-gradient(0deg, rgba(14,54,52,.98), rgba(14,54,52,.9));
+  border-top:1px solid rgba(198,153,47,.35);
+  padding:6px 4px calc(6px + env(safe-area-inset-bottom));
+  max-width:480px; margin:0 auto;
+}
+.bottombar.hidden{display:none;}
+.bottom-tab{
+  flex:1; display:flex; flex-direction:column; align-items:center; gap:2px;
+  background:none; border:none; color:var(--parchment-edge); padding:6px 2px; border-radius:10px;
+}
+.bottom-tab .bt-icon{font-size:1.15rem;}
+.bottom-tab .bt-label{font-size:.6rem; text-transform:uppercase; letter-spacing:.05em; font-weight:700;}
+.bottom-tab.active{color:var(--gold);}
+.bottom-tab:active{opacity:.65;}
+
+/* ---------- Pull-to-refresh (forces an update check on demand) ---------- */
+.pull-refresh{
+  position:fixed; top:10px; left:50%; transform:translate(-50%,-60px);
+  width:36px; height:36px; border-radius:50%;
+  background:linear-gradient(180deg, var(--parchment-hi), var(--parchment));
+  border:2px solid var(--wood);
+  box-shadow:var(--shadow);
+  display:flex; align-items:center; justify-content:center;
+  font-size:15px; color:var(--wood-dark); z-index:90;
+}
+.pull-refresh.hidden{display:none;}
+.pull-refresh.dragging{transition:none;}
+.pull-refresh:not(.dragging){transition:transform .2s ease, opacity .2s ease;}
+.pull-refresh .arrow{transition:transform .15s ease; line-height:1;}
+.pull-refresh.ready .arrow{transform:rotate(180deg);}
+.pull-refresh.spinning .arrow{display:none;}
+.pull-refresh.spinning::after{
+  content:''; width:16px; height:16px; border-radius:50%;
+  border:2px solid var(--parchment-edge); border-top-color:var(--carrot);
+  animation:pr-spin .7s linear infinite;
+}
+@keyframes pr-spin{to{transform:rotate(360deg);}}
+
+.screen{padding:16px;}
+
+/* ---------- Carrot plaque (signature element) ---------- */
+.plaque-wrap{display:flex; justify-content:center; margin:6px 0 20px;}
+.plaque{
+  position:relative;
+  background:linear-gradient(180deg, var(--wood) 0%, var(--wood-dark) 100%);
+  border:2px solid var(--wood-darker);
+  border-radius:10px;
+  padding:16px 20px 14px;
+  width:100%;
+  box-shadow:var(--shadow), inset 0 0 0 1px rgba(255,255,255,.05);
+}
+.plaque::before, .plaque::after{
+  content:""; position:absolute; top:-22px; width:2px; height:24px;
+  background:repeating-linear-gradient(180deg,#8a7550 0 4px, transparent 4px 8px);
+}
+.plaque::before{left:22px;}
+.plaque::after{right:22px;}
+.plaque-rivet{position:absolute; width:7px; height:7px; border-radius:50%; background:radial-gradient(circle at 35% 30%, #e8d9a8, var(--wood-darker) 70%); box-shadow:inset 0 0 2px #000;}
+.plaque-rivet.tl{top:8px; left:8px;} .plaque-rivet.tr{top:8px; right:8px;}
+.plaque-rivet.bl{bottom:8px; left:8px;} .plaque-rivet.br{bottom:8px; right:8px;}
+.plaque-count{
+  display:flex; align-items:baseline; justify-content:center; gap:8px;
+  color:var(--parchment-hi); font-family:Georgia,serif; font-size:2.1rem; font-weight:700;
+  text-shadow:0 2px 0 rgba(0,0,0,.4);
+}
+.plaque-count .unit{font-size:.95rem; font-weight:400; color:var(--parchment-edge);}
+.plaque-label{text-align:center; color:var(--gold); font-size:.72rem; letter-spacing:.14em; text-transform:uppercase; margin-bottom:10px;}
+.pip-row{display:flex; gap:6px; justify-content:center; flex-wrap:wrap; margin-top:10px;}
+.pip{font-size:1.15rem; opacity:.28; filter:grayscale(1);}
+.pip.filled{opacity:1; filter:none;}
+.plaque-progress-text{text-align:center; color:var(--parchment-edge); font-size:.76rem; margin-top:8px;}
+
+/* ---------- Habit cards ---------- */
+.section-label{color:var(--parchment-edge); font-size:.75rem; text-transform:uppercase; letter-spacing:.14em; margin:18px 4px 8px;}
+.habit-card{
+  background:linear-gradient(180deg, var(--parchment-hi), var(--parchment));
+  border-radius:10px;
+  border:1px solid var(--parchment-edge);
+  box-shadow:var(--shadow);
+  padding:14px 16px;
+  margin-bottom:12px;
+  position:relative;
+}
+.habit-card:nth-child(odd){transform:rotate(-.4deg);}
+.habit-card:nth-child(even){transform:rotate(.35deg);}
+.habit-head{display:flex; align-items:center; gap:10px; margin-bottom:8px;}
+.habit-emoji{font-size:1.4rem;}
+.habit-name{flex:1; font-weight:700; color:var(--wood-dark);}
+.habit-type-badge{
+  font-size:.62rem; text-transform:uppercase; letter-spacing:.08em; font-weight:700;
+  color:var(--leaf-deep); background:rgba(92,122,63,.15); padding:3px 7px; border-radius:6px;
+}
+.habit-del{background:none; border:none; font-size:1rem; opacity:.45; padding:2px 4px;}
+.habit-del:active{opacity:.9;}
+.habit-week{display:flex; gap:5px; margin-bottom:10px;}
+.day-pip{
+  flex:1; height:22px; border-radius:5px; background:rgba(107,69,38,.15);
+  display:flex; align-items:center; justify-content:center; font-size:.7rem; color:var(--wood);
+}
+.day-pip.done{background:var(--leaf); color:#fff;}
+.day-pip.today{outline:2px solid var(--carrot); outline-offset:1px;}
+.log-btn{
+  width:100%; border:none; border-radius:9px; padding:11px; font-weight:700; font-size:.92rem;
+  background:linear-gradient(180deg, var(--carrot), var(--carrot-deep)); color:#fff7ea;
+  box-shadow:0 3px 0 var(--wood-darker);
+}
+.log-btn:active{transform:translateY(2px); box-shadow:0 1px 0 var(--wood-darker);}
+.log-btn.done{background:linear-gradient(180deg,#7c9c5e,var(--leaf-deep)); box-shadow:0 3px 0 #2c4019;}
+.habit-meta{color:var(--wood); font-size:.78rem; margin-top:8px;}
+.habit-meta.done{color:var(--leaf-deep); font-weight:700;}
+
+.add-habit-card{
+  border:2px dashed rgba(241,228,194,.4); border-radius:10px; padding:16px; text-align:center;
+  color:var(--parchment-edge); margin-top:6px;
+}
+.add-habit-card button{margin-top:8px;}
+.locked-note{font-size:.78rem; color:var(--parchment-edge); margin-top:6px; line-height:1.5;}
+
+/* ---------- Rewards screen ---------- */
+.reward-grid{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+.reward-card{
+  background:linear-gradient(180deg, var(--parchment-hi), var(--parchment));
+  border-radius:12px; border:1px solid var(--parchment-edge); box-shadow:var(--shadow);
+  overflow:hidden; position:relative; display:flex; flex-direction:column;
+}
+.reward-media{
+  height:118px; background:linear-gradient(160deg, var(--teal-glow), var(--teal-deep));
+  display:flex; align-items:center; justify-content:center; overflow:hidden;
+}
+.reward-media img{width:100%; height:100%; object-fit:cover;}
+.reward-media .medallion{font-size:2.6rem;}
+.reward-body{padding:10px 12px 12px;}
+.reward-title{font-weight:700; color:var(--wood-dark); font-size:.86rem; margin-bottom:3px;}
+.reward-desc{color:var(--wood); font-size:.72rem; line-height:1.4; margin-bottom:6px;}
+.reward-status{font-size:.68rem; font-weight:700;}
+.reward-status.unlocked{color:var(--leaf-deep);}
+.reward-status.locked{color:#8a7a5c;}
+.reward-card.locked .reward-media img{filter:grayscale(1) brightness(.55);}
+.reward-card.locked .reward-media .medallion{filter:grayscale(1); opacity:.5;}
+.reward-card.locked{opacity:.82;}
+.reward-lock{
+  position:absolute; top:8px; right:8px; background:rgba(20,20,20,.55); color:#fff;
+  width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:.85rem;
+}
+.reward-ribbon{
+  position:absolute; top:8px; left:8px; background:var(--gold); color:var(--wood-darker);
+  font-size:.6rem; font-weight:800; text-transform:uppercase; letter-spacing:.06em;
+  padding:3px 7px; border-radius:6px; box-shadow:0 2px 4px rgba(0,0,0,.35);
+}
+
+/* ---------- Modals ---------- */
+.modal-backdrop{
+  position:fixed; inset:0; background:rgba(8,20,19,.72); backdrop-filter:blur(2px);
+  display:flex; align-items:flex-end; justify-content:center; z-index:60; animation:fadeIn .18s ease;
+}
+.modal{
+  width:100%; max-width:480px; background:linear-gradient(180deg,var(--parchment-hi),var(--parchment));
+  border-radius:18px 18px 0 0; padding:22px 22px calc(22px + env(safe-area-inset-bottom));
+  max-height:88vh; overflow-y:auto; box-shadow:0 -8px 30px rgba(0,0,0,.5);
+}
+/* Centered popup variant -- used for install/uninstall instructions, the
+   proactive install-prompt, and the auto-restore-detected prompt (all appended
+   directly to <body> via openInfoModal, outside #app). A bottom sheet pinned
+   to a top-right topbar tap runs off-screen; a centered popup doesn't. */
+.modal-backdrop.center{align-items:center; padding:24px;}
+.modal-backdrop.center .modal{border-radius:16px; width:min(420px,100%); max-height:80vh;}
+.modal h3{color:var(--wood-dark);}
+.modal-close{float:right; background:none; border:none; font-size:1.3rem; color:var(--wood); line-height:1;}
+.type-picker{display:flex; flex-direction:column; gap:8px; margin-bottom:18px;}
+.type-opt{
+  display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:9px;
+  background:rgba(107,69,38,.08); border:1px solid transparent;
+}
+.type-opt.selected{border-color:var(--carrot); background:rgba(224,123,46,.14);}
+.type-opt.disabled{opacity:.45;}
+.type-opt .t-title{font-weight:700; color:var(--wood-dark); font-size:.92rem;}
+.type-opt .t-sub{font-size:.72rem; color:var(--wood);}
+
+.celebration{text-align:center;}
+.celebration .confetti{font-size:2rem; margin-bottom:6px;}
+.celebration .medallion-lg{font-size:3.4rem; margin:6px 0;}
+.celebration img.reward-hero{max-height:200px; margin:0 auto 10px; border-radius:12px;}
+.celebration h4{color:var(--carrot-deep); font-size:1.2rem;}
+.celebration p{color:var(--wood); font-size:.92rem; line-height:1.5;}
+
+.profile-avatar-lg{width:120px; height:120px; border-radius:50%; margin:0 auto 14px; border:3px solid var(--gold); object-fit:cover;}
+.profile-stats{display:flex; justify-content:space-around; margin:14px 0 20px; text-align:center;}
+.profile-stat b{display:block; font-size:1.3rem; color:var(--wood-dark);}
+.profile-stat span{font-size:.68rem; color:var(--wood); text-transform:uppercase; letter-spacing:.06em;}
+.profile-actions{display:flex; flex-direction:column; gap:10px;}
+
+.toast{
+  position:fixed; left:50%; bottom:24px; transform:translateX(-50%);
+  background:var(--wood-dark); color:var(--parchment-hi); padding:10px 18px; border-radius:20px;
+  font-size:.85rem; box-shadow:var(--shadow); z-index:80; animation:fadeIn .2s ease;
+}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div class="pull-refresh hidden" id="pullRefresh"><span class="arrow">&#8595;</span></div>
+<!-- Persistent app chrome: lives outside #app so it survives every render()
+     rebuild of #app's innerHTML -- see initBottombar()/syncBottombarUI() in
+     the script below. Click handlers are wired exactly once, at bootstrap,
+     never from wireEvents() (which re-runs on every render()). -->
+<nav class="bottombar hidden" id="bottombar">
+  <button class="bottom-tab" data-nav="logbook"><span class="bt-icon">&#128214;</span><span class="bt-label">Logbook</span></button>
+  <button class="bottom-tab" data-nav="rewards"><span class="bt-icon">&#127942;</span><span class="bt-label">Rewards</span></button>
+  <button class="bottom-tab" data-nav="profile-modal"><span class="bt-icon">&#128100;</span><span class="bt-label">Profile</span></button>
+  <button class="bottom-tab" data-nav="backup"><span class="bt-icon">&#128190;</span><span class="bt-label">Backup</span></button>
+</nav>
+<script>
+(function(){
+"use strict";
+
+var ASSET = {
+  avatar_male: "__AVATAR_MALE__",
+  avatar_female: "__AVATAR_FEMALE__",
+  home_scene: "__HOME_SCENE__",
+  home_icon: "__HOME_ICON__",
+  cutout_male: "__CUTOUT_MALE__",
+  cutout_female: "__CUTOUT_FEMALE__"
+};
+
+var STORAGE_KEY = "rhabbits_state_v1";
+// Human-readable build marker shown in Profile > Version -- bump this on
+// every future code change to this file so a reload can be visually
+// confirmed against what was actually deployed. Distinct from any
+// data-schema/localStorage version (this app has none yet).
+var APP_VERSION = "1.0.0";
+var EMOJI_CHOICES = ["🌱","💧","🏃","🧘","📚","🛌","🦷","🥗","🧹","✍️","🙏","🎯","🧭","⚓","🦜"];
+
+var REWARDS = [
+  {
+    id: "portrait",
+    title: "rHabbit Portrait",
+    desc: "Your very own castaway, full body.",
+    starter: true,
+    image: function(state){ return state.avatar === "female" ? ASSET.cutout_female : ASSET.cutout_male; }
+  },
+  {
+    id: "island_home",
+    title: "Island Home",
+    desc: "The treehouse you call home.",
+    starter: true,
+    image: function(){ return ASSET.home_scene; }
+  },
+  {
+    id: "first_habit",
+    title: "1 Tracked rHabbit",
+    desc: "You started your very first habit-garden.",
+    starter: true,
+    medallion: "🌱"
+  },
+  {
+    id: "second_garden",
+    title: "Second Habit-Garden",
+    desc: "Earn 7 carrots to plant a second daily habit.",
+    medallion: "🥕",
+    condition: function(state){ return state.carrots >= 7; },
+    progress: function(state){ return Math.min(state.carrots,7) + "/7 carrots"; }
+  },
+  {
+    id: "new_task_types",
+    title: "Monthly & Once-off Tasks",
+    desc: "4 weeks in — unlock new habit types to track.",
+    medallion: "🗓️",
+    condition: function(state){ return daysSince(state.startDate) >= 28; },
+    progress: function(state){ return Math.min(daysSince(state.startDate),28) + "/28 days"; }
+  },
+  {
+    id: "seven_seasons",
+    title: "Seven Seasons Strong",
+    desc: "Log a monthly habit 7 times. Unlocks another habit-garden.",
+    medallion: "🌙",
+    condition: function(state){ return state.habits.some(function(h){ return h.type==="monthly" && h.completions.length>=7; }); },
+    progress: function(state){
+      var best = state.habits.filter(function(h){return h.type==="monthly";})
+        .reduce(function(m,h){ return Math.max(m,h.completions.length); },0);
+      return Math.min(best,7) + "/7 months";
+    }
+  },
+  {
+    id: "bucket_list",
+    title: "Bucket List Buccaneer",
+    desc: "Complete 7 once-off adventures. Unlocks another habit-garden.",
+    medallion: "🏴‍☠️",
+    condition: function(state){ return onceoffCompletedCount(state) >= 7; },
+    progress: function(state){ return Math.min(onceoffCompletedCount(state),7) + "/7 once-offs"; }
+  }
+];
+var STARTER_REASON = "Reward issued: Starting to use the app!";
+
+function onceoffCompletedCount(state){
+  return state.habits.filter(function(h){ return h.type==="onceoff" && h.completions.length>0; }).length;
+}
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+function monthStr(d){ return (d||new Date()).toISOString().slice(0,7); }
+function daysSince(iso){
+  if(!iso) return 0;
+  var ms = Date.now() - new Date(iso+"T00:00:00").getTime();
+  return Math.max(0, Math.floor(ms/86400000));
+}
+function uid(){ return Math.random().toString(36).slice(2,10) + Date.now().toString(36); }
+
+function maxDailySlots(state){
+  var n = 1;
+  if(state.unlocks.second_garden) n++;
+  if(state.unlocks.seven_seasons) n++;
+  if(state.unlocks.bucket_list) n++;
+  return n;
+}
+function countActive(state, type){
+  return state.habits.filter(function(h){
+    if(h.type!==type) return false;
+    if(type==="onceoff") return h.completions.length===0;
+    return true;
+  }).length;
+}
+
+function defaultState(){
+  return {
+    onboarded:false,
+    onbStep:0,
+    avatar:null,
+    startDate:null,
+    carrots:0,
+    habits:[],
+    unlocks:{},
+    screen:"logbook",
+    pendingCelebration:null,
+    toast:null,
+    _draft:{ name:"", emoji:"🌱", type:"daily" },
+    // Install-state bookkeeping -- see isInstalled()/triggerInstall() below.
+    // installPromptAccepted also covers a manual/native install this session
+    // hasn't relaunched from the real Home Screen icon yet (display-mode
+    // doesn't flip to standalone until that happens).
+    installPromptAccepted:false,
+    installPromptAsked:false
+  };
+}
+
+function load(){
+  try{
+    var raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return defaultState();
+    var parsed = JSON.parse(raw);
+    var d = defaultState();
+    for(var k in d){ if(!(k in parsed)) parsed[k]=d[k]; }
+    return parsed;
+  }catch(e){ return defaultState(); }
+}
+function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+
+var state = load();
+
+function evaluateRewards(){
+  if(!state.onboarded) return;
+  for(var i=0;i<REWARDS.length;i++){
+    var r = REWARDS[i];
+    if(r.starter) continue;
+    if(state.unlocks[r.id]) continue;
+    if(r.condition(state)){
+      state.unlocks[r.id] = { unlockedAt: todayStr() };
+      state.pendingCelebration = r.id;
+    }
+  }
+}
+
+function unlockStarterRewards(){
+  ["portrait","island_home","first_habit"].forEach(function(id){
+    state.unlocks[id] = { unlockedAt: todayStr(), reason: STARTER_REASON };
+  });
+}
+
+/* ---------------- rendering ---------------- */
+var root = document.getElementById("app");
+
+function render(){
+  root.innerHTML = state.onboarded ? renderApp() : renderOnboarding();
+  wireEvents();
+  syncBottombarUI(); // bottombar lives outside #app -- keep it in sync separately, see initBottombar()
+}
+
+function renderOnboarding(){
+  var step = state.onbStep;
+  if(step===0){
+    return (
+      '<div class="onb-screen">' +
+        '<div class="onb-logo"><img src="'+ASSET.home_icon+'" alt=""></div>' +
+        '<h1 class="onb-title">rHabbits</h1>' +
+        '<p class="onb-copy">Build better habits (<b>rHabbits</b>) by tracking progress, earning carrots to unlock more app features. You start small with one habit (rHabbit) to track.</p>' +
+        '<button class="btn mt" data-action="onb-next">Get Started</button>' +
+        '<button class="btn-ghost mt" data-action="restore-backup" style="margin-top:14px;">Already used rHabbits? Restore backup</button>' +
+        '<input type="file" id="onbRestoreInput" accept="application/json,.json" class="hidden">' +
+      '</div>'
+    );
+  }
+  if(step===1){
+    var m = state.avatar==="male", f = state.avatar==="female";
+    return (
+      '<div class="onb-screen">' +
+        '<h2 style="color:var(--parchment-hi)">Choose your rHabbit</h2>' +
+        '<p class="onb-copy">This becomes your castaway — and your icon in the app.</p>' +
+        '<div class="avatar-choice">' +
+          '<div><button class="avatar-option '+(m?'selected':'')+'" data-action="pick-avatar" data-gender="male"><img src="'+ASSET.avatar_male+'" alt="Male rHabbit"></button><div class="avatar-option-label">Male</div></div>' +
+          '<div><button class="avatar-option '+(f?'selected':'')+'" data-action="pick-avatar" data-gender="female"><img src="'+ASSET.avatar_female+'" alt="Female rHabbit"></button><div class="avatar-option-label">Female</div></div>' +
+        '</div>' +
+        '<button class="btn mt" data-action="onb-next" '+(state.avatar?'':'disabled')+'>Continue</button>' +
+      '</div>'
+    );
+  }
+  if(step===2){
+    return (
+      '<div class="onb-screen">' +
+        '<h2 style="color:var(--parchment-hi)">The story so far&hellip;</h2>' +
+        '<img class="story-home" src="'+ASSET.home_scene+'" alt="Your island home">' +
+        '<p class="onb-copy">Your rHabbit is a pira&mdash; (ahem) &mdash; a <b>Freelancer</b>, marooned on a remote island. To survive, your rHabbit built a shelter and started a small garden of carrots. To keep motivation up, your rHabbit keeps a logbook of daily activities, earning 1 carrot for each regular activity completed.</p>' +
+        '<p class="onb-copy">After 7 carrots, your rHabbit will have enough carrot seeds to open another habit-garden. Soon, your rHabbit hopes to have multiple habit-gardens going at once &mdash; and make this place feel like a real home. Help your rHabbit by logging regular progress on your habits (rHabbits).</p>' +
+        '<button class="btn mt" data-action="onb-next">Continue</button>' +
+      '</div>'
+    );
+  }
+  var d = state._draft;
+  return (
+    '<div class="onb-screen">' +
+      '<h2 style="color:var(--parchment-hi)">Let\'s get started!</h2>' +
+      '<p class="onb-copy">Choose one rHabbit you\'d like to track daily. (Later you can unlock monthly and once-off tasks too.) After you earn 7 carrots, you\'ll unlock your next reward.</p>' +
+      '<div class="field"><label>Habit name</label><input type="text" id="firstHabitName" maxlength="40" placeholder="e.g. Drink 8 glasses of water" value="'+escapeAttr(d.name)+'"></div>' +
+      '<div class="emoji-picker">'+EMOJI_CHOICES.map(function(e){return '<button class="emoji-opt '+(d.emoji===e?'selected':'')+'" data-action="pick-emoji" data-emoji="'+e+'">'+e+'</button>';}).join('')+'</div>' +
+      '<button class="btn mt" data-action="finish-onboarding" '+(d.name.trim()?'':'disabled')+'>Start Tracking 🌱</button>' +
+    '</div>'
+  );
+}
+
+function renderTopbar(){
+  var avatarImg = state.avatar==="female" ? ASSET.avatar_female : ASSET.avatar_male;
+  var html = '<header class="topbar">';
+  html += '<div class="topbar-row1">';
+  html += '  <button class="icon-btn" data-action="show-rewards" aria-label="Home / Rewards"><img class="home-thumb" src="'+ASSET.home_icon+'" alt=""></button>';
+  html += '  <div class="wordmark">rHabbits</div>';
+  html += '  <button class="icon-btn" data-action="show-profile" aria-label="Profile"><img class="avatar-thumb" src="'+avatarImg+'" alt=""></button>';
+  html += '</div>';
+  // On every main screen, the Install pill disappears entirely once
+  // installed -- there's nothing left to act on here. Profile is the one
+  // place it stays visible (as an inert "Installed" status line) -- see
+  // renderProfileModal(), which passes keepAfterInstall=true.
+  var pill = installTopbarBtnHtml(false);
+  if(pill){ html += '<div class="topbar-row2">'+pill+'</div>'; }
+  html += '</header>';
+  return html;
+}
+
+function renderApp(){
+  var html = '';
+  html += renderTopbar();
+  html += state.screen==="rewards" ? renderRewardsScreen() : renderLogbookScreen();
+  html += renderModals();
+  return html;
+}
+
+function nextLockedReward(){
+  for(var i=0;i<REWARDS.length;i++){
+    var r = REWARDS[i];
+    if(!r.starter && !state.unlocks[r.id]) return r;
+  }
+  return null;
+}
+
+function renderLogbookScreen(){
+  var html = '<section class="screen">';
+  var next = nextLockedReward();
+  html += '<div class="plaque-wrap"><div class="plaque">';
+  html += '<span class="plaque-rivet tl"></span><span class="plaque-rivet tr"></span><span class="plaque-rivet bl"></span><span class="plaque-rivet br"></span>';
+  html += '<div class="plaque-label">Carrots earned</div>';
+  html += '<div class="plaque-count">🥕 <span>'+state.carrots+'</span> <span class="unit">carrots</span></div>';
+  if(next){
+    var target = next.id==="second_garden" ? 7 : null;
+    if(target){
+      var pips='';
+      for(var i=1;i<=7;i++){ pips += '<span class="pip '+(state.carrots>=i?'filled':'')+'">🥕</span>'; }
+      html += '<div class="pip-row">'+pips+'</div>';
+    }
+    html += '<div class="plaque-progress-text">Next: '+next.title+' — '+next.progress(state)+'</div>';
+  } else {
+    html += '<div class="plaque-progress-text">All rewards unlocked — more coming soon!</div>';
+  }
+  html += '</div></div>';
+
+  html += renderHabitGroup("daily","Daily Habit-Gardens");
+  if(state.unlocks.new_task_types || countActive(state,"monthly")>0){
+    html += renderHabitGroup("monthly","Monthly Habits");
+  }
+  if(state.unlocks.new_task_types || countActive(state,"onceoff")>0 || state.habits.some(function(h){return h.type==="onceoff";})){
+    html += renderHabitGroup("onceoff","Once-off Tasks");
+  }
+
+  html += renderAddHabitCard();
+  html += '</section>';
+  return html;
+}
+
+function renderHabitGroup(type, label){
+  var habits = state.habits.filter(function(h){ return h.type===type; });
+  if(habits.length===0) return '';
+  var html = '<div class="section-label">'+label+'</div>';
+  habits.forEach(function(h){ html += renderHabitCard(h); });
+  return html;
+}
+
+function renderHabitCard(h){
+  var badge = h.type==="daily"?"Daily":h.type==="monthly"?"Monthly":"Once-off";
+  var html = '<div class="habit-card" data-id="'+h.id+'">';
+  html += '<div class="habit-head"><span class="habit-emoji">'+h.emoji+'</span><span class="habit-name">'+escapeHtml(h.name)+'</span><span class="habit-type-badge">'+badge+'</span><button class="habit-del" data-action="delete-habit" data-id="'+h.id+'" aria-label="Delete">🗑</button></div>';
+
+  if(h.type==="daily"){
+    var today = todayStr();
+    var doneToday = h.completions.indexOf(today) !== -1;
+    var pips = '';
+    for(var i=6;i>=0;i--){
+      var d = new Date(); d.setDate(d.getDate()-i);
+      var ds = d.toISOString().slice(0,10);
+      var done = h.completions.indexOf(ds)!==-1;
+      var isToday = ds===today;
+      pips += '<div class="day-pip '+(done?'done':'')+' '+(isToday?'today':'')+'">'+(done?'✓':'')+'</div>';
+    }
+    html += '<div class="habit-week">'+pips+'</div>';
+    html += '<button class="log-btn '+(doneToday?'done':'')+'" data-action="toggle-daily" data-id="'+h.id+'">'+(doneToday?'✓ Logged Today':'Log Today  +1 🥕')+'</button>';
+    html += '<div class="habit-meta">Streak: '+dailyStreak(h)+' day'+(dailyStreak(h)===1?'':'s')+'</div>';
+  } else if(h.type==="monthly"){
+    var m = monthStr();
+    var doneMonth = h.completions.indexOf(m)!==-1;
+    html += '<button class="log-btn '+(doneMonth?'done':'')+'" data-action="toggle-monthly" data-id="'+h.id+'">'+(doneMonth?'✓ Logged this month':'Log this Month  +1 🥕')+'</button>';
+    html += '<div class="habit-meta">'+h.completions.length+'/7 months toward next reward</div>';
+  } else {
+    var done = h.completions.length>0;
+    if(done){
+      html += '<div class="habit-meta done">✓ Completed '+h.completions[0]+'</div>';
+    } else {
+      html += '<button class="log-btn" data-action="toggle-onceoff" data-id="'+h.id+'">Mark Complete  +1 🥕</button>';
+    }
+  }
+  html += '</div>';
+  return html;
+}
+
+function dailyStreak(h){
+  var n=0, d=new Date();
+  var today = todayStr();
+  if(h.completions.indexOf(today)===-1){ d.setDate(d.getDate()-1); }
+  while(true){
+    var ds = d.toISOString().slice(0,10);
+    if(h.completions.indexOf(ds)!==-1){ n++; d.setDate(d.getDate()-1); } else break;
+  }
+  return n;
+}
+
+function renderAddHabitCard(){
+  var dailyFull = countActive(state,"daily") >= maxDailySlots(state);
+  var typesUnlocked = !!state.unlocks.new_task_types;
+  var html = '<div class="add-habit-card">';
+  html += '<div style="font-size:1.6rem;">➕🥕</div>';
+  html += '<div>Plant a new habit-garden</div>';
+  html += '<button class="btn btn-wood" data-action="open-add-habit">Add a Habit</button>';
+  if(dailyFull && !typesUnlocked){
+    html += '<div class="locked-note">Daily slots full ('+maxDailySlots(state)+'). Earn '+Math.max(0,7-state.carrots)+' more 🥕 or wait '+Math.max(0,28-daysSince(state.startDate))+' more day(s) to unlock more.</div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+function renderRewardsScreen(){
+  var html = '<section class="screen">';
+  html += '<h2 style="color:var(--parchment-hi); margin-bottom:4px;">Your Rewards</h2>';
+  html += '<p style="color:var(--parchment-edge); font-size:.85rem; margin-bottom:16px;">A growing collection from life on the island. More rewards to come!</p>';
+  html += '<div class="reward-grid">';
+  REWARDS.forEach(function(r){
+    var unlocked = !!state.unlocks[r.id];
+    html += '<div class="reward-card '+(unlocked?'':'locked')+'">';
+    html += '<div class="reward-media">';
+    if(r.image){
+      html += '<img src="'+r.image(state)+'" alt="">';
+    } else {
+      html += '<div class="medallion">'+r.medallion+'</div>';
+    }
+    html += '</div>';
+    if(!unlocked){ html += '<div class="reward-lock">🔒</div>'; }
+    else if(r.starter){ html += '<div class="reward-ribbon">Starter</div>'; }
+    else { html += '<div class="reward-ribbon">Unlocked</div>'; }
+    html += '<div class="reward-body">';
+    html += '<div class="reward-title">'+r.title+'</div>';
+    html += '<div class="reward-desc">'+r.desc+'</div>';
+    if(unlocked){
+      var u = state.unlocks[r.id];
+      html += '<div class="reward-status unlocked">'+(u.reason?u.reason:'Unlocked '+u.unlockedAt)+'</div>';
+    } else {
+      html += '<div class="reward-status locked">'+r.progress(state)+'</div>';
+    }
+    html += '</div></div>';
+  });
+  html += '</div></section>';
+  return html;
+}
+
+function renderModals(){
+  var html = '';
+  if(state.screen==="add-habit-modal"){ html += renderAddHabitModal(); }
+  if(state.screen==="profile-modal"){ html += renderProfileModal(); }
+  if(state.pendingCelebration){ html += renderCelebrationModal(REWARDS.filter(function(r){return r.id===state.pendingCelebration;})[0]); }
+  if(state.toast){ html += '<div class="toast">'+state.toast+'</div>'; }
+  return html;
+}
+
+function renderAddHabitModal(){
+  var d = state._draft;
+  var dailyCount = countActive(state,"daily"), dailyMax = maxDailySlots(state);
+  var typesUnlocked = !!state.unlocks.new_task_types;
+  var monthlyCount = countActive(state,"monthly"), monthlyMax = 3;
+  var onceoffCount = countActive(state,"onceoff"), onceoffMax = 3;
+
+  var dailyDisabled = dailyCount >= dailyMax;
+  var monthlyDisabled = !typesUnlocked || monthlyCount >= monthlyMax;
+  var onceoffDisabled = !typesUnlocked || onceoffCount >= onceoffMax;
+
+  if(dailyDisabled && d.type==="daily"){ d.type = !monthlyDisabled ? "monthly" : (!onceoffDisabled ? "onceoff" : "daily"); }
+
+  var html = '<div class="modal-backdrop" data-backdrop="add-habit">';
+  html += '<div class="modal">';
+  html += '<button class="modal-close" data-action="close-modal">✕</button>';
+  html += '<h3>Add a Habit</h3>';
+  html += '<div class="field"><label>Name</label><input type="text" id="addHabitName" maxlength="40" placeholder="e.g. Stretch for 5 minutes" value="'+escapeAttr(d.name)+'"></div>';
+  html += '<div class="emoji-picker">'+EMOJI_CHOICES.map(function(e){return '<button class="emoji-opt '+(d.emoji===e?'selected':'')+'" data-action="pick-emoji" data-emoji="'+e+'">'+e+'</button>';}).join('')+'</div>';
+  html += '<div class="type-picker">';
+  html += typeOptRow("daily","Daily", dailyCount+"/"+dailyMax+" habit-gardens used", d.type==="daily", dailyDisabled);
+  html += typeOptRow("monthly","Monthly", typesUnlocked ? (monthlyCount+"/"+monthlyMax+" used") : "🔒 Unlocks after 4 weeks", d.type==="monthly", monthlyDisabled);
+  html += typeOptRow("onceoff","Once-off", typesUnlocked ? (onceoffCount+"/"+onceoffMax+" used") : "🔒 Unlocks after 4 weeks", d.type==="onceoff", onceoffDisabled);
+  html += '</div>';
+  var canSubmit = d.name.trim() && !(d.type==="daily"&&dailyDisabled) && !(d.type==="monthly"&&monthlyDisabled) && !(d.type==="onceoff"&&onceoffDisabled);
+  html += '<button class="btn btn-block" data-action="confirm-add-habit" '+(canSubmit?'':'disabled')+'>Plant it 🌱</button>';
+  html += '</div></div>';
+  return html;
+}
+function typeOptRow(value,title,sub,selected,disabled){
+  return '<button class="type-opt '+(selected?'selected':'')+' '+(disabled?'disabled':'')+'" data-action="pick-type" data-type="'+value+'" '+(disabled?'disabled':'')+'>' +
+    '<div><div class="t-title">'+title+'</div><div class="t-sub">'+sub+'</div></div>' +
+  '</button>';
+}
+
+function renderProfileModal(){
+  var avatarImg = state.avatar==="female" ? ASSET.avatar_female : ASSET.avatar_male;
+  var otherGender = state.avatar==="female" ? "Male" : "Female";
+  var html = '<div class="modal-backdrop" data-backdrop="profile">';
+  html += '<div class="modal">';
+  // This is rHabbits' closest thing to a Settings/About screen, so unlike
+  // every other screen the Install pill stays visible here even once
+  // installed (keepAfterInstall=true) -- that's the one place people go to
+  // confirm state, so it switches to an inert "Installed" line instead of
+  // disappearing. Same row as the heading, matching the topbar's own layout.
+  html += '<div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px;">';
+  html += '  <h3 style="margin:0;">Your rHabbit</h3>';
+  html += '  <div style="display:flex; align-items:center; gap:10px; flex-shrink:0;">'+installTopbarBtnHtml(true)+'<button class="modal-close" data-action="close-modal" style="float:none; margin:0;">✕</button></div>';
+  html += '</div>';
+  html += '<img class="profile-avatar-lg" src="'+avatarImg+'" alt="">';
+  html += '<div class="profile-stats">';
+  html += '<div class="profile-stat"><b>'+state.carrots+'</b><span>Carrots</span></div>';
+  html += '<div class="profile-stat"><b>'+daysSince(state.startDate)+'</b><span>Days Ashore</span></div>';
+  html += '<div class="profile-stat"><b>'+state.habits.length+'</b><span>Habit-Gardens</span></div>';
+  html += '</div>';
+  html += '<div class="profile-actions">';
+  html += '<button class="btn btn-wood" data-action="switch-avatar">Switch rHabbit ('+otherGender+')</button>';
+  html += '<button class="btn btn-wood" data-action="backup-now">Back up data now</button>';
+  html += '<button class="btn btn-ghost" data-action="restore-backup">Restore from backup&hellip;</button>';
+  html += '<input type="file" id="profileRestoreInput" accept="application/json,.json" class="hidden">';
+  html += '<button class="btn btn-danger" data-action="reset-progress">Reset Progress</button>';
+  html += '</div>';
+  html += '<div style="margin-top:18px; padding-top:14px; border-top:1px solid var(--parchment-edge); display:flex; justify-content:space-between; font-size:.78rem; color:var(--wood);">';
+  html += '<span>Version</span><span>'+APP_VERSION+'</span>';
+  html += '</div>';
+  var diag = latestDiagEntry();
+  if(diag){ html += '<div style="margin-top:8px; font-size:.66rem; color:var(--wood); opacity:.75; line-height:1.4;">'+escapeHtml(diag.message)+'</div>'; }
+  html += '</div></div>';
+  return html;
+}
+
+function renderCelebrationModal(r){
+  if(!r) return '';
+  var html = '<div class="modal-backdrop" data-backdrop="celebration">';
+  html += '<div class="modal celebration">';
+  html += '<div class="confetti">🎉🥕✨</div>';
+  html += '<h3>New Reward Unlocked!</h3>';
+  if(r.image){ html += '<img class="reward-hero" src="'+r.image(state)+'" alt="">'; }
+  else { html += '<div class="medallion-lg">'+r.medallion+'</div>'; }
+  html += '<h4>'+r.title+'</h4>';
+  html += '<p>'+r.desc+'</p>';
+  html += '<button class="btn mt" data-action="ack-celebration">Nice!</button>';
+  html += '</div></div>';
+  return html;
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+  });
+}
+function escapeAttr(s){ return escapeHtml(s); }
+
+/* ---------------- events ---------------- */
+function showToast(msg){
+  state.toast = msg;
+  render();
+  setTimeout(function(){ state.toast=null; render(); }, 1800);
+}
+
+function wireEvents(){
+  var els = root.querySelectorAll("[data-action]");
+  els.forEach(function(el){
+    el.addEventListener("click", onAction);
+  });
+  var backdrops = root.querySelectorAll(".modal-backdrop");
+  backdrops.forEach(function(bd){
+    bd.addEventListener("click", function(e){
+      if(e.target!==bd) return;
+      // The celebration overlay isn't a navigated screen (it's shown via
+      // state.pendingCelebration layered on top of whatever screen is
+      // active, regardless of history) -- dismissing it must NOT go through
+      // closeModal()/history.back(), or tapping its backdrop would pop
+      // whatever real screen/modal history entry is actually current out
+      // from under it. Mirrors the "Nice!" button's own ack-celebration case.
+      if(bd.getAttribute("data-backdrop")==="celebration"){
+        state.pendingCelebration = null;
+        save(); render();
+      } else {
+        closeModal();
+      }
+    });
+  });
+  var nameInput = root.querySelector("#firstHabitName");
+  if(nameInput){
+    nameInput.addEventListener("input", function(e){
+      state._draft.name = e.target.value;
+      var btn = root.querySelector('[data-action="finish-onboarding"]');
+      if(btn) btn.disabled = !state._draft.name.trim();
+    });
+  }
+  var addNameInput = root.querySelector("#addHabitName");
+  if(addNameInput){
+    addNameInput.addEventListener("input", function(e){
+      state._draft.name = e.target.value;
+      var btn = root.querySelector('[data-action="confirm-add-habit"]');
+      if(btn) btn.disabled = !e.target.value.trim();
+    });
+    addNameInput.focus();
+  }
+  // Backup restore <input type=file> -- lives inside whichever screen
+  // rendered it (onboarding step 0, or Profile), so it's safe to wire from
+  // here (rebuilt fresh by render() every time, unlike the bottombar).
+  var restoreInput = root.querySelector("#profileRestoreInput") || root.querySelector("#onbRestoreInput");
+  if(restoreInput){
+    restoreInput.addEventListener("change", function(){
+      importLatestBackupFromFiles(restoreInput.files);
+      restoreInput.value = ""; // lets picking the exact same file again re-fire "change"
+    });
+  }
+}
+
+// Just steps history back one entry -- the popstate listener (see
+// onPopState below) performs the actual screen restore + render(). Safe to
+// call unconditionally here because every modal/screen this closes was
+// itself opened via navigateTo(), which always pushed exactly one entry.
+function closeModal(){
+  history.back();
+}
+
+function onAction(e){
+  var el = e.currentTarget;
+  var action = el.getAttribute("data-action");
+  switch(action){
+    // Every explicit forward navigation below (onboarding steps, tapping the
+    // home-icon/avatar to switch screens, opening the add-habit modal) goes
+    // through navigateTo() so it participates in real one-step-at-a-time
+    // back navigation (hardware back, Android gesture-nav swipe, the
+    // browser's own back button) -- see navigateTo()/onPopState() below.
+    case "onb-next":
+      navigateTo(function(){ state.onbStep++; });
+      break;
+    case "pick-avatar":
+      state.avatar = el.getAttribute("data-gender");
+      render();
+      break;
+    case "pick-emoji":
+      state._draft.emoji = el.getAttribute("data-emoji");
+      render();
+      break;
+    case "pick-type":
+      if(el.hasAttribute("disabled")) return;
+      state._draft.type = el.getAttribute("data-type");
+      render();
+      break;
+    case "finish-onboarding":
+      finishOnboarding();
+      break;
+    case "show-rewards":
+      navigateTo(function(){ state.screen = "rewards"; });
+      break;
+    case "show-profile":
+      navigateTo(function(){ state.screen = "profile-modal"; });
+      break;
+    case "open-add-habit":
+      navigateTo(function(){
+        state._draft = { name:"", emoji:"🌱", type: countActive(state,"daily")<maxDailySlots(state) ? "daily" : (state.unlocks.new_task_types ? "monthly":"daily") };
+        state.screen = "add-habit-modal";
+      });
+      break;
+    case "close-modal":
+      closeModal();
+      break;
+    case "confirm-add-habit":
+      addHabit();
+      break;
+    case "toggle-daily":
+      toggleDaily(el.getAttribute("data-id"));
+      break;
+    case "toggle-monthly":
+      toggleMonthly(el.getAttribute("data-id"));
+      break;
+    case "toggle-onceoff":
+      toggleOnceoff(el.getAttribute("data-id"));
+      break;
+    case "delete-habit":
+      deleteHabit(el.getAttribute("data-id"));
+      break;
+    case "switch-avatar":
+      state.avatar = state.avatar==="female" ? "male" : "female";
+      save(); render();
+      break;
+    case "reset-progress":
+      if(confirm("Reset all progress? This cannot be undone.")){
+        state = defaultState();
+        save(); render();
+        // Full reset hands back off to a fresh onboarding flow -- establish
+        // it as a new baseline (like the very first load) rather than
+        // pushing, so back from onboarding step 0 exits the app instead of
+        // returning to whatever screen was open right before the reset.
+        try{ history.replaceState(currentNavState(), ""); }catch(err){}
+      }
+      break;
+    case "ack-celebration":
+      state.pendingCelebration = null;
+      save(); render();
+      break;
+    case "install-pill":
+      if(isInstalled()){ openInfoModal("Uninstall", UNINSTALL_STEPS_HTML); }
+      else { triggerInstall(); }
+      break;
+    case "backup-now":
+      backupNow();
+      break;
+    case "restore-backup":
+      openBackupRestorePicker(root.querySelector("#profileRestoreInput") || root.querySelector("#onbRestoreInput"));
+      break;
+  }
+}
+
+function finishOnboarding(){
+  var name = state._draft.name.trim();
+  if(!name) return;
+  state.startDate = todayStr();
+  state.habits.push({
+    id: uid(), name:name, emoji: state._draft.emoji, type:"daily",
+    createdAt: todayStr(), completions:[]
+  });
+  unlockStarterRewards();
+  state.onboarded = true;
+  state.screen = "logbook";
+  save();
+  render();
+  // Onboarding finishing and handing off to the main app is a one-time setup
+  // flow completing, not a forward navigation -- replaceState establishes a
+  // fresh baseline here so the bottombar/topbar are correctly synced (see
+  // render()) and so Install/backup features relying on isInstalled()/
+  // maybeShowInstallPrompt() start from the real "now in the main app" state.
+  try{ history.replaceState(currentNavState(), ""); }catch(e){}
+  // Proactive install ask happens here (after onboarding, never during it)
+  // -- see maybeShowInstallPrompt() below for the once-ever gate.
+  maybeShowInstallPrompt();
+}
+
+function addHabit(){
+  var d = state._draft;
+  var name = d.name.trim();
+  if(!name) return;
+  state.habits.push({ id:uid(), name:name, emoji:d.emoji, type:d.type, createdAt:todayStr(), completions:[] });
+  save();
+  // Pops the add-habit-modal's history entry (pushed by navigateTo() when it
+  // was opened) rather than setting state.screen directly -- keeps the
+  // history stack accurate so a later back-press doesn't return to a stale
+  // add-habit form. onPopState() performs the actual re-render.
+  closeModal();
+}
+
+function findHabit(id){
+  return state.habits.filter(function(h){return h.id===id;})[0];
+}
+
+function toggleDaily(id){
+  var h = findHabit(id); if(!h) return;
+  var t = todayStr();
+  var idx = h.completions.indexOf(t);
+  if(idx===-1){ h.completions.push(t); state.carrots++; }
+  else { h.completions.splice(idx,1); state.carrots=Math.max(0,state.carrots-1); }
+  evaluateRewards();
+  save(); render();
+}
+function toggleMonthly(id){
+  var h = findHabit(id); if(!h) return;
+  var m = monthStr();
+  var idx = h.completions.indexOf(m);
+  if(idx===-1){ h.completions.push(m); state.carrots++; }
+  else { h.completions.splice(idx,1); state.carrots=Math.max(0,state.carrots-1); }
+  evaluateRewards();
+  save(); render();
+}
+function toggleOnceoff(id){
+  var h = findHabit(id); if(!h) return;
+  if(h.completions.length){ h.completions=[]; state.carrots=Math.max(0,state.carrots-1); }
+  else { h.completions=[todayStr()]; state.carrots++; }
+  evaluateRewards();
+  save(); render();
+}
+function deleteHabit(id){
+  if(!confirm("Remove this habit-garden?")) return;
+  state.habits = state.habits.filter(function(h){return h.id!==id;});
+  save(); render();
+}
+
+/* =========================================================
+   HISTORY / BACK-NAVIGATION (Phone gesture support, part 1)
+   Every explicit forward navigation (onboarding steps, switching to
+   Rewards/Profile/an Add-Habit modal, the bottombar) goes through
+   navigateTo(), which both applies the change and pushes exactly one
+   history entry. A single popstate listener below just reflects whatever
+   the browser already walked back to -- it must NOT push anything itself,
+   which is what makes a hardware back press / Android gesture-nav swipe /
+   the browser's own back button always undo exactly one step instead of
+   jumping straight to some fixed "home" screen.
+   ========================================================= */
+function currentNavState(){
+  return state.onboarded ? {screen: state.screen} : {onbStep: state.onbStep};
+}
+function navigateTo(mutate){
+  mutate();
+  save();
+  render();
+  try{ history.pushState(currentNavState(), ""); }catch(e){}
+}
+function onPopState(e){
+  var target = e.state;
+  if(!target){
+    // No state to restore (popped past the first entry this app ever
+    // established) -- fall back to whatever "root" currently means; in
+    // practice the browser is usually navigating away from the app entirely
+    // at this point, so this is mostly a defensive no-op.
+    target = state.onboarded ? {screen:"logbook"} : {onbStep:0};
+  }
+  if(typeof target.onbStep === "number"){
+    state.onboarded = false;
+    state.onbStep = target.onbStep;
+  } else if(target.screen){
+    state.onboarded = true;
+    state.screen = target.screen;
+  }
+  render(); // reflect only -- see the comment above, must not push
+}
+window.addEventListener("popstate", onPopState);
+
+/* =========================================================
+   INSTALL / HOME SCREEN
+   ========================================================= */
+// True once actually running as the installed/home-screen app rather than a
+// regular browser tab -- display-mode covers Chrome/Edge/Android,
+// navigator.standalone is Safari's own (non-standard, iOS-only) equivalent.
+function isStandaloneApp(){
+  return (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone === true;
+}
+// What the Install pill actually checks -- not just isStandaloneApp() alone,
+// since a regular tab that just walked through a manual/native install
+// doesn't itself flip to display-mode:standalone until the user actually
+// relaunches from the real Home Screen icon.
+function isInstalled(){
+  return isStandaloneApp() || !!state.installPromptAccepted;
+}
+// Shown top-right on every main screen's topbar (same row as the icon/
+// wordmark row) so the call-to-action is visible immediately no matter
+// where someone lands -- not just tucked into Profile. Once actually
+// installed there's nothing left to act on there, so it disappears from
+// Logbook/Rewards; Profile passes keepAfterInstall=true to keep showing it
+// as an inert "Installed" status line instead, since that's the one place
+// people go looking to confirm state. Label always mirrors isInstalled()
+// directly -- no separate "uninstalled" state, since a page can't actually
+// uninstall itself (see INSTALL_STEPS_HTML/UNINSTALL_STEPS_HTML below).
+function installTopbarBtnHtml(keepAfterInstall){
+  var installed = isInstalled();
+  if(installed && !keepAfterInstall) return "";
+  return '<button class="topbar-install-btn'+(installed?' installed':'')+'" data-action="install-pill">'+(installed?'Installed':'Install')+'</button>';
+}
+// Platform-agnostic (a page can't reliably detect device type) instructions
+// -- the real install/uninstall action always happens at the OS level, so
+// these just point at it. Shown via openInfoModal (centered popup), not a
+// position-anchored tooltip -- a tooltip pinned to this top-right pill's tap
+// point would run off the edge of the screen.
+var INSTALL_STEPS_HTML =
+  '<strong>iPhone/iPad (Safari):</strong>' +
+  '<ol style="margin:4px 0 0;padding-left:18px;">' +
+    '<li>Tap the Share icon (square with an arrow) in the toolbar.</li>' +
+    '<li>Scroll down and tap "Add to Home Screen".</li>' +
+    '<li>Tap "Add" in the top right.</li>' +
+  '</ol><br>' +
+  '<strong>Android (Chrome):</strong>' +
+  '<ol style="margin:4px 0 0;padding-left:18px;">' +
+    '<li>Tap the &#8942; menu in the top right.</li>' +
+    '<li>Tap "Add to Home screen" or "Install app".</li>' +
+    '<li>Tap "Install" (or "Add") to confirm.</li>' +
+  '</ol><br>' +
+  '<strong>Desktop Chrome/Edge:</strong>' +
+  '<ol style="margin:4px 0 0;padding-left:18px;">' +
+    '<li>Click the install icon at the right edge of the address bar (or the &#8942; menu &rarr; "Install rHabbits").</li>' +
+    '<li>Click "Install" to confirm.</li>' +
+  '</ol>';
+var UNINSTALL_STEPS_HTML =
+  '<strong>iPhone/iPad:</strong>' +
+  '<ol style="margin:4px 0 0;padding-left:18px;">' +
+    '<li>Touch and hold the rHabbits icon on the Home Screen.</li>' +
+    '<li>Tap "Remove App".</li>' +
+    '<li>Tap "Delete App" to confirm.</li>' +
+  '</ol><br>' +
+  '<strong>Android:</strong>' +
+  '<ol style="margin:4px 0 0;padding-left:18px;">' +
+    '<li>Touch and hold the rHabbits icon on the Home screen.</li>' +
+    '<li>Tap "Uninstall" (or drag it to "Uninstall" at the top of the screen).</li>' +
+    '<li>Confirm when prompted.</li>' +
+  '</ol><br>' +
+  '<strong>Desktop Chrome/Edge:</strong>' +
+  '<ol style="margin:4px 0 0;padding-left:18px;">' +
+    '<li>Right-click the rHabbits icon (Start Menu/Taskbar/Dock).</li>' +
+    '<li>Click "Uninstall".</li>' +
+    '<li>Confirm when prompted.</li>' +
+  '</ol>';
+// Reusable centered popup, appended straight to <body> -- deliberately
+// outside #app/state.screen, since these can be shown regardless of which
+// screen is current (e.g. the auto-restore prompt fires before onboarding
+// even renders its first real screen) and don't need back-navigation
+// history of their own the way a real screen/modal does.
+function openInfoModal(title, bodyHtml){
+  var wrap = document.createElement("div");
+  wrap.innerHTML =
+    '<div class="modal-backdrop center">' +
+      '<div class="modal">' +
+        '<button class="modal-close" data-close-info>✕</button>' +
+        '<h3>'+title+'</h3>' +
+        '<div style="color:var(--wood-dark); font-size:.92rem; line-height:1.5;">'+bodyHtml+'</div>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(wrap);
+  function close(){ wrap.remove(); }
+  wrap.querySelector("[data-close-info]").addEventListener("click", close);
+  wrap.querySelector(".modal-backdrop").addEventListener("click", function(e){ if(e.target===e.currentTarget) close(); });
+  return wrap;
+}
+// Chrome/Edge/Android fire this instead of installing immediately, handing
+// over an event whose .prompt() shows the native install UI on demand -- so
+// it has to be captured up front (page load) and held until the Install
+// pill is actually tapped. preventDefault() stops the browser's own
+// separate install mini-infobar so this pill is the one path in.
+var deferredInstallPrompt = null;
+window.addEventListener("beforeinstallprompt", function(e){
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  render();
+});
+window.addEventListener("appinstalled", function(){
+  deferredInstallPrompt = null;
+  state.installPromptAccepted = true;
+  save();
+  render();
+});
+// Shared by the Install pill's tap and the proactive install-prompt popup's
+// "Install" button -- one native-vs-manual branch, not two.
+function triggerInstall(){
+  if(deferredInstallPrompt){
+    var promptEvent = deferredInstallPrompt;
+    deferredInstallPrompt = null; // one-shot -- the browser invalidates it after a single use either way
+    promptEvent.prompt();
+    promptEvent.userChoice.then(function(choice){
+      if(choice.outcome==="accepted"){
+        state.installPromptAccepted = true;
+        save();
+        showToast("Installed — look for it on your Home Screen.");
+      }
+      render();
+    });
+  } else {
+    // No captured browser-native prompt -- either this browser doesn't
+    // support triggering install from a page at all (iOS Safari, plain
+    // Firefox), or Chrome/Edge just hasn't fired beforeinstallprompt yet.
+    // The manual path always works; there's no signal a page can detect
+    // for "the user actually finished the manual steps", so this can't
+    // flip to Installed on its own -- only relaunching from the real Home
+    // Screen icon can do that.
+    openInfoModal("Install on Home Screen", INSTALL_STEPS_HTML);
+  }
+}
+// Proactive "Install rHabbits?" prompt, shown once (ever, per device) after
+// onboarding finishes (never during it) when not already installed -- asked,
+// not assumed: declining just closes it and points at Profile's Install
+// pill for later, and the asked-flag is set either way so this never nags
+// on a later visit. A short delay lets beforeinstallprompt (which can
+// arrive a moment after load) have a chance to populate
+// deferredInstallPrompt first, so "Install" here has the same shot at the
+// fast native one-tap path as the pill itself does.
+function maybeShowInstallPrompt(){
+  if(!state.onboarded) return; // never during onboarding -- see finishOnboarding()
+  if(isInstalled()) return;
+  if(state.installPromptAsked) return;
+  setTimeout(function(){
+    if(isInstalled()) return; // could have installed (or been asked elsewhere) during the delay
+    state.installPromptAsked = true;
+    save();
+    var wrap = openInfoModal("Install rHabbits?",
+      '<div style="margin-bottom:14px;">Installing adds rHabbits to your Home Screen and gives it the strongest protection against your browser silently clearing its data.</div>' +
+      '<button class="btn btn-block" id="install-prompt-yes" style="margin-bottom:8px;">Install</button>' +
+      '<button class="btn-ghost btn-block" id="install-prompt-no">Not now</button>'
+    );
+    wrap.querySelector("#install-prompt-yes").addEventListener("click", function(){ wrap.remove(); triggerInstall(); });
+    wrap.querySelector("#install-prompt-no").addEventListener("click", function(){
+      wrap.remove();
+      showToast("No problem — look for the Install button in your Profile whenever you're ready.");
+    });
+  }, 1500);
+}
+
+/* =========================================================
+   DIAGNOSTIC LOG -- there's no dedicated log viewer in rHabbits, so this is
+   deliberately minimal: a handful of the most recent entries, persisted so
+   they survive a reload, surfaced as a small muted line in Profile (see
+   renderProfileModal/latestDiagEntry) -- just enough to be checkable later
+   if a user reports data loss, without a whole Settings > Error Log screen.
+   ========================================================= */
+var DIAG_LOG_KEY = "rhabbits_diag_log";
+function logDiag(message){
+  try{
+    var log = JSON.parse(localStorage.getItem(DIAG_LOG_KEY) || "[]");
+    log.unshift({ts: Date.now(), message: message});
+    localStorage.setItem(DIAG_LOG_KEY, JSON.stringify(log.slice(0,3)));
+  }catch(e){}
+}
+function latestDiagEntry(){
+  try{
+    var log = JSON.parse(localStorage.getItem(DIAG_LOG_KEY) || "[]");
+    return log[0] || null;
+  }catch(e){ return null; }
+}
+// Best-effort ask not to auto-evict this site's storage under low-disk
+// pressure. There's no way to test real eviction behavior on someone else's
+// actual phone from here, so a denial (with a rough usage/quota estimate)
+// is logged rather than silently swallowed.
+function checkStoragePersistence(){
+  if(!(navigator.storage && navigator.storage.persist)) return;
+  (function(){
+    var persistedPromise = navigator.storage.persisted ? navigator.storage.persisted() : Promise.resolve(false);
+    persistedPromise.then(function(persisted){
+      var work = persisted ? Promise.resolve(true) : navigator.storage.persist();
+      work.then(function(granted){
+        if(granted) return;
+        var detail = "";
+        (navigator.storage.estimate ? navigator.storage.estimate() : Promise.resolve(null)).then(function(est){
+          if(est && est.quota){ detail = " (using ~"+Math.round((est.usage||0)/1048576)+"MB of ~"+Math.round(est.quota/1048576)+"MB available)"; }
+        }).catch(function(){}).then(function(){
+          logDiag("Storage is NOT persisted"+detail+" — this browser may silently evict rHabbits' data under storage pressure. Installing to your Home Screen gives the strongest protection.");
+        });
+      }).catch(function(){});
+    }).catch(function(){});
+  })();
+}
+
+/* =========================================================
+   BACKUP / RESTORE -- manual-only, gated entirely behind an explicit tap
+   (Profile's "Back up data now", the bottombar Backup icon, or the
+   onboarding/auto-restore "Restore" flows). Never called automatically from
+   save() or on backgrounding -- an earlier version of this pattern did that
+   and it silently piled up dozens of downloaded files plus an
+   unsuppressable OS "Download complete" notification every single time.
+   The whole state object IS the backup (rHabbits only has the one
+   localStorage key, STORAGE_KEY) -- no separate export format to maintain.
+   ========================================================= */
+// Excluded from the dedup fingerprint below: pure UI/navigation bookkeeping
+// that churns on its own (or on every tap) and was never what "back up my
+// data" was protecting -- toast/pendingCelebration/screen/onbStep/_draft are
+// transient UI state, not user data, and installPromptAsked/Accepted are
+// install bookkeeping. Leaving those in would make backupFingerprint()
+// change on nearly every render and defeat the dedup entirely.
+function backupFingerprint(){
+  var d = {
+    onboarded: state.onboarded,
+    avatar: state.avatar,
+    startDate: state.startDate,
+    carrots: state.carrots,
+    habits: state.habits,
+    unlocks: state.unlocks
+  };
+  return JSON.stringify(d);
+}
+var BACKUP_LAST_FINGERPRINT_KEY = "rhabbits_last_backup_fingerprint";
+var BACKUP_HANDLE_DB = "rhabbits-fs", BACKUP_HANDLE_STORE = "handles", BACKUP_HANDLE_KEY = "backupFile";
+function openHandleDb(){
+  return new Promise(function(resolve, reject){
+    var req = indexedDB.open(BACKUP_HANDLE_DB, 1);
+    req.onupgradeneeded = function(){ req.result.createObjectStore(BACKUP_HANDLE_STORE); };
+    req.onsuccess = function(){ resolve(req.result); };
+    req.onerror = function(){ reject(req.error); };
+  });
+}
+function loadSavedBackupHandle(){
+  return openHandleDb().then(function(db){
+    return new Promise(function(resolve, reject){
+      var req = db.transaction(BACKUP_HANDLE_STORE, "readonly").objectStore(BACKUP_HANDLE_STORE).get(BACKUP_HANDLE_KEY);
+      req.onsuccess = function(){ resolve(req.result || null); };
+      req.onerror = function(){ reject(req.error); };
+    });
+  }).catch(function(){ return null; });
+}
+function saveBackupHandle(handle){
+  return openHandleDb().then(function(db){
+    return new Promise(function(resolve, reject){
+      var tx = db.transaction(BACKUP_HANDLE_STORE, "readwrite");
+      tx.objectStore(BACKUP_HANDLE_STORE).put(handle, BACKUP_HANDLE_KEY);
+      tx.oncomplete = resolve; tx.onerror = function(){ reject(tx.error); };
+    });
+  }).catch(function(){ /* best-effort */ });
+}
+// On browsers with the File System Access API (desktop Chrome/Edge -- absent
+// on iOS Safari and most Android Chrome), this lets "Back up now" overwrite
+// the SAME on-disk file every time instead of creating a new timestamped one
+// on every tap. A saved, already-granted handle is reused silently on every
+// call after the first.
+function getWritableBackupHandle(){
+  if(!window.showSaveFilePicker) return Promise.resolve(null);
+  return loadSavedBackupHandle().then(function(handle){
+    if(handle){
+      return handle.queryPermission({mode:"readwrite"}).then(function(perm){
+        if(perm==="granted") return handle;
+        return handle.requestPermission({mode:"readwrite"}).then(function(req){
+          return req==="granted" ? handle : null;
+        });
+      });
+    }
+    return window.showSaveFilePicker({
+      suggestedName: "rhabbits-data.json",
+      types: [{description:"rHabbits backup", accept:{"application/json":[".json"]}}]
+    }).then(function(h){
+      return saveBackupHandle(h).then(function(){ return h; });
+    });
+  }).catch(function(){ return null; }); // user cancelled the picker, or any other failure -- caller falls back
+}
+// Manual/on-demand only. Skips writing/downloading anything when nothing
+// has actually changed since the last backup (see backupFingerprint) --
+// without this, repeat taps of "Back up data now" (or the bottombar Backup
+// icon) each produce a brand-new timestamped file on any browser without
+// the File System Access API (iOS Safari, most Android Chrome -- there's no
+// web API on those platforms that can silently overwrite an existing file),
+// piling up dozens of near-identical backups over normal use.
+function backupNow(){
+  var fp = backupFingerprint();
+  if(fp === localStorage.getItem(BACKUP_LAST_FINGERPRINT_KEY)){
+    showToast("Already up to date — no changes since last backup.");
+    return Promise.resolve(false);
+  }
+  var json = JSON.stringify(state, null, 2);
+  return getWritableBackupHandle().then(function(handle){
+    if(handle){
+      return handle.createWritable().then(function(writable){
+        return writable.write(json).then(function(){ return writable.close(); });
+      }).then(function(){
+        localStorage.setItem(BACKUP_LAST_FINGERPRINT_KEY, fp);
+        showToast("Backup saved.");
+        return true;
+      }).catch(function(){ return downloadBackupFallback(json, fp); });
+    }
+    return downloadBackupFallback(json, fp);
+  });
+}
+function downloadBackupFallback(json, fp){
+  try{
+    var blob = new Blob([json], {type:"application/json"});
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    // Timestamped, not a fixed name -- a fixed name hits a hard "file
+    // already exists" failure on-device rather than a silent auto-rename,
+    // on the browsers that land here.
+    var stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    a.download = "rhabbits-data-"+stamp+".json";
+    a.click();
+    localStorage.setItem(BACKUP_LAST_FINGERPRINT_KEY, fp);
+    showToast("Backup saved to your Downloads.");
+    return true;
+  }catch(e){
+    showToast("Could not save backup: "+e.message);
+    return false;
+  }
+}
+function validBackupShape(parsed){
+  return !!parsed && typeof parsed==="object" && Array.isArray(parsed.habits) && typeof parsed.unlocks==="object";
+}
+// Shared by manual restore (Step 7), the onboarding "Restore backup" link,
+// and the auto-detected-empty-state restore prompt (see maybeOfferAutoRestore
+// below) -- one validate-then-merge implementation, not three.
+function applyRestoredState(parsed){
+  var merged = Object.assign(defaultState(), parsed);
+  merged.unlocks = Object.assign({}, parsed.unlocks || {});
+  merged._draft = { name:"", emoji:"🌱", type:"daily" };
+  merged.toast = null;
+  merged.pendingCelebration = null;
+  merged.screen = "logbook";
+  state = merged;
+  save();
+  render();
+  try{ history.replaceState(currentNavState(), ""); }catch(e){}
+}
+function importDataFromFile(file){
+  if(!file) return;
+  file.text().then(function(text){
+    var parsed;
+    try{ parsed = JSON.parse(text); }catch(e){ throw new Error("That file isn't valid JSON."); }
+    if(!validBackupShape(parsed)) throw new Error("This file does not look like an rHabbits backup.");
+    if(!confirm("This will replace all current data on this device with the contents of this backup. Continue?")) return;
+    applyRestoredState(parsed);
+    showToast("Backup restored.");
+  }).catch(function(e){
+    showToast("Could not restore that file: "+e.message);
+  });
+}
+// Picks the newest backup out of one or more selected files, so restoring
+// never requires eyeballing filenames. Matches this app's own timestamped
+// filename first (sorts correctly as a string); anything that doesn't match
+// (e.g. a renamed file) falls back to the File object's own lastModified.
+function pickLatestBackupFile(files){
+  var list = Array.prototype.filter.call(files||[], function(f){ return /\.json$/i.test(f.name); });
+  if(list.length===0) return null;
+  function stampOf(f){
+    var m = f.name.match(/rhabbits-data-(.+)\.json$/i);
+    return m ? m[1] : null;
+  }
+  list.sort(function(a,b){
+    var sa=stampOf(a), sb=stampOf(b);
+    if(sa && sb) return sa<sb ? 1 : sa>sb ? -1 : 0;
+    if(sa && !sb) return -1;
+    if(sb && !sa) return 1;
+    return b.lastModified - a.lastModified;
+  });
+  return list[0];
+}
+function importLatestBackupFromFiles(files){
+  var latest = pickLatestBackupFile(files);
+  if(!latest){ if(files && files.length) showToast("No .json backup file found in what you selected."); return; }
+  importDataFromFile(latest);
+}
+// On browsers that support it, jumps the native picker straight into the
+// Downloads folder and allows multi-select in one go. iOS Safari and most
+// Android browsers fall back to the plain <input type=file> picker passed in.
+// Returns a Promise resolving to "native" (a file was picked and handed to
+// importLatestBackupFromFiles), "cancelled" (user backed out of the native
+// picker), or "fallback-clicked" (fallbackInputEl.click() was invoked --
+// its own "change" listener, wired by the caller, handles the rest once a
+// file is actually chosen). Callers that don't need this (Profile/
+// onboarding's plain "Restore from backup" buttons) can just ignore it.
+function openBackupRestorePicker(fallbackInputEl){
+  if(window.showOpenFilePicker){
+    return window.showOpenFilePicker({
+      multiple: true,
+      startIn: "downloads",
+      types: [{description:"rHabbits backup", accept:{"application/json":[".json"]}}]
+    }).then(function(handles){
+      return Promise.all(handles.map(function(h){ return h.getFile(); }));
+    }).then(function(files){
+      importLatestBackupFromFiles(files);
+      return "native";
+    }).catch(function(e){
+      if(e && e.name==="AbortError") return "cancelled"; // user backed out -- don't chain into a second picker
+      if(fallbackInputEl) fallbackInputEl.click();
+      return "fallback-clicked";
+    });
+  }
+  if(fallbackInputEl) fallbackInputEl.click();
+  return Promise.resolve("fallback-clicked");
+}
+
+/* =========================================================
+   RESTORE PROMPT AT STARTUP (auto-detect) -- proactively offers to restore
+   when the app's own on-device data looks freshly wiped (fresh browser
+   profile, a "Clear browsing data" wipe, storage eviction) but a prior
+   backup is still reachable. Only ever runs while !state.onboarded (the
+   app's own definition of "looks empty" -- see maybeOfferAutoRestore),
+   which also means it naturally never fights with maybeShowInstallPrompt()
+   (that one is gated on state.onboarded being true).
+   ========================================================= */
+// Path A -- silent handle re-read, File System Access browsers only. Query
+// only, never requestPermission() here: escalating permission needs a user
+// gesture, and there isn't one this early in the page lifecycle.
+function tryAutoRestorePathA(){
+  if(!window.showSaveFilePicker) return Promise.resolve(false);
+  return loadSavedBackupHandle().then(function(handle){
+    if(!handle) return false;
+    return handle.queryPermission({mode:"read"}).then(function(perm){
+      if(perm!=="granted") return false;
+      return handle.getFile().then(function(file){ return file.text(); }).then(function(text){
+        var parsed = JSON.parse(text);
+        if(!validBackupShape(parsed)) return false;
+        offerAutoRestore(parsed);
+        return true;
+      });
+    });
+  }).catch(function(){ return false; });
+}
+function offerAutoRestore(parsed){
+  var n = (parsed.habits||[]).length;
+  var when = parsed.startDate || "a previous session";
+  var wrap = openInfoModal("Restore your data?",
+    '<div style="margin-bottom:14px;">This device\'s rHabbits data looks empty, but a backup was found — '+n+' habit-garden(s) since '+escapeHtml(when)+'. Restore it?</div>' +
+    '<button class="btn btn-block" id="ar-yes" style="margin-bottom:8px;">Restore</button>' +
+    '<button class="btn-ghost btn-block" id="ar-no">No, start fresh</button>'
+  );
+  wrap.querySelector("#ar-yes").addEventListener("click", function(){
+    wrap.remove();
+    applyRestoredState(parsed);
+    showToast("Backup restored.");
+    maybeShowInstallPrompt();
+  });
+  wrap.querySelector("#ar-no").addEventListener("click", function(){
+    wrap.remove();
+    maybeShowInstallPrompt();
+  });
+}
+// Path B -- every other browser (most phones: iOS Safari, most Android
+// Chrome). Nothing can be silently re-read here without a user gesture, so
+// the proactive prompt itself IS the ask -- its button goes straight to the
+// open-file-picker flow the moment it's tapped.
+function offerAutoRestorePathB(){
+  var wrap = openInfoModal("Restore your data?",
+    '<div style="margin-bottom:14px;">This device\'s rHabbits data looks empty. If you have a backup file saved, you can restore it now.</div>' +
+    '<button class="btn btn-block" id="ar-yes" style="margin-bottom:8px;">Restore from file&hellip;</button>' +
+    '<input type="file" id="ar-file-input" accept="application/json,.json" class="hidden">' +
+    '<button class="btn-ghost btn-block" id="ar-no">No, start fresh</button>'
+  );
+  var fileInput = wrap.querySelector("#ar-file-input");
+  wrap.querySelector("#ar-yes").addEventListener("click", function(){
+    // Deliberately does NOT remove/detach wrap (or fileInput, which lives
+    // inside it) before calling this -- a detached <input type=file> isn't
+    // guaranteed to still open its native picker on a synthetic .click() in
+    // every browser. Left in place until we know which path was taken:
+    // "native"/"cancelled" clean up here; "fallback-clicked" is cleaned up
+    // by the input's own "change" listener below once a file is chosen.
+    openBackupRestorePicker(fileInput).then(function(result){
+      if(result==="native" || result==="cancelled"){ wrap.remove(); maybeShowInstallPrompt(); }
+    });
+  });
+  fileInput.addEventListener("change", function(){
+    wrap.remove();
+    importLatestBackupFromFiles(fileInput.files);
+    maybeShowInstallPrompt();
+  });
+  wrap.querySelector("#ar-no").addEventListener("click", function(){ wrap.remove(); maybeShowInstallPrompt(); });
+}
+function maybeOfferAutoRestore(){
+  if(state.onboarded) return; // real on-device data exists -- never prompt over it
+  tryAutoRestorePathA().then(function(handled){
+    if(!handled) offerAutoRestorePathB();
+  });
+}
+
+/* =========================================================
+   UPDATE CHECKING -- two independent signals, run together (see
+   checkForUpdate). Deliberately does NOT reload while a field is focused;
+   it just defers and retries on the next check instead of yanking an
+   in-progress habit name out from under someone.
+   ========================================================= */
+function isUserTyping(){
+  var el = document.activeElement;
+  if(!el) return false;
+  if(el.tagName === "TEXTAREA") return true;
+  if(el.tagName === "INPUT") return /^(text|search|number)$/i.test(el.type || "text");
+  return false;
+}
+// Signal 1: index.html's own etag/last-modified, remembered across sessions
+// so the very first check of a new session can catch "what got served just
+// now is already behind what's on the server."
+var DEPLOYED_TAG_KEY = "rhabbitsDeployedTag";
+var deployedVersionTag = (function(){ try{ return localStorage.getItem(DEPLOYED_TAG_KEY); }catch(e){ return null; } })();
+// Signal 2: forces the service worker's own update check right now instead
+// of waiting on the browser's lazy schedule (up to ~24h). Once a genuinely
+// new worker activates (it calls skipWaiting()/clients.claim() itself --
+// see sw.js), 'controllerchange' fires and that's what actually triggers
+// the reload, not reg.update() itself (which only starts the check).
+var swReloadPending = false, swReloadTriggered = false;
+function reloadForNewServiceWorker(){
+  if(swReloadTriggered) return; // controllerchange can fire more than once per page life
+  if(isUserTyping()){ swReloadPending = true; return; } // retried from checkForUpdate's next call
+  swReloadTriggered = true;
+  location.reload();
+}
+if(navigator.serviceWorker){
+  navigator.serviceWorker.addEventListener("controllerchange", reloadForNewServiceWorker);
+}
+// Returns a status string so callers wanting feedback (pull-to-refresh) can
+// react -- the interval/visibilitychange callers just ignore it.
+function checkForUpdate(){
+  if(swReloadPending && !isUserTyping()){ reloadForNewServiceWorker(); return Promise.resolve("reloading"); }
+  var swCheck = (navigator.serviceWorker && navigator.serviceWorker.getRegistration)
+    ? navigator.serviceWorker.getRegistration().then(function(reg){ if(reg) reg.update().catch(function(){}); }).catch(function(){})
+    : Promise.resolve();
+  return swCheck.then(function(){
+    return fetch(location.pathname+"?_="+Date.now(), {cache:"no-store", method:"HEAD"}).then(function(res){
+      var tag = res.headers.get("etag") || res.headers.get("last-modified");
+      if(!tag) return "unknown";
+      if(deployedVersionTag===null){
+        deployedVersionTag = tag;
+        try{ localStorage.setItem(DEPLOYED_TAG_KEY, tag); }catch(e){}
+        return "up-to-date";
+      }
+      if(tag===deployedVersionTag) return "up-to-date";
+      if(isUserTyping()) return "deferred";
+      deployedVersionTag = tag;
+      try{ localStorage.setItem(DEPLOYED_TAG_KEY, tag); }catch(e){}
+      location.reload();
+      return "reloading";
+    }).catch(function(){ return "offline"; }); // offline or blocked -- silently skip, next successful check catches up
+  });
+}
+
+/* =========================================================
+   BOTTOM NAV -- lives in the page shell (a sibling of #app in <body>), not
+   inside the DOM subtree render() tears down and rebuilds, so its click
+   handlers are wired exactly ONCE at bootstrap (initBottombar, called
+   below) rather than from wireEvents(), which re-runs on every render().
+   Wiring it from wireEvents() instead would accumulate one additional
+   listener on these same nodes every single render -- a single tap would
+   then fire backupNow() once per render that's happened since page load.
+   ========================================================= */
+function initBottombar(){
+  var bar = document.getElementById("bottombar");
+  if(!bar) return;
+  var buttons = bar.querySelectorAll("[data-nav]");
+  buttons.forEach(function(btn){
+    btn.addEventListener("click", function(){
+      var target = btn.getAttribute("data-nav");
+      if(target==="backup"){ backupNow(); return; }
+      if(state.screen===target) return; // already there -- no-op push
+      navigateTo(function(){ state.screen = target; });
+    });
+  });
+}
+// Called at the end of every render() to keep the (persistent, un-rebuilt)
+// bottombar's visibility and active-tab highlight in sync with state.
+function syncBottombarUI(){
+  var bar = document.getElementById("bottombar");
+  if(!bar) return;
+  bar.classList.toggle("hidden", !state.onboarded);
+  bar.querySelectorAll("[data-nav]").forEach(function(btn){
+    var target = btn.getAttribute("data-nav");
+    btn.classList.toggle("active", target===state.screen);
+  });
+}
+
+/* =========================================================
+   PULL-TO-REFRESH -- forces an update check on demand instead of waiting
+   for backgrounding/foregrounding to trigger one. Only activates when the
+   touch starts at the very top of the page's scroll (this app's screens all
+   scroll the whole document, no per-screen internal scroll container) and
+   no modal is open, so it doesn't fight normal scrolling or a modal's own
+   touch handling.
+   ========================================================= */
+(function(){
+  var indicator = document.getElementById("pullRefresh");
+  if(!indicator) return;
+  var THRESHOLD = 70;
+  var startY = null, dragging = false, ready = false;
+  document.addEventListener("touchstart", function(e){
+    if(window.scrollY===0 && !document.querySelector(".modal-backdrop")){
+      startY = e.touches[0].clientY;
+      dragging = true; ready = false;
+      indicator.classList.remove("hidden");
+      indicator.classList.add("dragging");
+    }
+  }, {passive:true});
+  document.addEventListener("touchmove", function(e){
+    if(!dragging || startY===null) return;
+    var dy = e.touches[0].clientY - startY;
+    if(dy>0 && window.scrollY===0){
+      var dist = Math.min(dy, THRESHOLD*1.6);
+      ready = dy > THRESHOLD;
+      indicator.style.transform = "translate(-50%, "+(dist-60)+"px)";
+      indicator.classList.toggle("ready", ready);
+    }
+  }, {passive:true});
+  document.addEventListener("touchend", function(){
+    if(!dragging) return;
+    dragging = false;
+    indicator.classList.remove("dragging");
+    if(!ready){
+      indicator.classList.remove("ready");
+      indicator.style.transform = "";
+      indicator.classList.add("hidden");
+      startY = null;
+      return;
+    }
+    indicator.classList.remove("ready");
+    indicator.classList.add("spinning");
+    indicator.style.transform = "translate(-50%, 10px)";
+    checkForUpdate().then(function(status){
+      if(status !== "reloading"){ // otherwise the page is already navigating away
+        indicator.classList.remove("spinning");
+        indicator.style.transform = "";
+        indicator.classList.add("hidden");
+      }
+      startY = null;
+    });
+  }, {passive:true});
+})();
+
+/* =========================================================
+   BOOTSTRAP
+   ========================================================= */
+evaluateRewards();
+save();
+render();
+try{ history.replaceState(currentNavState(), ""); }catch(e){} // the first screen shown on load establishes the baseline
+initBottombar();
+
+if(!state.onboarded){
+  maybeOfferAutoRestore();
+} else {
+  maybeShowInstallPrompt();
+}
+
+checkForUpdate();
+document.addEventListener("visibilitychange", function(){
+  if(document.visibilityState==="visible") checkForUpdate();
+});
+
+checkStoragePersistence();
+
+if("serviceWorker" in navigator){
+  window.addEventListener("load", function(){
+    navigator.serviceWorker.register("./sw.js").catch(function(){});
+  });
+}
+})();
+</script>
+</body>
+</html>

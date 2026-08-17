@@ -1,0 +1,22 @@
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Local source copy + unused design assets (all imagery is embedded as
+# base64/webp inside index.html, except icon-192/512.png which are served
+# as real files for the manifest)
+Male_rHabbit2.jpeg
+Female_rHabbit.jpeg
+rHabbitson_Cruscoe.jpeg
+Icon.jpeg
+avatar_male.png
+avatar_female.png
+avatar_male.webp
+avatar_female.webp
+home_scene.png
+home_scene.webp
+home_icon.webp
+cutout_male.png
+cutout_female.png
+cutout_male.webp
+cutout_female.webp

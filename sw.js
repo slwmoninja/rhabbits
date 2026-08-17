@@ -1,0 +1,67 @@
+// Precaches the app shell and serves it cache-first with a background network
+// refresh (stale-while-revalidate) -- fast, offline-capable loads instead of
+// re-downloading the whole app every open (all of rHabbits' own imagery is
+// embedded as base64/webp inside index.html already, so the shell here is
+// just the HTML + manifest + icons).
+//
+// This does NOT fight index.html's own checkForUpdate() (a HEAD request with
+// cache:'no-store' + a cache-busting query string, comparing etag/last-
+// modified, and force-reloading on a mismatch) -- that request is excluded
+// below (method!=='GET') and always goes straight to the network untouched.
+//
+// manifest.json and the icon files are served network-first instead (fall
+// back to cache only if offline). Android/Chrome's installed-PWA (WebAPK)
+// icon-update check reads the manifest client-side and only re-fetches an
+// icon when its URL changes -- and uninstalling a WebAPK on Android does NOT
+// clear this service worker/cache. See scripts/sync_icon_version.py, which
+// stamps manifest.json's icon src URLs with a content hash whenever the icon
+// files change, so a real icon update always gets a new URL for this check
+// to notice.
+const CACHE_NAME = 'rhabbits-shell-v1';
+const PRECACHE_URLS = [
+  './index.html', './manifest.json', './icon-192.png', './icon-512.png'
+];
+
+self.addEventListener('install', (e)=>{
+  self.skipWaiting();
+  e.waitUntil(caches.open(CACHE_NAME).then(cache=>cache.addAll(PRECACHE_URLS)).catch(()=>{}));
+});
+self.addEventListener('activate', (e)=>{
+  e.waitUntil((async ()=>{
+    const names = await caches.keys();
+    await Promise.all(names.filter(n=>n!==CACHE_NAME).map(n=>caches.delete(n)));
+    await self.clients.claim();
+  })());
+});
+self.addEventListener('fetch', (e)=>{
+  const req = e.request;
+  const url = new URL(req.url);
+  if(req.method!=='GET' || url.origin!==location.origin){
+    e.respondWith(fetch(req));
+    return;
+  }
+  if(/\/(manifest\.json|icon-(192|512)\.png)$/.test(url.pathname)){
+    e.respondWith((async ()=>{
+      try{
+        const res = await fetch(req);
+        if(res && res.ok){ const cache = await caches.open(CACHE_NAME); cache.put(req, res.clone()); }
+        return res;
+      }catch(err){
+        const cached = await caches.match(req);
+        return cached || Response.error();
+      }
+    })());
+    return;
+  }
+  e.respondWith((async ()=>{
+    const cache = await caches.open(CACHE_NAME);
+    const cacheKey = req.mode==='navigate' ? './index.html' : req;
+    const cached = await cache.match(cacheKey);
+    const networkFetch = fetch(req).then(res=>{
+      if(res && res.ok) cache.put(cacheKey, res.clone());
+      return res;
+    }).catch(()=>null);
+    if(cached){ e.waitUntil(networkFetch); return cached; }
+    return (await networkFetch) || Response.error();
+  })());
+});
