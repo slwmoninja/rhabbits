@@ -951,7 +951,7 @@ function renderRewardsScreen(){
   var chainNext = nextLockedReward();
   var sightingsActive = state.sightings.length < SIGHTINGS_TOTAL;
   if(chainNext || sightingsActive){
-    html += '<div class="reward-card locked" data-action="show-next-rewards-detail">';
+    html += '<div class="reward-card" data-action="show-next-rewards-detail">';
     html += '<div class="reward-media"><img src="'+ASSET.chest+'" alt=""></div>';
     html += '<div class="reward-lock">🔒</div>';
     html += '<div class="reward-body">';
@@ -1106,7 +1106,7 @@ function renderAddHabitModal(){
   html += typeOptRow("onceoff","Once-off", typesUnlocked ? (onceoffCount+"/"+onceoffMax+" used") : "🔒 Unlocks after 4 weeks", d.type==="onceoff", onceoffDisabled);
   html += '</div>';
   var canSubmit = d.name.trim() && !(d.type==="daily"&&dailyDisabled) && !(d.type==="monthly"&&monthlyDisabled) && !(d.type==="onceoff"&&onceoffDisabled);
-  html += '<button class="btn btn-block" data-action="confirm-add-habit" '+(canSubmit?'':'disabled')+'>Plant it 🌱</button>';
+  html += '<button class="btn btn-block" data-action="confirm-add-habit" '+(canSubmit?'':'disabled')+'>Start tracking 🌱</button>';
   html += '</div></div>';
   return html;
 }
