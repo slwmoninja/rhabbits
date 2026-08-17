@@ -354,14 +354,6 @@ img{max-width:100%; display:block;}
    non-square box). */
 .reward-media.square{height:auto; aspect-ratio:1/1;}
 .sighting-hero{width:100%; height:100%; background-repeat:no-repeat;}
-.icon-tile{
-  border-radius:10px; background-color:var(--parchment); margin:0 auto;
-  display:flex; align-items:center; justify-content:center;
-}
-.reward-media .icon-tile{width:64px; height:64px;}
-.icon-tile.lg{width:140px; height:140px;}
-.icon-tile.locked{filter:grayscale(1); opacity:.55;}
-.sprite-medallion{background-repeat:no-repeat;}
 .reward-body{padding:10px 12px 12px;}
 .reward-title{font-weight:700; color:var(--wood-dark); font-size:.86rem; margin-bottom:3px;}
 .reward-desc{color:var(--wood); font-size:.72rem; line-height:1.4; margin-bottom:6px;}
@@ -467,7 +459,8 @@ var ASSET = {
   home_icon: "__HOME_ICON__",
   cutout_male: "__CUTOUT_MALE__",
   cutout_female: "__CUTOUT_FEMALE__",
-  sightings_sprite: "__SIGHTINGS_SPRITE__"
+  sightings_sprite: "__SIGHTINGS_SPRITE__",
+  chest: "__CHEST__"
 };
 
 var STORAGE_KEY = "rhabbits_state_v1";
@@ -922,6 +915,30 @@ function dailyStreak(h){
   return n;
 }
 
+// Shared between the Next Rewards card and its own detail modal so the two
+// never drift out of sync.
+function renderNextRewardsList(chainNext, sightingsActive){
+  var html = '<ul class="next-rewards-list">';
+  if(chainNext){ html += '<li>'+chestIconSvg("0.8rem")+' '+chainNext.title+'</li>'; }
+  if(sightingsActive){ html += '<li>🔭 New Island Sighting</li>'; }
+  html += '</ul>';
+  return html;
+}
+
+function renderNextRewardsDetailModal(){
+  var chainNext = nextLockedReward();
+  var sightingsActive = state.sightings.length < SIGHTINGS_TOTAL;
+  var html = '<div class="modal-backdrop" data-backdrop="next-rewards-detail">';
+  html += '<div class="modal reward-detail">';
+  html += '<button class="modal-close" data-action="close-modal">✕</button>';
+  html += '<img class="reward-hero" src="'+ASSET.chest+'" alt="">';
+  html += '<h3>Next Rewards</h3>';
+  html += renderNextRewardsList(chainNext, sightingsActive);
+  html += '<div class="carrot-counter" style="text-align:center; margin-top:10px;">🥕 '+(state.carrots%7)+'/7</div>';
+  html += '</div></div>';
+  return html;
+}
+
 function renderRewardsScreen(){
   var html = '<section class="screen">';
   html += '<h2 style="color:var(--parchment-hi); margin-bottom:4px;">Your Rewards</h2>';
@@ -934,15 +951,12 @@ function renderRewardsScreen(){
   var chainNext = nextLockedReward();
   var sightingsActive = state.sightings.length < SIGHTINGS_TOTAL;
   if(chainNext || sightingsActive){
-    html += '<div class="reward-card locked" '+(chainNext ? 'data-action="show-reward-detail" data-id="'+chainNext.id+'"' : '')+'>';
-    html += '<div class="reward-media"><div class="icon-tile">'+chestIconSvg("2.2rem")+'</div></div>';
+    html += '<div class="reward-card locked" data-action="show-next-rewards-detail">';
+    html += '<div class="reward-media"><img src="'+ASSET.chest+'" alt=""></div>';
     html += '<div class="reward-lock">🔒</div>';
     html += '<div class="reward-body">';
     html += '<div class="reward-title">Next Rewards</div>';
-    html += '<ul class="next-rewards-list">';
-    if(chainNext){ html += '<li>'+chestIconSvg("0.8rem")+' '+chainNext.title+'</li>'; }
-    if(sightingsActive){ html += '<li>🔭 New Island Sighting</li>'; }
-    html += '</ul>';
+    html += renderNextRewardsList(chainNext, sightingsActive);
     html += '<div class="carrot-counter">🥕 '+(state.carrots%7)+'/7</div>';
     html += '</div></div>';
   }
@@ -1059,6 +1073,7 @@ function renderModals(){
   if(state.screen==="habit-detail-modal"){ html += renderHabitDetailModal(state._detailHabitId); }
   if(state.screen==="reward-detail-modal"){ html += renderRewardDetailModal(state._detailRewardId); }
   if(state.screen==="sightings-gallery-modal"){ html += renderSightingsGalleryModal(); }
+  if(state.screen==="next-rewards-detail-modal"){ html += renderNextRewardsDetailModal(); }
   if(state.screen==="story-modal"){ html += renderStoryModal(); }
   if(state.pendingCelebration){ html += renderCelebrationModal(REWARDS.filter(function(r){return r.id===state.pendingCelebration;})[0]); }
   if(state.toast){ html += '<div class="toast">'+state.toast+'</div>'; }
@@ -1322,6 +1337,9 @@ function onAction(e){
       break;
     case "show-sightings-gallery":
       navigateTo(function(){ state.screen = "sightings-gallery-modal"; });
+      break;
+    case "show-next-rewards-detail":
+      navigateTo(function(){ state.screen = "next-rewards-detail-modal"; });
       break;
     case "show-story":
       navigateTo(function(){ state.screen = "story-modal"; });
