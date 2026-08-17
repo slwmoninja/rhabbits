@@ -625,6 +625,24 @@ function onceoffCompletedCount(state){
 }
 function todayStr(){ return new Date().toISOString().slice(0,10); }
 function monthStr(d){ return (d||new Date()).toISOString().slice(0,7); }
+
+// The Castaway's Log is dated in-world as if it were the 1700s: real month
+// and day pass through unchanged, but the year is compressed onto 17xx (e.g.
+// 2026 -> 1726) so entries always read like an old ship's logbook while still
+// tracking the real calendar.
+var JOURNAL_MONTH_NAMES = ["January","February","March","April","May","June",
+  "July","August","September","October","November","December"];
+function fictionalDate(d){
+  return JOURNAL_MONTH_NAMES[d.getMonth()]+" "+d.getDate()+", "+(1700+(d.getFullYear()%100));
+}
+// Each entry's in-world date is the real calendar date it unlocked on
+// (startDate + unlockDay-1 days), not the day the user happens to be reading it.
+function journalEntryDate(state, entry){
+  var start = state.startDate ? new Date(state.startDate+"T00:00:00") : new Date();
+  var d = new Date(start.getTime());
+  d.setDate(d.getDate() + (entry.unlockDay - 1));
+  return fictionalDate(d);
+}
 function daysSince(iso){
   if(!iso) return 0;
   var ms = Date.now() - new Date(iso+"T00:00:00").getTime();
@@ -1227,7 +1245,7 @@ function renderJournalEntries(state){
   var html = '<div class="log-entries">';
   entries.forEach(function(e){
     html += '<div class="log-entry">';
-    html += '<span class="log-entry-when">'+e.when+'</span>';
+    html += '<span class="log-entry-when">'+journalEntryDate(state, e)+'</span>';
     html += '<div class="log-entry-title">'+e.title+'</div>';
     html += '<p class="log-entry-body">'+e.body+'</p>';
     html += '</div>';
