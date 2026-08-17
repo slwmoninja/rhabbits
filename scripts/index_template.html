@@ -1160,7 +1160,7 @@ function renderAddHabitModal(){
   html += typeOptRow("onceoff","Once-off", typesUnlocked ? (onceoffCount+"/"+onceoffMax+" used") : "🔒 Unlocks after 4 weeks", d.type==="onceoff", onceoffDisabled);
   html += '</div>';
   var canSubmit = d.name.trim() && !(d.type==="daily"&&dailyDisabled) && !(d.type==="monthly"&&monthlyDisabled) && !(d.type==="onceoff"&&onceoffDisabled);
-  html += '<button class="btn btn-block" data-action="confirm-add-habit" '+(canSubmit?'':'disabled')+'>Start tracking 🌱</button>';
+  html += '<button class="btn btn-block" data-action="confirm-add-habit" '+(canSubmit?'':'disabled')+'>Start tracking 🌴</button>';
   html += '</div></div>';
   return html;
 }
