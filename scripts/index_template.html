@@ -329,6 +329,20 @@ img{max-width:100%; display:block;}
   font-size:.75rem; font-weight:700; border-radius:20px; padding:5px 12px; margin-bottom:10px;
 }
 .sightings-footer{color:var(--parchment-edge); font-size:.78rem; margin-top:10px;}
+/* The single most recent discovery, picture + its Castaway's Log story
+   together -- sits above the plain thumbnail grid (which stays a bare,
+   browsable overview of everything found so far). */
+.sighting-featured{
+  display:flex; gap:12px; align-items:flex-start; text-align:left;
+  background:rgba(107,69,38,.07); border:1px solid var(--parchment-edge); border-radius:9px;
+  padding:10px 12px; margin-bottom:14px;
+}
+.sighting-featured-img{
+  width:64px; height:64px; flex-shrink:0; border-radius:8px; border:2px solid var(--gold);
+  box-shadow:var(--shadow); background-repeat:no-repeat;
+}
+.sighting-featured-text .log-entry-when{display:block; margin-bottom:3px;}
+.sighting-featured-text .log-entry-body{margin:0;}
 
 .story-link{
   width:100%; display:flex; align-items:center; gap:10px; text-align:left;
@@ -1593,6 +1607,18 @@ function renderSightingsGalleryModal(){
     html += '</div></div>';
     return html;
   }
+  // Featured: the single most recent find, picture and story together --
+  // shares its journal text with the Story So Far log (unlockedJournalEntries()
+  // is newest-first, so index 0 is always this same discovery) rather than
+  // duplicating/drifting from it.
+  var latestEntry = unlockedJournalEntries(state)[0];
+  html += '<div class="sighting-featured">';
+  html += '<div class="sighting-featured-img" style="'+sightingTileStyle(latestEntry.sightingIdx)+'"></div>';
+  html += '<div class="sighting-featured-text">';
+  html += '<span class="log-entry-when">'+latestEntry.title+'</span>';
+  html += '<p class="log-entry-body">'+latestEntry.body+'</p>';
+  html += '</div></div>';
+
   var showingFavorites = state.sightingsFilter==="favorites";
   html += '<button class="favorites-link" data-action="toggle-sightings-filter">'+
     (showingFavorites ? '📖 Show all' : '⭐ Favorites ('+state.favoriteSightings.length+'/'+SIGHTINGS_FAVORITE_MAX+')') +
