@@ -11,25 +11,43 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageFilter
+from scipy import ndimage
 
 ROOT = Path(__file__).resolve().parent.parent
 GRAPHICS = ROOT / "Graphics"
 
 
-def remove_white_bg(im, thresh=238, feather=2.2, shadow_cutoff=90):
+def remove_white_bg(im, fg_thresh=150, feather=2.2):
+    """Border-connected flood fill rather than a fixed color threshold.
+
+    A fixed min-channel cutoff can't separate the barrel's cast shadow from
+    the subject: right where the shadow touches the barrel's base it gets
+    dark enough (min_channel down near 195-205) to cross any threshold that
+    still leaves the subject's own dark wood/brass alpha intact, and a
+    Gaussian feather doesn't help since the shadow is smooth-but-genuinely-
+    dark, not just an antialiased edge.
+
+    Instead: anything with min_channel above fg_thresh (background, shadow,
+    and soft edges together) is one candidate region; anything at or below
+    it (the barrel's actual wood/brass, which sits far darker than the
+    shadow ever gets) is definitely foreground. Label the candidate region's
+    connected components and keep only the ones touching the image border --
+    true background always reaches the border; the shadow is one continuous
+    gradient connected to it. Anything left over (the barrel) stays opaque
+    regardless of how dark any single pixel is.
+    """
     im = im.convert("RGB")
-    arr = np.array(im).astype(np.float32)
+    arr = np.array(im).astype(np.int32)
     min_channel = arr.min(axis=2)
-    alpha = np.clip((thresh - min_channel) / (thresh - 200), 0, 1) * 255
-    # The source photo casts a soft studio shadow on the white backdrop --
-    # those pixels are pale gray, not pure white, so the ramp above gives
-    # them a faint partial alpha that survives as a visible smudge on any
-    # background darker than white (see the app's teal theme). Real subject
-    # edges jump alpha sharply over 1-2px; the shadow stays low and gradual,
-    # so a hard floor cuts the shadow without visibly notching the subject.
-    alpha[alpha < shadow_cutoff] = 0
-    alpha_img = Image.fromarray(alpha.astype(np.uint8), mode="L")
-    alpha_img = alpha_img.filter(ImageFilter.GaussianBlur(feather))
+
+    not_fg = min_channel > fg_thresh
+    labels, _ = ndimage.label(not_fg, structure=np.ones((3, 3)))
+    border_labels = set(labels[0, :]) | set(labels[-1, :]) | set(labels[:, 0]) | set(labels[:, -1])
+    border_labels.discard(0)
+    bg_mask = np.isin(labels, list(border_labels))
+
+    alpha = np.where(bg_mask, 0, 255).astype(np.uint8)
+    alpha_img = Image.fromarray(alpha, mode="L").filter(ImageFilter.GaussianBlur(feather))
     out = im.convert("RGBA")
     out.putalpha(alpha_img)
     return out

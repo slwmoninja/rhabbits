@@ -13,7 +13,7 @@
      this tag or index_template.html. Recompute (sha256 of icon-192.png,
      first 8 hex chars) and bump this whenever icon-192.png's bytes change,
      or iPhone installs will keep showing a stale icon after an update. -->
-<link rel="apple-touch-icon" href="./icon-192.png?v=fb848def">
+<link rel="apple-touch-icon" href="./icon-192.png?v=fce2a942">
 <meta name="theme-color" content="#0E3634">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -255,6 +255,11 @@ img{max-width:100%; display:block;}
 .pip-row{display:flex; gap:6px; justify-content:center; flex-wrap:wrap; margin-top:10px;}
 .pip{font-size:1.15rem; opacity:.28; filter:grayscale(1);}
 .pip.filled{opacity:1; filter:none;}
+/* Sized to hold 7 pips on one line inside a narrow reward-card body (~190px
+   usable width) without wrapping -- the plain .pip-row above is tuned for
+   the wider Logbook plaque instead. */
+.pip-row.compact{gap:2px; flex-wrap:nowrap; justify-content:flex-start; margin-top:6px;}
+.pip-row.compact .pip{font-size:.78rem;}
 .carrot-counter{font-size:.78rem; font-weight:700; color:var(--wood-dark); margin-top:6px;}
 .plaque-progress-text{text-align:center; color:var(--parchment-edge); font-size:.76rem; margin-top:8px;}
 
@@ -1125,6 +1130,18 @@ function evaluateSightings(){
   }
 }
 
+// A one-time freebie, separate from evaluateSightings()'s normal 7-carrot
+// discovery pacing above -- the castaway's very first sighting is
+// guaranteed the moment their first habit exists (see finishOnboarding()),
+// rather than something they might not reach for a week or more depending
+// on how consistently they log. Called once, on brand-new state, so
+// state.sightings is always empty here -- no duplicate-index check needed.
+function unlockFirstDiscoveryFree(){
+  var idx = Math.floor(Math.random()*SIGHTINGS_TOTAL);
+  state.sightings.push(idx);
+  showToast("Reward issued: 1st rHabbit created!");
+}
+
 function unlockStarterRewards(){
   ["portrait","island_home","first_habit"].forEach(function(id){
     state.unlocks[id] = { unlockedAt: todayStr(), reason: STARTER_REASON };
@@ -1415,6 +1432,10 @@ function renderTreasureHuntCard(favorited){
   html += '<div class="reward-body">';
   html += '<div class="reward-title">Treasure Hunt</div>';
   html += '<div class="reward-desc">'+treasureStatusText()+'</div>';
+  if(!state.treasureMapComplete){
+    var movesUsedToday = state.treasureMoveDays.indexOf(todayStr())!==-1 ? 1 : 0;
+    html += '<div class="reward-desc">'+movesUsedToday+'/1 moves used today</div>';
+  }
   html += '</div></div>';
   return html;
 }
@@ -1506,9 +1527,13 @@ function renderRewardsScreen(){
   if(treasurePinned){ html += renderTreasureHuntCard(treasureFavorited); }
 
   // New Discovery gets one summary card here (not its own inline section)
-  // -- "?" placeholder until the first discovery, then the most recently
-  // discovered sighting as its thumbnail. Tapping it opens the full gallery
-  // (or, pre-discovery, just "No discoveries yet").
+  // -- "?" placeholder pre-discovery (only ever seen by pre-existing saves
+  // from before unlockFirstDiscoveryFree() shipped; every new player gets
+  // sightings[0] for free at finishOnboarding, so this branch is otherwise
+  // unreachable), then always the most recently discovered sighting as its
+  // thumbnail. Progress toward the *next* discovery is a compact carrot-pip
+  // row -- same visual language as the Logbook's carrot-pip row -- instead
+  // of a text count, to keep the card to one line no matter the state.
   html += '<div class="reward-card" data-action="show-sightings-gallery">';
   if(state.sightings.length===0){
     html += '<div class="reward-media"><div class="medallion">❓</div></div>';
@@ -1518,7 +1543,7 @@ function renderRewardsScreen(){
   }
   html += '<div class="reward-body">';
   html += '<div class="reward-title">New Discovery</div>';
-  html += '<div class="reward-desc">'+(state.sightings.length===0 ? (state.discoveryCarrots%7)+'/7 carrots toward a new discovery.' : state.sightings.length+' / '+SIGHTINGS_TOTAL+' discovered.')+'</div>';
+  html += '<div class="pip-row compact">'+carrotPipsHtml(state.discoveryCarrots%7,7)+'</div>';
   html += '</div></div>';
 
   // Unlocked rewards each get their own real card. Everything still locked
@@ -2034,6 +2059,9 @@ function finishOnboarding(){
   unlockStarterRewards();
   state.onboarded = true;
   state.screen = "logbook";
+  // Must come after state.onboarded=true -- showToast()'s toast only
+  // renders as part of renderApp(), not renderOnboarding().
+  unlockFirstDiscoveryFree();
   save();
   render();
   // Onboarding finishing and handing off to the main app is a one-time setup
