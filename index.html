@@ -3166,7 +3166,7 @@ function cocoImgAspect(img, fallback){
 }
 function cocoDrawCrow(ctx, x, y, isCaptain){
   var img = isCaptain ? cocoImgCrowRed : cocoImgCrow;
-  var w = isCaptain ? 34 : 26;
+  var w = isCaptain ? 44 : 34; // 30% larger than the original 34/26
   var h = w * cocoImgAspect(img, 0.7);
   if(img.complete && img.naturalWidth){
     ctx.drawImage(img, x-w/2, y-h/2, w, h);
@@ -3279,7 +3279,7 @@ function initCocoCannon(){
   var W = 320, H = 480; // logical (CSS-pixel) play-field size, recomputed on resize
   var running = false, rafId = null, lastTs = 0;
   var moveLeft = false, moveRight = false;
-  var cannon, coconut, crows, level, score, phase, sinceLevelStart, smoke, stars;
+  var cannon, coconut, crows, level, score, phase, sinceLevelStart, smoke, stars, levelKills;
 
   var MAX_ANGLE = Math.PI/2; // full turret sweep: straight left/ground to straight right/ground
   var TAP_MS = 220, TAP_NUDGE = 0.09; // ~5 degrees -- a quick tap nudges precisely instead of relying on hold-timing luck
@@ -3315,8 +3315,8 @@ function initCocoCannon(){
   function levelCrowSpeed(isCaptain){
     // Captain Crow moves a bit faster than any regular level -- levels 1-7
     // ramp gently, level 7's own speed is the ceiling for "regular" crows.
-    if(isCaptain) return (40 + (COCO_MAX_LEVEL-1)*3.5) * 1.35;
-    return 40 + (level-1)*3.5; // px/sec
+    if(isCaptain) return (34 + (COCO_MAX_LEVEL-1)*3) * 1.35;
+    return 34 + (level-1)*3; // px/sec
   }
   function spawnLevel(){
     crows = [];
@@ -3332,6 +3332,7 @@ function initCocoCannon(){
     coconut = null;
     smoke = []; stars = [];
     level = 1;
+    levelKills = 0;
     score = 0;
     phase = "ready";
     spawnLevel();
@@ -3377,6 +3378,7 @@ function initCocoCannon(){
     setTimeout(function(){
       hideOverlay();
       level = 1;
+      levelKills = 0;
       spawnLevel();
       phase = "playing";
     }, 1600);
@@ -3384,7 +3386,7 @@ function initCocoCannon(){
 
   function startPlaying(){
     if(state.cocoLives<=0){ showOverlay(); return; }
-    if(phase==="gameover"){ level=1; score=0; spawnLevel(); }
+    if(phase==="gameover"){ level=1; levelKills=0; score=0; spawnLevel(); }
     phase = "playing";
     hideOverlay();
     updateHud();
@@ -3431,7 +3433,7 @@ function initCocoCannon(){
       c.drawX = c.baseX + Math.sin(sinceLevelStart*2 + c.phase) * 14;
       if(coconut){
         var dx = c.drawX - coconut.x, dy = c.y - coconut.y;
-        if(Math.abs(dx) < 14 && Math.abs(dy) < 14){
+        if(Math.abs(dx) < 18 && Math.abs(dy) < 18){ // matches the 30%-larger crow sprite
           c.hp--;
           coconut = null;
           cocoSpawnStars(stars, c.drawX, c.y);
@@ -3443,6 +3445,7 @@ function initCocoCannon(){
               showWinBanner(); // handles the level=1 restart itself, once the banner clears
             } else {
               score += 10*level;
+              levelKills++;
               updateHud();
             }
           }
@@ -3454,9 +3457,20 @@ function initCocoCannon(){
       }
     }
     if(!anyAlive && phase==="playing"){
-      level++;
-      if(level > COCO_MAX_LEVEL+1) level = 1;
-      spawnLevel();
+      if(level > COCO_MAX_LEVEL){
+        // Captain Crow reached the ground without being fully defeated --
+        // face him again rather than handing the player a free win.
+        spawnLevel();
+      } else if(levelKills < level){
+        // Some of this level's crows escaped instead of being shot down --
+        // repeat the same level (same crow count) until the player has
+        // actually eliminated all of them before moving on.
+        spawnLevel();
+      } else {
+        level++;
+        levelKills = 0;
+        spawnLevel();
+      }
     }
   }
 
