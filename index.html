@@ -297,6 +297,7 @@ img{max-width:100%; display:block;}
 .day-pip{
   flex:1; height:22px; border-radius:5px; background:rgba(107,69,38,.15); position:relative;
   display:flex; align-items:center; justify-content:center; font-size:.7rem; color:var(--wood);
+  border:none; padding:0; margin:0; font-family:inherit;
 }
 .day-pip.done{background:var(--leaf); color:#fff;}
 .day-pip-note{position:absolute; top:-6px; right:-4px; font-size:.6rem; filter:drop-shadow(0 1px 1px rgba(0,0,0,.5));}
@@ -312,6 +313,7 @@ img{max-width:100%; display:block;}
 .habit-meta.done{color:var(--leaf-deep); font-weight:700;}
 
 /* ---------- Habit log notes (see renderHabitNoteModal()) ---------- */
+.habit-note-daylabel{color:var(--wood); font-size:.78rem; font-weight:700; margin-bottom:4px;}
 .habit-note-meta{color:var(--carrot-deep); font-size:.68rem; font-weight:700; margin-bottom:8px;}
 .habit-note-input{
   width:100%; min-height:70px; resize:vertical; border-radius:9px; border:1px solid var(--parchment-edge);
@@ -1065,6 +1067,10 @@ function defaultState(){
     _draft:{ name:"", emoji:"🌴", type:"daily", description:"" },
     _detailHabitId:null,
     _detailRewardId:null,
+    // Which date/month key the currently-open habit-note-modal is for --
+    // set by "open-habit-note" in onAction(), read by renderHabitNoteModal()
+    // and the save/delete-habit-note cases.
+    _noteKey:null,
     // Install-state bookkeeping -- see isInstalled()/triggerInstall() below.
     // installPromptAccepted also covers a manual/native install this session
     // hasn't relaunched from the real Home Screen icon yet (display-mode
@@ -1366,19 +1372,21 @@ function renderHabitDetailModal(id){
       // A note badge on the specific day it belongs to (not just today) --
       // h.notes can hold entries for past days too (nothing deletes them
       // when the day rolls over, only an explicit unlog does, see
-      // deleteHabitNoteFor()), so this lets a note from a couple of days
-      // ago still show up here even though only today's is reachable via
-      // the "logged" button below (habitNoteKey() always resolves to
-      // today for a daily habit).
+      // deleteHabitNoteFor()).
       var hasNote = h.notes && (ds in h.notes);
-      pips += '<div class="day-pip '+(done?'done':'')+' '+(isToday?'today':'')+'">'+(done?'✓':'')+(hasNote?'<span class="day-pip-note">📝</span>':'')+'</div>';
+      var pipCls = 'day-pip '+(done?'done':'')+' '+(isToday?'today':'');
+      var pipInner = (done?'✓':'')+(hasNote?'<span class="day-pip-note">📝</span>':'');
+      // Only a *logged* day can carry a note -- past or today, tapping the
+      // pip itself (not the Log/Logged button below, which stays a plain
+      // toggle) opens that day's note for add/edit/delete.
+      if(done){
+        pips += '<button class="'+pipCls+'" data-action="open-habit-note" data-id="'+h.id+'" data-date="'+ds+'">'+pipInner+'</button>';
+      } else {
+        pips += '<div class="'+pipCls+'">'+pipInner+'</div>';
+      }
     }
     html += '<div class="habit-week">'+pips+'</div>';
-    if(doneToday){
-      html += '<button class="log-btn done" data-action="open-habit-note" data-id="'+h.id+'">✓ Logged Today</button>';
-    } else {
-      html += '<button class="log-btn" data-action="toggle-daily" data-id="'+h.id+'">Log Today  +1 🥕</button>';
-    }
+    html += '<button class="log-btn '+(doneToday?'done':'')+'" data-action="toggle-daily" data-id="'+h.id+'">'+(doneToday?'✓ Logged Today':'Log Today  +1 🥕')+'</button>';
     html += '<div class="habit-meta">Streak: '+dailyStreak(h)+' day'+(dailyStreak(h)===1?'':'s')+'</div>';
   } else if(h.type==="monthly"){
     var m = monthStr();
@@ -2058,14 +2066,20 @@ function onAction(e){
       toggleOnceoff(el.getAttribute("data-id"));
       break;
     case "open-habit-note":
+      // data-date is only present on a daily habit's day-pip (any of the 7,
+      // not just today); monthly/once-off log-btns don't pass one, so this
+      // falls back to whichever period is currently logged.
+      var noteHabit = findHabit(el.getAttribute("data-id"));
+      if(!noteHabit) return;
+      state._noteKey = el.getAttribute("data-date") || habitNoteKey(noteHabit);
       navigateTo(function(){ state.screen = "habit-note-modal"; });
       break;
     case "save-habit-note":
       var noteInput = root.querySelector("#habitNoteText");
-      saveHabitNote(el.getAttribute("data-id"), noteInput ? noteInput.value : "");
+      saveHabitNote(el.getAttribute("data-id"), state._noteKey, noteInput ? noteInput.value : "");
       break;
     case "delete-habit-note":
-      deleteHabitNote(el.getAttribute("data-id"));
+      deleteHabitNote(el.getAttribute("data-id"), state._noteKey);
       break;
     case "delete-habit":
       deleteHabit(el.getAttribute("data-id"));
@@ -2209,11 +2223,13 @@ function deleteHabitNoteFor(h, key){
 // rather than just re-rendering in place -- the note modal is reached via
 // navigateTo() (see "open-habit-note" below) so it owns a real history
 // entry that needs popping, exactly like every other modal in this file.
-function saveHabitNote(id, text){
+// `key` is whichever specific date/month string the pop-up was opened for
+// (state._noteKey -- a past day-pip's own date, not necessarily "today"),
+// not re-derived from habitNoteKey(h) here.
+function saveHabitNote(id, key, text){
   var h = findHabit(id); if(!h) return;
   text = text.trim();
   if(!text) return; // nothing to persist -- delete-habit-note removes an existing one
-  var key = habitNoteKey(h);
   if(!h.notes) h.notes = {};
   var existing = h.notes[key];
   var now = new Date().toISOString();
@@ -2221,9 +2237,9 @@ function saveHabitNote(id, text){
   save();
   closeModal();
 }
-function deleteHabitNote(id){
+function deleteHabitNote(id, key){
   var h = findHabit(id); if(!h) return;
-  deleteHabitNoteFor(h, habitNoteKey(h));
+  deleteHabitNoteFor(h, key);
   save();
   closeModal();
 }
@@ -2231,18 +2247,29 @@ function formatNoteTimestamp(iso){
   var d = new Date(iso);
   return d.toLocaleDateString(undefined,{month:"short",day:"numeric"})+" "+d.toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"});
 }
-// Reached by tapping the day's checkmark once it's already logged (see the
-// log-btn.done branches in renderHabitDetailModal()) -- only ever opened
-// for a habit whose current period is already logged, so h always has a
-// valid habitNoteKey() here.
+// Human-readable label for whichever key the note pop-up was opened for --
+// shown regardless of whether that's today, so opening a past day-pip's
+// note never reads ambiguously as "is this today's note?".
+function formatNoteDateLabel(key, type){
+  if(type==="monthly"){
+    return new Date(key+"-01T00:00:00").toLocaleDateString(undefined,{month:"long",year:"numeric"});
+  }
+  return new Date(key+"T00:00:00").toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"});
+}
+// Reached by tapping a logged day-pip (daily -- any of the 7, not just
+// today) or the "Logged"/"Completed" button (monthly/once-off, which have
+// no per-day pip strip of their own) -- state._noteKey (set by
+// "open-habit-note" in onAction()) says exactly which entry this is for.
 function renderHabitNoteModal(id){
   var h = findHabit(id);
   if(!h) return '';
-  var note = getHabitNote(h);
+  var key = state._noteKey;
+  var note = (h.notes||{})[key];
   var html = '<div class="modal-backdrop" data-backdrop="habit-note">';
   html += '<div class="modal">';
   html += '<button class="modal-close" data-action="close-modal">✕</button>';
   html += '<h3>'+h.emoji+' '+escapeHtml(h.name)+'</h3>';
+  html += '<div class="habit-note-daylabel">'+formatNoteDateLabel(key, h.type)+'</div>';
   if(note){
     html += '<div class="habit-note-meta">'+(note.updatedAt!==note.loggedAt?"Updated ":"Logged ")+formatNoteTimestamp(note.updatedAt)+'</div>';
   }
