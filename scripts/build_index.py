@@ -26,6 +26,10 @@ ASSETS = {
     "__BOTTLE__": b64("bottle.webp", "image/webp"),
     "__TREASURE_MAP__": b64("treasure_map.webp", "image/webp"),
     "__CARROT_JUICE__": b64("carrot_juice.webp", "image/webp"),
+    "__COCO_CANNON_IMG__": b64("cannon.webp", "image/webp"),
+    "__COCO_CROW__": b64("crow.webp", "image/webp"),
+    "__COCO_CROW_RED__": b64("redcrow.webp", "image/webp"),
+    "__COCO_COCONUT__": b64("coco.webp", "image/webp"),
 }
 
 template = (ROOT / "scripts" / "index_template.html").read_text(encoding="utf-8")

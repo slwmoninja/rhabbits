@@ -535,9 +535,9 @@ img.reward-hero{max-height:240px; max-width:100%; margin:0 auto 10px; border-rad
   padding:calc(10px + env(safe-area-inset-top)) 14px 8px;
 }
 .coco-back{background:none; border:none; color:var(--parchment-hi); font-size:1.25rem; padding:4px; line-height:1;}
-.coco-lives{display:flex; gap:2px; font-size:1rem; min-width:0;}
-.coco-lives .pip{font-size:1rem;}
 .coco-score{font-weight:700; font-size:.85rem; color:var(--gold); white-space:nowrap;}
+.coco-lives{display:flex; justify-content:center; gap:5px; font-size:1.3rem; padding:8px 14px 4px;}
+.coco-lives .pip{font-size:1.3rem;}
 .coco-canvas-wrap{flex:1; position:relative; min-height:0;}
 .coco-canvas{width:100%; height:100%; display:block; touch-action:none;}
 .coco-overlay{
@@ -582,13 +582,13 @@ img.reward-hero{max-height:240px; max-width:100%; margin:0 auto 10px; border-rad
 <div class="coco-screen hidden" id="cocoScreen">
   <div class="coco-header">
     <button class="coco-back" data-coco-back aria-label="Close Coco Cannon">✕</button>
-    <div class="coco-lives" id="cocoLivesDisplay"></div>
     <div class="coco-score" id="cocoScoreDisplay">Score: 0</div>
   </div>
   <div class="coco-canvas-wrap">
     <canvas class="coco-canvas" id="cocoCanvas"></canvas>
     <div class="coco-overlay hidden" id="cocoOverlay"></div>
   </div>
+  <div class="coco-lives" id="cocoLivesDisplay"></div>
   <div class="coco-controls">
     <button class="coco-btn" id="cocoLeftBtn" aria-label="Move left">◀</button>
     <button class="coco-btn coco-fire" id="cocoFireBtn" aria-label="Fire coconut">🥥</button>
@@ -610,7 +610,11 @@ var ASSET = {
   chest: "__CHEST__",
   bottle: "__BOTTLE__",
   treasure_map: "__TREASURE_MAP__",
-  carrot_juice: "__CARROT_JUICE__"
+  carrot_juice: "__CARROT_JUICE__",
+  coco_cannon_img: "__COCO_CANNON_IMG__",
+  coco_crow: "__COCO_CROW__",
+  coco_crow_red: "__COCO_CROW_RED__",
+  coco_coconut: "__COCO_COCONUT__"
 };
 
 var STORAGE_KEY = "rhabbits_state_v1";
@@ -664,7 +668,7 @@ var REWARDS = [
   },
   {
     id: "second_garden",
-    title: "Second Habit-Garden",
+    title: "Second Habit",
     desc: "Earn 7 carrots to plant a second daily habit.",
     medallion: "🥕",
     condition: function(state){ return state.carrots >= 7; },
@@ -681,7 +685,7 @@ var REWARDS = [
   {
     id: "seven_seasons",
     title: "Seven Seasons Strong",
-    desc: "Log a monthly habit 7 times. Unlocks another habit-garden.",
+    desc: "Log a monthly habit 7 times. Unlocks another habit.",
     medallion: "🌙",
     condition: function(state){ return state.habits.some(function(h){ return h.type==="monthly" && h.completions.length>=7; }); },
     progress: function(state){
@@ -693,7 +697,7 @@ var REWARDS = [
   {
     id: "bucket_list",
     title: "Bucket List Buccaneer",
-    desc: "Complete 7 once-off adventures. Unlocks another habit-garden.",
+    desc: "Complete 7 once-off adventures. Unlocks another habit.",
     medallion: "🏴‍☠️",
     condition: function(state){ return onceoffCompletedCount(state) >= 7; },
     progress: function(state){ return Math.min(onceoffCompletedCount(state),7) + "/7 once-offs"; }
@@ -1194,6 +1198,11 @@ function evaluateRewards(){
     if(r.condition(state)){
       state.unlocks[r.id] = { unlockedAt: todayStr() };
       state.pendingCelebration = r.id;
+      // Coco Cannon's first-ever life grant is the full 7, not the normal
+      // 1-per-day trickle -- a week's worth of carrots up front, so a
+      // brand new player can actually play a real game immediately
+      // instead of starting with a single life.
+      if(r.id==="coco_cannon") grantCocoCannonStarterLives();
     }
   }
   evaluateSightings();
@@ -1210,6 +1219,16 @@ function evaluateCocoCannon(){
     state.cocoLivesDays.push(t);
     state.cocoLives = Math.min(7, state.cocoLives+1);
   }
+}
+// Called once, exactly when coco_cannon's REWARDS condition first becomes
+// true (see evaluateRewards() above) -- also marks today as already used
+// for the day-cap, so the ordinary evaluateCocoCannon() call right after
+// it in the same evaluateRewards() pass doesn't also add an extra life on
+// top for today.
+function grantCocoCannonStarterLives(){
+  state.cocoLives = 7;
+  var t = todayStr();
+  if(state.cocoLivesDays.indexOf(t)===-1) state.cocoLivesDays.push(t);
 }
 
 // True the first time, on a given calendar day, that any habit has a
@@ -1357,7 +1376,7 @@ function renderTopbar(){
   html += '  <button class="icon-btn" data-action="show-profile" aria-label="Profile"><img class="avatar-thumb" src="'+avatarImg+'" alt=""></button>';
   html += '  <div class="wordmark">rHabbits</div>';
   if(canAddAnyHabit(state)){
-    html += '  <button class="icon-btn add-habit-fab" data-action="open-add-habit" aria-label="Add a habit" title="You have unlocked a new habit-garden">+</button>';
+    html += '  <button class="icon-btn add-habit-fab" data-action="open-add-habit" aria-label="Add a habit" title="You have unlocked a new habit">+</button>';
   } else {
     html += '  <span class="topbar-spacer"></span>';
   }
@@ -1414,7 +1433,7 @@ function renderLogbookScreen(){
   }
   html += '</div></div>';
 
-  html += renderHabitGroup("daily","Habit Gardens: Activity Tracking");
+  html += renderHabitGroup("daily","Habits: Activity Tracking");
   if(state.unlocks.new_task_types || countActive(state,"monthly")>0){
     html += renderHabitGroup("monthly","Monthly Habits");
   }
@@ -1520,7 +1539,7 @@ function renderHabitDetailModal(id){
       html += '<button class="log-btn" data-action="toggle-onceoff" data-id="'+h.id+'">Mark Complete  +1 🥕</button>';
     }
   }
-  html += '<button class="btn btn-danger btn-block mt" data-action="delete-habit" data-id="'+h.id+'">Remove this habit-garden</button>';
+  html += '<button class="btn btn-danger btn-block mt" data-action="delete-habit" data-id="'+h.id+'">Remove this habit</button>';
   html += '</div></div>';
   return html;
 }
@@ -1893,7 +1912,7 @@ function renderAddHabitModal(){
   html += '<div class="field"><label>Habit description (optional)</label><textarea id="addHabitDescription" maxlength="140" placeholder="e.g. Right after brushing my teeth">'+escapeHtml(d.description)+'</textarea></div>';
   html += '<div class="emoji-picker">'+EMOJI_CHOICES.map(function(e){return '<button class="emoji-opt '+(d.emoji===e?'selected':'')+'" data-action="pick-emoji" data-emoji="'+e+'">'+e+'</button>';}).join('')+'</div>';
   html += '<div class="type-picker">';
-  html += typeOptRow("daily","Daily", dailyCount+"/"+dailyMax+" habit-gardens used", d.type==="daily", dailyDisabled);
+  html += typeOptRow("daily","Daily", dailyCount+"/"+dailyMax+" habits used", d.type==="daily", dailyDisabled);
   html += typeOptRow("monthly","Monthly", typesUnlocked ? (monthlyCount+"/"+monthlyMax+" used") : "🔒 Unlocks after 4 weeks", d.type==="monthly", monthlyDisabled);
   html += typeOptRow("onceoff","Once-off", typesUnlocked ? (onceoffCount+"/"+onceoffMax+" used") : "🔒 Unlocks after 4 weeks", d.type==="onceoff", onceoffDisabled);
   html += '</div>';
@@ -1926,7 +1945,7 @@ function renderProfileModal(){
   html += '<div class="profile-stats">';
   html += '<div class="profile-stat"><b>'+state.carrots+'</b><span>Carrots</span></div>';
   html += '<div class="profile-stat"><b>'+daysAshore(state)+'</b><span>Days Ashore</span></div>';
-  html += '<div class="profile-stat"><b>'+state.habits.length+'</b><span>Habit-Gardens</span></div>';
+  html += '<div class="profile-stat"><b>'+state.habits.length+'</b><span>Habits</span></div>';
   html += '</div>';
   html += '<div class="profile-actions">';
   html += '<button class="btn btn-wood" data-action="switch-avatar">Switch Castaway</button>';
@@ -1994,7 +2013,7 @@ function renderCelebrationModal(r){
   else { html += '<div class="medallion-lg">'+r.medallion+'</div>'; }
   html += '<h4>'+r.title+'</h4>';
   html += '<p>'+r.desc+'</p>';
-  html += '<button class="btn mt" data-action="ack-celebration">Nice!</button>';
+  html += '<button class="btn mt" data-action="ack-celebration">OK</button>';
   html += '</div></div>';
   return html;
 }
@@ -2437,7 +2456,7 @@ function renderHabitNoteModal(id){
   return html;
 }
 function deleteHabit(id){
-  if(!confirm("Remove this habit-garden?")) return;
+  if(!confirm("Remove this habit?")) return;
   state.habits = state.habits.filter(function(h){return h.id!==id;});
   save();
   // Only ever called from inside the habit-detail modal now (the compact
@@ -2939,7 +2958,7 @@ function offerAutoRestore(parsed){
   var n = (parsed.habits||[]).length;
   var when = parsed.startDate || "a previous session";
   var wrap = openInfoModal("Restore your data?",
-    '<div style="margin-bottom:14px;">This device\'s rHabbits data looks empty, but a backup was found — '+n+' habit-garden(s) since '+escapeHtml(when)+'. Restore it?</div>' +
+    '<div style="margin-bottom:14px;">This device\'s rHabbits data looks empty, but a backup was found — '+n+' habit(s) since '+escapeHtml(when)+'. Restore it?</div>' +
     '<button class="btn btn-block" id="ar-yes" style="margin-bottom:8px;">Restore</button>' +
     '<button class="btn-ghost btn-block" id="ar-no">No, start fresh</button>'
   );
@@ -3132,56 +3151,111 @@ function syncBottombarUI(){
    ========================================================= */
 var COCO_MAX_LEVEL = 7; // Captain Crow is the encounter right after this, then it loops back to 1
 
-// No crow/cannon/coconut emoji reads consistently across devices (ZWJ
-// sequences like the crow one especially), so these are hand-drawn canvas
-// shapes instead -- same reasoning as chestIconSvg() elsewhere in this file.
+// Real cutout photos (see scripts/process_coco_assets.py) -- preloaded
+// once, module-scope, rather than per-frame. Fall back to a plain hand-
+// drawn shape if a data-URI image somehow isn't decoded yet on a given
+// frame (should be effectively instant with no network round-trip, but
+// costs nothing to guard against a blank frame).
+var cocoImgCannon = new Image(); cocoImgCannon.src = ASSET.coco_cannon_img;
+var cocoImgCrow = new Image(); cocoImgCrow.src = ASSET.coco_crow;
+var cocoImgCrowRed = new Image(); cocoImgCrowRed.src = ASSET.coco_crow_red;
+var cocoImgCoconut = new Image(); cocoImgCoconut.src = ASSET.coco_coconut;
+
+function cocoImgAspect(img, fallback){
+  return (img.complete && img.naturalWidth) ? img.naturalHeight/img.naturalWidth : fallback;
+}
 function cocoDrawCrow(ctx, x, y, isCaptain){
-  var body = isCaptain ? "#a33a2c" : "#241a10";
-  var wing = isCaptain ? "#7a2a20" : "#3e2e1c";
-  var s = isCaptain ? 16 : 12;
+  var img = isCaptain ? cocoImgCrowRed : cocoImgCrow;
+  var w = isCaptain ? 34 : 26;
+  var h = w * cocoImgAspect(img, 0.7);
+  if(img.complete && img.naturalWidth){
+    ctx.drawImage(img, x-w/2, y-h/2, w, h);
+  } else {
+    ctx.fillStyle = isCaptain ? "#a33a2c" : "#241a10";
+    ctx.beginPath(); ctx.ellipse(x, y, w*0.4, h*0.4, 0, 0, Math.PI*2); ctx.fill();
+  }
+}
+// Barrel-only real photo -- the fixed mount/base it pivots on (see
+// cocoCannonBarrelLen()/update()'s swivel-aim handling) is still a simple
+// hand-drawn shape, drawn separately and un-rotated in draw().
+function cocoDrawCannonBarrel(ctx, x, y, angle, w){
+  var h = w * cocoImgAspect(cocoImgCannon, 4.4);
   ctx.save();
   ctx.translate(x, y);
-  ctx.fillStyle = wing;
-  ctx.beginPath();
-  ctx.moveTo(-s*1.4, 0); ctx.lineTo(-s*0.3, -s*0.35); ctx.lineTo(-s*0.3, s*0.35);
-  ctx.closePath(); ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(s*1.4, 0); ctx.lineTo(s*0.3, -s*0.35); ctx.lineTo(s*0.3, s*0.35);
-  ctx.closePath(); ctx.fill();
-  ctx.fillStyle = body;
-  ctx.beginPath();
-  ctx.ellipse(0, 0, s*0.55, s*0.4, 0, 0, Math.PI*2);
-  ctx.fill();
-  ctx.fillStyle = "#c6992f";
-  ctx.beginPath();
-  ctx.moveTo(0, s*0.08); ctx.lineTo(s*0.55, 0); ctx.lineTo(0, -s*0.08);
-  ctx.closePath(); ctx.fill();
+  ctx.rotate(angle);
+  if(cocoImgCannon.complete && cocoImgCannon.naturalWidth){
+    ctx.drawImage(cocoImgCannon, -w/2, -h, w, h);
+  } else {
+    ctx.fillStyle = "#3e2714";
+    ctx.fillRect(-w*0.15, -h, w*0.3, h);
+  }
   ctx.restore();
 }
-function cocoDrawCannon(ctx, x, y, w){
-  ctx.save();
-  ctx.translate(x, y);
+function cocoDrawCannonBase(ctx, x, y, w){
   ctx.fillStyle = "#241a10";
-  ctx.beginPath(); ctx.arc(-w*0.35, w*0.28, w*0.22, 0, Math.PI*2); ctx.fill();
-  ctx.beginPath(); ctx.arc(w*0.35, w*0.28, w*0.22, 0, Math.PI*2); ctx.fill();
-  ctx.fillStyle = "#6b4526";
-  ctx.fillRect(-w*0.55, w*0.05, w*1.1, w*0.32);
+  ctx.beginPath(); ctx.ellipse(x, y+4, w*0.55, w*0.22, 0, 0, Math.PI*2); ctx.fill();
   ctx.fillStyle = "#3e2714";
-  ctx.save();
-  ctx.rotate(-0.12);
-  ctx.fillRect(-w*0.22, -w*0.9, w*0.44, w*0.9);
-  ctx.restore();
-  ctx.restore();
+  ctx.beginPath(); ctx.ellipse(x, y, w*0.42, w*0.18, 0, 0, Math.PI*2); ctx.fill();
 }
 function cocoDrawCoconut(ctx, x, y){
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.fillStyle = "#6b4526";
-  ctx.beginPath(); ctx.arc(0, 0, 6, 0, Math.PI*2); ctx.fill();
-  ctx.strokeStyle = "#3e2714"; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(-4,-2); ctx.lineTo(4,-2); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(-3,3); ctx.lineTo(3,3); ctx.stroke();
-  ctx.restore();
+  var img = cocoImgCoconut;
+  var w = 20, h = w * cocoImgAspect(img, 1);
+  if(img.complete && img.naturalWidth){
+    ctx.drawImage(img, x-w/2, y-h/2, w, h);
+  } else {
+    ctx.fillStyle = "#6b4526";
+    ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI*2); ctx.fill();
+  }
+}
+// Small burst of fading gray puffs at the muzzle tip on every shot fired.
+function cocoSpawnSmoke(list, x, y){
+  for(var i=0;i<5;i++){
+    list.push({
+      x:x, y:y,
+      vx:(Math.random()-0.5)*40, vy:(Math.random()-0.5)*40 - 20,
+      age:0, maxAge:0.4+Math.random()*0.2, r:3+Math.random()*3
+    });
+  }
+}
+// Small gold star burst at a crow's position on every hit (not just the
+// killing one) -- Captain Crow's 3 hits each get their own burst.
+function cocoSpawnStars(list, x, y){
+  for(var i=0;i<5;i++){
+    var ang = (i/5)*Math.PI*2 + Math.random()*0.4;
+    list.push({
+      x:x, y:y,
+      vx:Math.cos(ang)*50, vy:Math.sin(ang)*50 - 10,
+      age:0, maxAge:0.35+Math.random()*0.15, size:10+Math.random()*4
+    });
+  }
+}
+function cocoUpdateParticles(list, dt){
+  for(var i=list.length-1;i>=0;i--){
+    var p = list[i];
+    p.age += dt;
+    p.x += p.vx*dt; p.y += p.vy*dt;
+    if(p.age>=p.maxAge) list.splice(i,1);
+  }
+}
+function cocoDrawSmoke(ctx, list){
+  ctx.fillStyle = "#d8d4c8";
+  for(var i=0;i<list.length;i++){
+    var p = list[i], t = p.age/p.maxAge;
+    ctx.globalAlpha = Math.max(0, 1-t);
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r*(1+t*1.5), 0, Math.PI*2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+function cocoDrawStars(ctx, list){
+  ctx.fillStyle = "#f0c93e";
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  for(var i=0;i<list.length;i++){
+    var p = list[i], t = p.age/p.maxAge;
+    ctx.globalAlpha = Math.max(0, 1-t);
+    ctx.font = Math.round(p.size*(1-t*0.3))+"px sans-serif";
+    ctx.fillText("★", p.x, p.y);
+  }
+  ctx.globalAlpha = 1;
 }
 
 // Reassigned by initCocoCannon() (called once at bootstrap, below) --
@@ -3205,7 +3279,11 @@ function initCocoCannon(){
   var W = 320, H = 480; // logical (CSS-pixel) play-field size, recomputed on resize
   var running = false, rafId = null, lastTs = 0;
   var moveLeft = false, moveRight = false;
-  var cannon, coconut, crows, level, score, phase, sinceLevelStart;
+  var cannon, coconut, crows, level, score, phase, sinceLevelStart, smoke, stars;
+
+  var MAX_ANGLE = Math.PI/2; // full turret sweep: straight left/ground to straight right/ground
+  var TAP_MS = 220, TAP_NUDGE = 0.09; // ~5 degrees -- a quick tap nudges precisely instead of relying on hold-timing luck
+  var leftDownAt = 0, rightDownAt = 0;
 
   function resizeCanvas(){
     var rect = canvas.parentNode.getBoundingClientRect();
@@ -3218,6 +3296,11 @@ function initCocoCannon(){
   }
   function cannonY(){ return H*0.90; }
   function dangerY(){ return H*0.84; }
+  function clampAngle(a){ return Math.max(-MAX_ANGLE, Math.min(MAX_ANGLE, a)); }
+  // Direction the barrel currently points, as a unit vector -- angle 0 is
+  // straight up, +-MAX_ANGLE is straight along the ground to the right/left.
+  function aimDir(){ return { x: Math.sin(cannon.angle), y: -Math.cos(cannon.angle) }; }
+  function barrelLen(){ return cannon.w * cocoImgAspect(cocoImgCannon, 4.4) * 0.92; }
 
   function newCrow(isCaptain){
     return {
@@ -3242,8 +3325,12 @@ function initCocoCannon(){
     sinceLevelStart = 0;
   }
   function resetGame(){
-    cannon = { x: W/2, w: 30, speed: 190 }; // px/sec
+    // The base is fixed at bottom-center and never moves -- only the
+    // barrel's aim angle changes (see update()'s moveLeft/moveRight
+    // handling and the tap-nudge in dirUp() below).
+    cannon = { x0: W/2, angle: 0, w: 26, rotSpeed: 1.85 }; // rad/sec while held; x0 is the fixed base position
     coconut = null;
+    smoke = []; stars = [];
     level = 1;
     score = 0;
     phase = "ready";
@@ -3279,6 +3366,21 @@ function initCocoCannon(){
     if(startBtn) startBtn.addEventListener("click", startPlaying);
   }
   function hideOverlay(){ overlay.classList.add("hidden"); overlay.innerHTML = ""; }
+  // Non-interactive banner shown over live gameplay (not gated behind
+  // "ready"/"gameover" like showOverlay()) -- pauses crow/cannon/coconut
+  // updates for a beat (see update()'s phase==="banner" guard) while smoke/
+  // star particles keep animating, then hands off to a fresh level 1.
+  function showWinBanner(){
+    phase = "banner";
+    overlay.classList.remove("hidden");
+    overlay.innerHTML = '<h3>🎉 Win!</h3><p>Captain Crow retreats -- the garden is safe, for now.</p>';
+    setTimeout(function(){
+      hideOverlay();
+      level = 1;
+      spawnLevel();
+      phase = "playing";
+    }, 1600);
+  }
 
   function startPlaying(){
     if(state.cocoLives<=0){ showOverlay(); return; }
@@ -3300,19 +3402,24 @@ function initCocoCannon(){
   }
   function fire(){
     if(phase!=="playing" || coconut) return; // one coconut in flight at a time, classic Space Invaders balance
-    coconut = { x: cannon.x, y: cannonY()-14, speed: 260 };
+    var dir = aimDir(), len = barrelLen();
+    var tipX = cannon.x0 + dir.x*len, tipY = cannonY() + dir.y*len;
+    coconut = { x: tipX, y: tipY, vx: dir.x*260, vy: dir.y*260 };
+    cocoSpawnSmoke(smoke, tipX, tipY);
   }
 
   function update(dt){
+    cocoUpdateParticles(smoke, dt);
+    cocoUpdateParticles(stars, dt);
     if(phase!=="playing") return;
     sinceLevelStart += dt;
-    if(moveLeft) cannon.x -= cannon.speed*dt;
-    if(moveRight) cannon.x += cannon.speed*dt;
-    cannon.x = Math.max(cannon.w/2+4, Math.min(W-cannon.w/2-4, cannon.x));
+    if(moveLeft) cannon.angle = clampAngle(cannon.angle - cannon.rotSpeed*dt);
+    if(moveRight) cannon.angle = clampAngle(cannon.angle + cannon.rotSpeed*dt);
 
     if(coconut){
-      coconut.y -= coconut.speed*dt;
-      if(coconut.y < -10) coconut = null;
+      coconut.x += coconut.vx*dt;
+      coconut.y += coconut.vy*dt;
+      if(coconut.y < -10 || coconut.x < -10 || coconut.x > W+10) coconut = null;
     }
 
     var anyAlive = false;
@@ -3327,10 +3434,17 @@ function initCocoCannon(){
         if(Math.abs(dx) < 14 && Math.abs(dy) < 14){
           c.hp--;
           coconut = null;
+          cocoSpawnStars(stars, c.drawX, c.y);
           if(c.hp<=0){
             c.alive = false;
-            score += c.captain ? 500 : 10*level;
-            updateHud();
+            if(c.captain){
+              score += 500;
+              updateHud();
+              showWinBanner(); // handles the level=1 restart itself, once the banner clears
+            } else {
+              score += 10*level;
+              updateHud();
+            }
           }
         }
       }
@@ -3350,13 +3464,16 @@ function initCocoCannon(){
     ctx.clearRect(0, 0, W, H);
     ctx.fillStyle = "#2a1f14";
     ctx.fillRect(0, H-28, W, 28); // soil floor band
-    cocoDrawCannon(ctx, cannon.x, cannonY(), cannon.w);
+    cocoDrawCannonBase(ctx, cannon.x0, cannonY(), cannon.w);
+    cocoDrawCannonBarrel(ctx, cannon.x0, cannonY(), cannon.angle, cannon.w);
+    cocoDrawSmoke(ctx, smoke);
     if(coconut) cocoDrawCoconut(ctx, coconut.x, coconut.y);
     for(var i=0;i<crows.length;i++){
       var c = crows[i];
       if(!c.alive) continue;
       cocoDrawCrow(ctx, c.drawX!==undefined ? c.drawX : c.baseX, c.y, c.captain);
     }
+    cocoDrawStars(ctx, stars);
   }
 
   function loop(ts){
@@ -3371,7 +3488,7 @@ function initCocoCannon(){
     if(running) return;
     running = true;
     resizeCanvas();
-    if(!cannon) resetGame(); else { updateHud(); draw(); if(phase!=="playing") showOverlay(); }
+    if(!cannon) resetGame(); else { updateHud(); draw(); if(phase!=="playing" && phase!=="banner") showOverlay(); }
     lastTs = (window.performance && performance.now) ? performance.now() : Date.now();
     rafId = requestAnimationFrame(loop);
   }
@@ -3380,29 +3497,49 @@ function initCocoCannon(){
     if(rafId){ cancelAnimationFrame(rafId); rafId = null; }
   }
 
-  // Press-and-hold buttons (not just click, so movement continues while
-  // held) plus arrow keys/space for desktop testing. All wired exactly
-  // once here, like initBottombar() -- never from wireEvents().
-  function bindHold(btn, onDown, onUp){
-    btn.addEventListener("touchstart", function(e){ e.preventDefault(); onDown(); }, {passive:false});
-    btn.addEventListener("touchend", function(e){ e.preventDefault(); onUp(); }, {passive:false});
-    btn.addEventListener("mousedown", onDown);
-    btn.addEventListener("mouseup", onUp);
-    btn.addEventListener("mouseleave", onUp);
+  // Holding a direction button/key sweeps continuously (see update()'s
+  // moveLeft/moveRight handling); releasing quickly (under TAP_MS) instead
+  // applies one small precise TAP_NUDGE -- without this, a genuinely fast
+  // tap could land entirely between two rAF frames and move the barrel not
+  // at all, since continuous rotation only accumulates while a frame
+  // actually observes the flag set.
+  function dirDown(sign){
+    if(sign<0){ moveLeft=true; leftDownAt=Date.now(); }
+    else { moveRight=true; rightDownAt=Date.now(); }
   }
-  bindHold(leftBtn, function(){ moveLeft=true; }, function(){ moveLeft=false; });
-  bindHold(rightBtn, function(){ moveRight=true; }, function(){ moveRight=false; });
+  function dirUp(sign){
+    var held;
+    if(sign<0){ held=Date.now()-leftDownAt; moveLeft=false; }
+    else { held=Date.now()-rightDownAt; moveRight=false; }
+    if(held<TAP_MS && cannon && phase==="playing"){
+      cannon.angle = clampAngle(cannon.angle + sign*TAP_NUDGE);
+    }
+  }
+  // Wired exactly once here, like initBottombar() -- never from wireEvents().
+  function bindDir(btn, sign){
+    btn.addEventListener("touchstart", function(e){ e.preventDefault(); dirDown(sign); }, {passive:false});
+    btn.addEventListener("touchend", function(e){ e.preventDefault(); dirUp(sign); }, {passive:false});
+    btn.addEventListener("mousedown", function(){ dirDown(sign); });
+    btn.addEventListener("mouseup", function(){ dirUp(sign); });
+    btn.addEventListener("mouseleave", function(){ if(sign<0) moveLeft=false; else moveRight=false; });
+  }
+  bindDir(leftBtn, -1);
+  bindDir(rightBtn, 1);
   fireBtn.addEventListener("click", fire);
   backBtn.addEventListener("click", function(){ closeModal(); });
   document.addEventListener("keydown", function(e){
     if(state.screen!=="coco-cannon") return;
-    if(e.key==="ArrowLeft") moveLeft = true;
-    else if(e.key==="ArrowRight") moveRight = true;
+    // Guard against key-repeat re-triggering dirDown() on every repeated
+    // keydown while held -- that would keep resetting *DownAt, making a
+    // long hold look like a fresh tap on every repeat and breaking the
+    // hold-vs-tap distinction for keyboard users.
+    if(e.key==="ArrowLeft"){ if(!moveLeft) dirDown(-1); }
+    else if(e.key==="ArrowRight"){ if(!moveRight) dirDown(1); }
     else if(e.key===" "){ e.preventDefault(); fire(); }
   });
   document.addEventListener("keyup", function(e){
-    if(e.key==="ArrowLeft") moveLeft = false;
-    else if(e.key==="ArrowRight") moveRight = false;
+    if(e.key==="ArrowLeft") dirUp(-1);
+    else if(e.key==="ArrowRight") dirUp(1);
   });
   window.addEventListener("resize", function(){ if(running) resizeCanvas(); });
 
