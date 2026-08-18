@@ -311,6 +311,25 @@ img{max-width:100%; display:block;}
 .habit-meta{color:var(--wood); font-size:.78rem; margin-top:8px;}
 .habit-meta.done{color:var(--leaf-deep); font-weight:700;}
 
+/* ---------- Habit log notes ---------- */
+.habit-note{margin-top:10px;}
+.habit-note-add{
+  width:100%; text-align:left; background:rgba(107,69,38,.08); border:1px dashed var(--parchment-edge);
+  border-radius:9px; padding:8px 12px; color:var(--wood); font-size:.82rem; font-weight:700;
+}
+.habit-note-preview{
+  width:100%; text-align:left; background:rgba(107,69,38,.08); border:1px solid var(--parchment-edge);
+  border-radius:9px; padding:8px 12px;
+}
+.habit-note-text{color:var(--wood-dark); font-size:.85rem; line-height:1.4; word-break:break-word;}
+.habit-note-meta{color:var(--carrot-deep); font-size:.68rem; font-weight:700; margin-top:4px;}
+.habit-note-input{
+  width:100%; min-height:70px; resize:vertical; border-radius:9px; border:1px solid var(--parchment-edge);
+  background:var(--parchment-hi); color:var(--wood-dark); font:inherit; font-size:.85rem; padding:8px 12px;
+  box-sizing:border-box;
+}
+.habit-note-actions{display:flex; flex-direction:column; gap:8px; margin-top:8px;}
+
 
 /* ---------- Rewards screen ---------- */
 .reward-grid{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
@@ -1064,6 +1083,10 @@ function defaultState(){
     _draft:{ name:"", emoji:"🌴", type:"daily", description:"" },
     _detailHabitId:null,
     _detailRewardId:null,
+    // Whether the habit-detail modal's note editor (textarea + Save/Delete)
+    // is currently open -- reset to false every time show-habit-detail
+    // opens a (possibly different) habit, see onAction() below.
+    _noteEditorOpen:false,
     // Install-state bookkeeping -- see isInstalled()/triggerInstall() below.
     // installPromptAccepted also covers a manual/native install this session
     // hasn't relaunched from the real Home Screen icon yet (display-mode
@@ -1367,15 +1390,18 @@ function renderHabitDetailModal(id){
     html += '<div class="habit-week">'+pips+'</div>';
     html += '<button class="log-btn '+(doneToday?'done':'')+'" data-action="toggle-daily" data-id="'+h.id+'">'+(doneToday?'✓ Logged Today':'Log Today  +1 🥕')+'</button>';
     html += '<div class="habit-meta">Streak: '+dailyStreak(h)+' day'+(dailyStreak(h)===1?'':'s')+'</div>';
+    if(doneToday){ html += renderHabitNoteSection(h); }
   } else if(h.type==="monthly"){
     var m = monthStr();
     var doneMonth = h.completions.indexOf(m)!==-1;
     html += '<button class="log-btn '+(doneMonth?'done':'')+'" data-action="toggle-monthly" data-id="'+h.id+'">'+(doneMonth?'✓ Logged this month':'Log this Month  +1 🥕')+'</button>';
     html += '<div class="habit-meta">'+h.completions.length+'/7 months toward next reward</div>';
+    if(doneMonth){ html += renderHabitNoteSection(h); }
   } else {
     var done = h.completions.length>0;
     if(done){
       html += '<div class="habit-meta done">✓ Completed '+h.completions[0]+'</div>';
+      html += renderHabitNoteSection(h);
     } else {
       html += '<button class="log-btn" data-action="toggle-onceoff" data-id="'+h.id+'">Mark Complete  +1 🥕</button>';
     }
@@ -1977,6 +2003,7 @@ function onAction(e){
     case "show-habit-detail":
       navigateTo(function(){
         state._detailHabitId = el.getAttribute("data-id");
+        state._noteEditorOpen = false;
         state.screen = "habit-detail-modal";
       });
       break;
@@ -2045,6 +2072,17 @@ function onAction(e){
       break;
     case "toggle-onceoff":
       toggleOnceoff(el.getAttribute("data-id"));
+      break;
+    case "open-habit-note":
+      state._noteEditorOpen = true;
+      render();
+      break;
+    case "save-habit-note":
+      var noteInput = root.querySelector("#habitNoteText");
+      saveHabitNote(el.getAttribute("data-id"), noteInput ? noteInput.value : "");
+      break;
+    case "delete-habit-note":
+      deleteHabitNote(el.getAttribute("data-id"));
       break;
     case "delete-habit":
       deleteHabit(el.getAttribute("data-id"));
@@ -2139,7 +2177,7 @@ function toggleDaily(id){
   var t = todayStr();
   var idx = h.completions.indexOf(t);
   if(idx===-1){ h.completions.push(t); state.carrots++; }
-  else { h.completions.splice(idx,1); state.carrots=Math.max(0,state.carrots-1); }
+  else { h.completions.splice(idx,1); state.carrots=Math.max(0,state.carrots-1); deleteHabitNoteFor(h,t); }
   evaluateRewards();
   save(); render();
 }
@@ -2148,16 +2186,84 @@ function toggleMonthly(id){
   var m = monthStr();
   var idx = h.completions.indexOf(m);
   if(idx===-1){ h.completions.push(m); state.carrots++; }
-  else { h.completions.splice(idx,1); state.carrots=Math.max(0,state.carrots-1); }
+  else { h.completions.splice(idx,1); state.carrots=Math.max(0,state.carrots-1); deleteHabitNoteFor(h,m); }
   evaluateRewards();
   save(); render();
 }
 function toggleOnceoff(id){
   var h = findHabit(id); if(!h) return;
-  if(h.completions.length){ h.completions=[]; state.carrots=Math.max(0,state.carrots-1); }
+  if(h.completions.length){ deleteHabitNoteFor(h,h.completions[0]); h.completions=[]; state.carrots=Math.max(0,state.carrots-1); }
   else { h.completions=[todayStr()]; state.carrots++; }
   evaluateRewards();
   save(); render();
+}
+
+/* ---------------- habit log notes ----------------
+   A note is optional, per-completion context the player can attach to
+   *today's* daily log, *this month's* monthly log, or the one-and-only
+   once-off log -- keyed by the exact same date/month string already used
+   in h.completions, so it always tracks whichever period is currently
+   logged rather than needing its own separate identity. Stored in a
+   parallel h.notes map (not inline on completions, which stay plain
+   date/month strings everywhere else in this file -- dailyStreak(),
+   habitLogged(), evaluateRewards(), onceoffCompletedCount() etc. all still
+   just see an array of strings) so nothing else has to change shape. */
+function habitNoteKey(h){
+  if(h.type==="daily") return todayStr();
+  if(h.type==="monthly") return monthStr();
+  return h.completions[0]; // onceoff -- undefined if not yet completed
+}
+function getHabitNote(h){
+  return (h.notes||{})[habitNoteKey(h)];
+}
+function deleteHabitNoteFor(h, key){
+  if(h.notes && key in h.notes) delete h.notes[key];
+}
+function saveHabitNote(id, text){
+  var h = findHabit(id); if(!h) return;
+  text = text.trim();
+  if(!text) return; // nothing to persist -- delete-habit-note removes an existing one
+  var key = habitNoteKey(h);
+  if(!h.notes) h.notes = {};
+  var existing = h.notes[key];
+  var now = new Date().toISOString();
+  h.notes[key] = { text: text, loggedAt: existing ? existing.loggedAt : now, updatedAt: now };
+  state._noteEditorOpen = false;
+  save(); render();
+}
+function deleteHabitNote(id){
+  var h = findHabit(id); if(!h) return;
+  deleteHabitNoteFor(h, habitNoteKey(h));
+  state._noteEditorOpen = false;
+  save(); render();
+}
+function formatNoteTimestamp(iso){
+  var d = new Date(iso);
+  return d.toLocaleDateString(undefined,{month:"short",day:"numeric"})+" "+d.toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"});
+}
+// Shared across the daily/monthly/once-off branches of
+// renderHabitDetailModal() -- only ever rendered when that period is
+// already logged (the note is context on a completed entry, not a
+// standalone thing), so h always has a valid habitNoteKey() here.
+function renderHabitNoteSection(h){
+  var note = getHabitNote(h);
+  var html = '<div class="habit-note">';
+  if(state._noteEditorOpen){
+    html += '<textarea class="habit-note-input" id="habitNoteText" maxlength="280" placeholder="Add a note...">'+escapeHtml(note?note.text:"")+'</textarea>';
+    html += '<div class="habit-note-actions">';
+    html += '<button class="btn btn-block" data-action="save-habit-note" data-id="'+h.id+'">Save note</button>';
+    if(note){ html += '<button class="btn-ghost btn-block" data-action="delete-habit-note" data-id="'+h.id+'">Delete note</button>'; }
+    html += '</div>';
+  } else if(note){
+    html += '<button class="habit-note-preview" data-action="open-habit-note" data-id="'+h.id+'">';
+    html += '<div class="habit-note-text">'+escapeHtml(note.text)+'</div>';
+    html += '<div class="habit-note-meta">'+(note.updatedAt!==note.loggedAt?"Updated ":"Logged ")+formatNoteTimestamp(note.updatedAt)+'</div>';
+    html += '</button>';
+  } else {
+    html += '<button class="habit-note-add" data-action="open-habit-note" data-id="'+h.id+'">📝 Add a note</button>';
+  }
+  html += '</div>';
+  return html;
 }
 function deleteHabit(id){
   if(!confirm("Remove this habit-garden?")) return;
