@@ -928,7 +928,7 @@ var DAY_ONE_ENTRY = {
 
 var GROWTH_INTERVAL = 4; // one growth beat at the 1st discovery, then every 4th after (~monthly, matching the 1/week discovery pace)
 var GROWTH_LINE = [
-  "I was scared, but did not panic. Retracing my steps using my vine-and-stick markers got me home sooner this time.",
+  "Also today: I was scared, but I didn't panic. That's new for me.",
   "One whole week! I didn't think I'd make it this far — and I did.",
   "This is starting to feel less like a test and more like just... me.",
   "I do the habit before I even think about it now. That's real progress.",
@@ -1168,8 +1168,19 @@ function evaluateSightings(){
 // rather than something they might not reach for a week or more depending
 // on how consistently they log. Called once, on brand-new state, so
 // state.sightings is always empty here -- no duplicate-index check needed.
+// Position 0's growth-arc line (GROWTH_LINE[0], see growthLineForPosition())
+// is specifically a "got scared, got lost, found my way back" beat -- it
+// only makes narrative sense paired with a getting-lost flavor entry, so
+// the free first discovery is pinned to "Roots Everywhere" (the Mangroves
+// entry) by title lookup rather than random, unlike every discovery after
+// it. Falls back to random if that title ever changes/moves, rather than
+// silently unlocking nothing.
 function unlockFirstDiscoveryFree(){
-  var idx = Math.floor(Math.random()*SIGHTINGS_TOTAL);
+  var idx = -1;
+  for(var i=0;i<SIGHTING_FLAVOR.length;i++){
+    if(SIGHTING_FLAVOR[i].title==="Roots Everywhere"){ idx = i; break; }
+  }
+  if(idx===-1) idx = Math.floor(Math.random()*SIGHTINGS_TOTAL);
   state.sightings.push(idx);
   state.freeSightings++;
   showToast("Reward issued: 1st rHabbit created!");
@@ -1376,10 +1387,13 @@ function renderHabitDetailModal(id){
       var hasNote = h.notes && (ds in h.notes);
       var pipCls = 'day-pip '+(done?'done':'')+' '+(isToday?'today':'');
       var pipInner = (done?'✓':'')+(hasNote?'<span class="day-pip-note">📝</span>':'');
-      // Only a *logged* day can carry a note -- past or today, tapping the
-      // pip itself (not the Log/Logged button below, which stays a plain
-      // toggle) opens that day's note for add/edit/delete.
-      if(done){
+      // Tapping the pip itself (not the Log/Logged button below, which
+      // stays a plain toggle) opens that day's note for add/edit/delete --
+      // clickable whenever the day is logged OR still carries a note from
+      // before it was unchecked (unchecking no longer deletes the note,
+      // see toggleDaily()), so it stays reachable until the user deletes
+      // it explicitly from the note pop-up.
+      if(done || hasNote){
         pips += '<button class="'+pipCls+'" data-action="open-habit-note" data-id="'+h.id+'" data-date="'+ds+'">'+pipInner+'</button>';
       } else {
         pips += '<div class="'+pipCls+'">'+pipInner+'</div>';
@@ -2173,8 +2187,12 @@ function toggleDaily(id){
   var h = findHabit(id); if(!h) return;
   var t = todayStr();
   var idx = h.completions.indexOf(t);
+  // Unchecking does NOT delete that day's note -- a daily habit's note key
+  // is always todayStr() regardless of completions, so it stays perfectly
+  // reachable (and re-checking the same day reunites with it) until the
+  // user deletes it explicitly from the note pop-up.
   if(idx===-1){ h.completions.push(t); state.carrots++; }
-  else { h.completions.splice(idx,1); state.carrots=Math.max(0,state.carrots-1); deleteHabitNoteFor(h,t); }
+  else { h.completions.splice(idx,1); state.carrots=Math.max(0,state.carrots-1); }
   evaluateRewards();
   save(); render();
 }
@@ -2182,6 +2200,11 @@ function toggleMonthly(id){
   var h = findHabit(id); if(!h) return;
   var m = monthStr();
   var idx = h.completions.indexOf(m);
+  // Unlike toggleDaily(), monthly has no day-pip-style surface that stays
+  // visible/clickable once unlogged (its log-btn IS the note trigger, only
+  // while doneMonth), so a note would become genuinely unreachable while
+  // unlogged this month -- deleting it here, same as toggleOnceoff(), is
+  // more honest than leaving orphaned, inaccessible data.
   if(idx===-1){ h.completions.push(m); state.carrots++; }
   else { h.completions.splice(idx,1); state.carrots=Math.max(0,state.carrots-1); deleteHabitNoteFor(h,m); }
   evaluateRewards();
@@ -2189,6 +2212,11 @@ function toggleMonthly(id){
 }
 function toggleOnceoff(id){
   var h = findHabit(id); if(!h) return;
+  // Once-off is the one type whose note key (habitNoteKey() -> h.completions[0])
+  // is *derived from* completions rather than independent of it -- clearing
+  // completions here would leave any note permanently unreachable (no
+  // "today"/"this month" fallback exists for a once-off), so unlike
+  // toggleDaily()/toggleMonthly() its note has to go too.
   if(h.completions.length){ deleteHabitNoteFor(h,h.completions[0]); h.completions=[]; state.carrots=Math.max(0,state.carrots-1); }
   else { h.completions=[todayStr()]; state.carrots++; }
   evaluateRewards();
@@ -2870,13 +2898,35 @@ function reloadForNewServiceWorker(){
   if(swReloadTriggered) return; // controllerchange can fire more than once per page life
   if(isUserTyping()){ swReloadPending = true; return; } // retried from checkForUpdate's next call
   swReloadTriggered = true;
-  location.reload();
+  // See purgeCachedShell() below (defined later in this file, but function
+  // declarations hoist) -- same stale-reload risk as checkForUpdate()'s own
+  // reload, so the same fix applies here.
+  purgeCachedShell().then(function(){ location.reload(); });
 }
 if(navigator.serviceWorker){
   navigator.serviceWorker.addEventListener("controllerchange", reloadForNewServiceWorker);
 }
 // Returns a status string so callers wanting feedback (pull-to-refresh) can
 // react -- the interval/visibilitychange callers just ignore it.
+// Deletes index.html from every Cache Storage bucket this origin owns
+// (not just sw.js's current CACHE_NAME -- reading that constant from here
+// would just be a second copy to keep in sync) so the reload triggered
+// below actually gets fresh content. Without this, sw.js's fetch handler
+// is stale-while-revalidate: it answers a navigation from cache FIRST and
+// only refreshes that cache in the background, so location.reload() alone
+// would just redisplay the exact same stale page it was trying to escape,
+// while deployedVersionTag above has *already* been bumped to the new tag
+// -- meaning every check after that reload sees "tag === deployedVersionTag"
+// and never retries. The only way out at that point used to be manually
+// clearing site data.
+function purgeCachedShell(){
+  if(!("caches" in window)) return Promise.resolve();
+  return caches.keys().then(function(names){
+    return Promise.all(names.map(function(n){
+      return caches.open(n).then(function(c){ return c.delete("./index.html"); });
+    }));
+  }).catch(function(){});
+}
 function checkForUpdate(){
   if(swReloadPending && !isUserTyping()){ reloadForNewServiceWorker(); return Promise.resolve("reloading"); }
   var swCheck = (navigator.serviceWorker && navigator.serviceWorker.getRegistration)
@@ -2895,8 +2945,10 @@ function checkForUpdate(){
       if(isUserTyping()) return "deferred";
       deployedVersionTag = tag;
       try{ localStorage.setItem(DEPLOYED_TAG_KEY, tag); }catch(e){}
-      location.reload();
-      return "reloading";
+      return purgeCachedShell().then(function(){
+        location.reload();
+        return "reloading";
+      });
     }).catch(function(){ return "offline"; }); // offline or blocked -- silently skip, next successful check catches up
   });
 }
