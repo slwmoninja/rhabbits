@@ -793,9 +793,26 @@ function treasureChestAt(r,c){
 // Same one-credit-per-calendar-day cap as New Discovery (see
 // hasCompletionToday() below) -- a move becomes available the moment any
 // habit is logged today, and (unlike Discovery credits) doesn't expire if
-// unspent -- it just waits until a direction is picked.
+// unspent -- it just waits until a direction is picked. Normally that's a
+// single move/day, but the very first time the map is opened (see
+// "show-treasure-hunt" in onAction()) grants 7 moves usable that one day
+// only, so a brand new player can actually see some of the map right away
+// instead of crawling one tile/day -- treasureTrialGrantedOn being today
+// is the only thing that raises the cap, so it automatically reverts to
+// the normal 1/day the moment the calendar date moves on, no separate
+// "expire it" step needed.
+function treasureMovesUsedToday(){
+  var t = todayStr(), n = 0;
+  for(var i=0;i<state.treasureMoveDays.length;i++){ if(state.treasureMoveDays[i]===t) n++; }
+  return n;
+}
+function treasureMovesAllowedToday(){
+  var base = state.treasureTrialGrantedOn===todayStr() ? 7 : 1;
+  var streakBonus = state.treasureStreakBonusDays.indexOf(todayStr())!==-1 ? 1 : 0;
+  return base + streakBonus;
+}
 function treasureMoveAvailable(){
-  return !state.treasureMapComplete && hasCompletionToday(state) && state.treasureMoveDays.indexOf(todayStr())===-1;
+  return !state.treasureMapComplete && hasCompletionToday(state) && treasureMovesUsedToday() < treasureMovesAllowedToday();
 }
 function treasureLegalDirections(){
   var p = state.treasurePos;
@@ -810,7 +827,10 @@ function treasureStatusText(){
   if(state.treasureMapComplete) return "You mapped the whole island!";
   if(state.treasureFound.length>=TREASURE_CHESTS.length) return "All treasure found — keep exploring the map.";
   var status = state.treasureFound.length+"/"+TREASURE_CHESTS.length+" treasures found.";
-  if(treasureMoveAvailable()) status += " Move ready!";
+  if(treasureMoveAvailable()){
+    var left = treasureMovesAllowedToday() - treasureMovesUsedToday();
+    status += left>1 ? " "+left+" moves ready!" : " Move ready!";
+  }
   return status;
 }
 function treasureMove(dir){
@@ -1218,6 +1238,23 @@ function defaultState(){
     treasureMapComplete:false,
     pendingTreasureFound:null,
     pendingMapComplete:false,
+    // Same one-time trial idea as Coco Cannon's cocoTrialGrantedOn -- the
+    // date (or null) the 7-moves-in-one-day bonus was granted, see
+    // treasureMovesAllowedToday() above. pendingTreasureTrial is the
+    // announcement overlay itself (see renderTreasureTrialModal()),
+    // following the exact same pendingX pattern as pendingMapComplete.
+    treasureTrialGrantedOn:null,
+    pendingTreasureTrial:false,
+    // Dates an extra Treasure Hunt move was earned via the 7-day streak
+    // bonus below (see evaluateStreakBonus()) -- adds +1 to that day's
+    // move allowance only, same one-day-only spirit as the trial above.
+    treasureStreakBonusDays:[],
+    // General cross-type "was the player active this day" record (see
+    // evaluateActiveDays()) and the 7-day-streak milestone bonus it
+    // powers (see evaluateStreakBonus()) -- streakBonusCount is how many
+    // 7-day milestones have been rewarded on the *current* unbroken streak.
+    activeDays:[],
+    streakBonusCount:0,
     // Coco Cannon -- cocoLives IS the in-game life count directly (not a
     // separate "bank" vs "active" split): reset (not accumulated) at most
     // once/day to that day's ration -- day 1 of play = 1 life, day 2 = 2,
@@ -1288,6 +1325,8 @@ function evaluateRewards(){
   }
   evaluateSightings();
   evaluateCocoCannon();
+  evaluateActiveDays();
+  evaluateStreakBonus();
 }
 
 // Coco Cannon lives reset (not accumulate) on each new day a habit gets
@@ -1314,14 +1353,59 @@ function evaluateCocoCannon(){
   }
 }
 
+// A general, type-agnostic "was the player active on day X" record --
+// separate from cocoLivesDays/treasureMoveDays/discoveryCarrotDays (which
+// are each their own currency's day-cap) so the 7-day streak bonus below
+// isn't tangled up with any one reward's own bookkeeping, and keeps
+// counting correctly even before Coco Cannon/Treasure Hunt happen to be
+// relevant. Same one-credit-per-day gate as everything else.
+function evaluateActiveDays(){
+  if(!state.onboarded) return;
+  var t = todayStr();
+  if(state.activeDays.indexOf(t)===-1 && hasCompletionToday(state)) state.activeDays.push(t);
+}
+// Consecutive days (ending today, or yesterday if today's not logged yet)
+// the player has been active, per evaluateActiveDays() above -- a gap of
+// even one day breaks the count back to 0.
+function activeDayStreak(){
+  var n = 0, d = new Date();
+  if(state.activeDays.indexOf(todayStr())===-1) d.setDate(d.getDate()-1);
+  while(true){
+    var ds = d.toISOString().slice(0,10);
+    if(state.activeDays.indexOf(ds)!==-1){ n++; d.setDate(d.getDate()-1); } else break;
+  }
+  return n;
+}
+// Every fresh 7-day milestone (7, 14, 21, ...) of an unbroken active
+// streak earns a one-time top-up: Coco Cannon lives refilled to a full 7
+// (regardless of gameplay losses so far today) and one extra Treasure Hunt
+// move usable today (see treasureMovesAllowedToday()). streakBonusCount
+// tracks how many milestones have been rewarded so far on the *current*
+// streak -- reset to 0 the moment the streak breaks, so a brand new streak
+// earns the day-7 bonus again rather than being stuck remembering a much
+// higher watermark from before the gap.
+function evaluateStreakBonus(){
+  if(!state.onboarded) return;
+  var streak = activeDayStreak();
+  if(streak===0){ state.streakBonusCount = 0; return; }
+  var milestone = Math.floor(streak/7);
+  if(milestone > state.streakBonusCount){
+    state.streakBonusCount = milestone;
+    state.cocoLives = 7;
+    state.treasureStreakBonusDays.push(todayStr());
+    showToast("🔥 7-day streak! Bonus Coco Cannon life + Treasure Hunt move earned.");
+  }
+}
+
 // True the first time, on a given calendar day, that any habit has a
 // completion logged for that day (month-token for monthly habits) -- used
 // to cap discovery pacing at one credit per day regardless of how many
 // habits get completed that day.
 function hasCompletionToday(state){
-  var t = todayStr(), m = monthStr();
+  var t = todayStr(), w = isoWeekStr(), m = monthStr();
   return state.habits.some(function(h){
     if(h.type==="monthly") return h.completions.indexOf(m)!==-1;
+    if(h.type==="weekly") return h.completions.indexOf(w)!==-1;
     return h.completions.indexOf(t)!==-1;
   });
 }
@@ -1762,8 +1846,7 @@ function renderTreasureHuntCard(favorited){
   html += '<div class="reward-title">Treasure Hunt</div>';
   html += '<div class="reward-desc">'+treasureStatusText()+'</div>';
   if(!state.treasureMapComplete){
-    var movesUsedToday = state.treasureMoveDays.indexOf(todayStr())!==-1 ? 1 : 0;
-    html += '<div class="reward-desc">'+movesUsedToday+'/1 moves used today</div>';
+    html += '<div class="reward-desc">'+treasureMovesUsedToday()+'/'+treasureMovesAllowedToday()+' moves used today</div>';
   }
   html += '</div></div>';
   return html;
@@ -1793,7 +1876,10 @@ function renderTreasureHuntModal(){
     html += dirBtn('W','◀')+'<span class="tmap-dpad-center">🧭</span>'+dirBtn('E','▶');
     html += dirBtn('SW','◣')+dirBtn('S','▼')+dirBtn('SE','◢');
     html += '</div>';
-    if(!canMove){ html += '<p class="tmap-hint">Log a habit today to earn your next move.<br>Up to 1 move earned per day.</p>'; }
+    if(!canMove){
+      var allowedToday = treasureMovesAllowedToday();
+      html += '<p class="tmap-hint">Log a habit today to earn your next move.<br>Up to '+allowedToday+' move'+(allowedToday===1?'':'s')+' earned per day.</p>';
+    }
   }
   html += '</div></div>';
   return html;
@@ -1817,6 +1903,21 @@ function renderMapCompleteModal(){
   html += '<h3>You mapped the whole island!</h3>';
   html += '<img class="reward-hero" src="'+ASSET.treasure_map+'" alt="">';
   html += '<button class="btn mt" data-action="ack-map-complete">Nice!</button>';
+  html += '</div></div>';
+  return html;
+}
+
+// Shown once, right as the treasure-hunt-modal is first opened (see
+// "show-treasure-hunt" in onAction()) -- layered on top of it via the same
+// pendingX overlay mechanism as pendingMapComplete, so it visually and
+// functionally blocks the move buttons underneath until dismissed.
+function renderTreasureTrialModal(){
+  var html = '<div class="modal-backdrop" data-backdrop="treasure-trial">';
+  html += '<div class="modal celebration">';
+  html += '<div class="confetti">🗺️✨</div>';
+  html += '<h3>7 Free Moves!</h3>';
+  html += '<p>You\'ve got 7 moves today only, so you can explore a real chunk of the island right away. They expire tomorrow -- make them count!</p>';
+  html += '<button class="btn mt" data-action="ack-treasure-trial">Let\'s Go!</button>';
   html += '</div></div>';
   return html;
 }
@@ -1850,7 +1951,7 @@ function renderNewDiscoveryCard(favorited){
 // separate summary/snapshot.
 function renderCocoCannonCard(favorited){
   var html = '<div class="reward-card" data-action="open-coco-cannon">';
-  html += '<div class="reward-media"><div class="medallion">🥥</div></div>';
+  html += '<div class="reward-media"><img src="'+ASSET.coco_coconut+'" alt=""></div>';
   html += '<button class="reward-heart '+(favorited?'favorited':'')+'" data-action="toggle-favorite-reward" data-id="coco_cannon" aria-label="Favorite">'+(favorited?'❤️':'🤍')+'</button>';
   html += '<div class="reward-body">';
   html += '<div class="reward-title">Coco Cannon</div>';
@@ -1880,7 +1981,7 @@ function renderUnlockedRewardCard(r, favorited){
 function renderRewardsScreen(){
   var html = '<section class="screen">';
   html += '<h2 style="color:var(--parchment-hi); margin-bottom:4px;">Your Rewards</h2>';
-  html += '<p style="color:var(--parchment-edge); font-size:.85rem; margin-bottom:16px;">A growing collection from life on the island. More rewards to come!</p>';
+  html += '<p style="color:var(--parchment-edge); font-size:.85rem; margin-bottom:16px;">7 days in a row = +1 life (Coco Cannons) and +1 move (Treasure Hunt)</p>';
   html += '<div class="reward-grid">';
 
   // "Next Rewards" always leads the grid -- it's the one card that answers
@@ -2057,6 +2158,7 @@ function renderModals(){
   if(state.pendingCelebration){ html += renderCelebrationModal(REWARDS.filter(function(r){return r.id===state.pendingCelebration;})[0]); }
   if(state.pendingTreasureFound!==null){ html += renderTreasureFoundModal(state.pendingTreasureFound); }
   if(state.pendingMapComplete){ html += renderMapCompleteModal(); }
+  if(state.pendingTreasureTrial){ html += renderTreasureTrialModal(); }
   if(state.toast){ html += '<div class="toast">'+state.toast+'</div>'; }
   return html;
 }
@@ -2249,7 +2351,7 @@ function wireEvents(){
       // closeModal()/history.back(), or tapping its backdrop would pop
       // whatever real screen/modal history entry is actually current out
       // from under it. Mirrors the "Nice!" button's own ack-celebration case.
-      // Same reasoning applies to the two Treasure Hunt pending overlays.
+      // Same reasoning applies to the three Treasure Hunt pending overlays.
       var backdropType = bd.getAttribute("data-backdrop");
       if(backdropType==="celebration"){
         state.pendingCelebration = null;
@@ -2259,6 +2361,9 @@ function wireEvents(){
         save(); render();
       } else if(backdropType==="map-complete"){
         state.pendingMapComplete = false;
+        save(); render();
+      } else if(backdropType==="treasure-trial"){
+        state.pendingTreasureTrial = false;
         save(); render();
       } else {
         closeModal();
@@ -2412,7 +2517,19 @@ function onAction(e){
       navigateTo(function(){ state.screen = "next-rewards-detail-modal"; });
       break;
     case "show-treasure-hunt":
-      navigateTo(function(){ state.screen = "treasure-hunt-modal"; });
+      navigateTo(function(){
+        state.screen = "treasure-hunt-modal";
+        // One-time trial: the very first time the map is actually opened,
+        // not just when it exists (it's always unlocked from minute one),
+        // grant 7 moves usable today only, so a brand new player can see a
+        // real chunk of the island right away instead of one tile/day --
+        // see treasureMovesAllowedToday() for how the bonus expires
+        // automatically the next calendar day.
+        if(!state.treasureTrialGrantedOn){
+          state.treasureTrialGrantedOn = todayStr();
+          state.pendingTreasureTrial = true;
+        }
+      });
       break;
     case "treasure-move":
       treasureMove(el.getAttribute("data-dir"));
@@ -2498,6 +2615,10 @@ function onAction(e){
       break;
     case "ack-map-complete":
       state.pendingMapComplete = false;
+      save(); render();
+      break;
+    case "ack-treasure-trial":
+      state.pendingTreasureTrial = false;
       save(); render();
       break;
     case "install-pill":
@@ -3603,7 +3724,7 @@ function initCocoCannon(){
     // The base is fixed at bottom-center and never moves -- only the
     // barrel's aim angle changes, by holding a direction button/key (see
     // update()'s moveLeft/moveRight handling).
-    cannon = { x0: W/2, angle: 0, w: 26, rotSpeed: 1.85 }; // rad/sec while held; x0 is the fixed base position
+    cannon = { x0: W/2, angle: 0, w: 13, rotSpeed: 1.85 }; // rad/sec while held; x0 is the fixed base position -- w halved from 26 (see close-range hit tolerance boost in update() below, which compensates for the shorter barrel this implies)
     coconut = null;
     smoke = []; stars = [];
     level = 1;
@@ -3741,7 +3862,15 @@ function initCocoCannon(){
       c.drawX = c.baseX + Math.sin(sinceLevelStart*2 + c.phase) * 14;
       if(coconut){
         var dx = c.drawX - coconut.x, dy = c.y - coconut.y;
-        if(Math.abs(dx) < 18 && Math.abs(dy) < 18){ // matches the 30%-larger crow sprite
+        // Crows low enough to be near the danger line force a near-horizontal
+        // shot from the (now smaller/shorter-barreled) cannon -- a steep angle
+        // where a small aim error swings the muzzle a lot, and there's very
+        // little vertical travel left before the crow's gone -- so widen the
+        // hit window a bit down there specifically, rather than making every
+        // shot easier across the board.
+        var closeRange = c.y > H*0.6;
+        var hitTol = closeRange ? 24 : 18; // 18 matches the 30%-larger crow sprite
+        if(Math.abs(dx) < hitTol && Math.abs(dy) < hitTol){
           c.hp--;
           coconut = null;
           cocoSpawnStars(stars, c.drawX, c.y);
