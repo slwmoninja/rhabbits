@@ -13,7 +13,7 @@
      this tag or index_template.html. Recompute (sha256 of icon-192.png,
      first 8 hex chars) and bump this whenever icon-192.png's bytes change,
      or iPhone installs will keep showing a stale icon after an update. -->
-<link rel="apple-touch-icon" href="./icon-192.png?v=74f62286">
+<link rel="apple-touch-icon" href="./icon-192.png?v=4739f0e8">
 <meta name="theme-color" content="#0E3634">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -397,6 +397,37 @@ img{max-width:100%; display:block;}
 .reward-heart.favorited{filter:none; opacity:1; background:rgba(20,20,20,.3);}
 .reward-heart:active{transform:translateY(1px);}
 
+/* ---------- Treasure Hunt ---------- */
+/* Aspect ratio matches Graphics/TreasureMap.jpeg's native 1408x768 exactly
+   -- the 14x8 fog grid below was hand-mapped against those pixel
+   proportions, so any mismatch here would drift the fog off the coastline. */
+.tmap-wrap{position:relative; width:100%; aspect-ratio:1408/768; background:var(--teal-deep); overflow:hidden;}
+.tmap-card .tmap-wrap{border-radius:0;}
+.tmap-wrap img{width:100%; height:100%; object-fit:cover;}
+.tmap-grid{
+  position:absolute; inset:0; display:grid;
+  grid-template-columns:repeat(14,1fr); grid-template-rows:repeat(8,1fr);
+}
+.tmap-cell{display:flex; align-items:center; justify-content:center;}
+.tmap-cell.fogged{background:rgba(18,12,7,.93); box-shadow:inset 0 0 0 .5px rgba(0,0,0,.15);}
+.tmap-cell.revealed{background:transparent;}
+.tmap-pin, .tmap-found{font-size:.9rem; filter:drop-shadow(0 1px 2px rgba(0,0,0,.6));}
+.tmap-card .tmap-pin, .tmap-card .tmap-found{font-size:.7rem;}
+.tmap-status{color:var(--wood-dark); font-weight:700; font-size:.85rem; text-align:center; margin:12px 0 0;}
+.tmap-hint{color:var(--wood); font-size:.75rem; text-align:center; margin:6px 0 0;}
+.tmap-dpad{
+  display:grid; grid-template-columns:repeat(3,42px); grid-auto-rows:42px; gap:4px;
+  justify-content:center; margin:14px auto 0;
+}
+.tmap-dbtn{
+  background:var(--wood); color:var(--parchment-hi); border:1px solid var(--wood-dark);
+  border-radius:8px; font-size:1rem; display:flex; align-items:center; justify-content:center;
+}
+.tmap-dbtn:active{transform:translateY(1px);}
+.tmap-dbtn[disabled]{opacity:.35; cursor:default;}
+.tmap-dpad-center{display:flex; align-items:center; justify-content:center; font-size:1.1rem; opacity:.7;}
+.treasure-hunt-modal{text-align:center;}
+
 /* ---------- Modals ---------- */
 .modal-backdrop{
   position:fixed; inset:0; background:rgba(8,20,19,.72); backdrop-filter:blur(2px);
@@ -477,7 +508,8 @@ var ASSET = {
   cutout_female: "__CUTOUT_FEMALE__",
   sightings_sprite: "__SIGHTINGS_SPRITE__",
   chest: "__CHEST__",
-  bottle: "__BOTTLE__"
+  bottle: "__BOTTLE__",
+  treasure_map: "__TREASURE_MAP__"
 };
 
 var STORAGE_KEY = "rhabbits_state_v1";
@@ -550,6 +582,105 @@ var REWARDS = [
   }
 ];
 var STARTER_REASON = "Reward issued: Starting to use the app!";
+
+// ---------------- Treasure Hunt ----------------
+// A slow-burn side quest layered on top of daily habit logging: one
+// grid-square move per day (earned exactly like New Discovery credits below,
+// via hasCompletionToday() -- at most one per calendar day, no matter how
+// many habits get completed that day), spent on whichever cardinal
+// direction the player picks among the currently legal ones. The castaway
+// has no ship, so movement -- and fog removal -- only ever happens across
+// island land, never ocean. The 14x8 grid below is hand-mapped directly
+// against Graphics/TreasureMap.jpeg's actual coastline (fixed art, no
+// runtime image analysis) so fog cells line up with the drawn coast.
+var TREASURE_COLS = 14, TREASURE_ROWS = 8;
+// NE-most beach tile on the island -- the small sandy headland north of the
+// main landmass -- so the castaway's very first sighting of solid ground
+// (matching Day One: "Woke up on the beach") reads as an actual point on
+// the coastline, not an arbitrary interior tile.
+var TREASURE_START = {r:1, c:9};
+var TREASURE_LAND = [
+  "1,6","1,7","1,9",
+  "2,4","2,5","2,6","2,7","2,8","2,9","2,10",
+  "3,3","3,4","3,5","3,6","3,7","3,8","3,9","3,10",
+  "4,3","4,4","4,5","4,6","4,7","4,8","4,9","4,10",
+  "5,8","5,9","5,10"
+];
+var TREASURE_CHESTS = [ {r:4,c:3}, {r:3,c:7}, {r:4,c:8} ];
+
+function treasureCellKey(r,c){ return r+","+c; }
+function isTreasureLand(r,c){
+  return r>=0 && r<TREASURE_ROWS && c>=0 && c<TREASURE_COLS && TREASURE_LAND.indexOf(treasureCellKey(r,c))!==-1;
+}
+function treasureChestAt(r,c){
+  for(var i=0;i<TREASURE_CHESTS.length;i++){
+    if(TREASURE_CHESTS[i].r===r && TREASURE_CHESTS[i].c===c) return i;
+  }
+  return -1;
+}
+// Same one-credit-per-calendar-day cap as New Discovery (see
+// hasCompletionToday() below) -- a move becomes available the moment any
+// habit is logged today, and (unlike Discovery credits) doesn't expire if
+// unspent -- it just waits until a direction is picked.
+function treasureMoveAvailable(){
+  return !state.treasureMapComplete && hasCompletionToday(state) && state.treasureMoveDays.indexOf(todayStr())===-1;
+}
+function treasureLegalDirections(){
+  var p = state.treasurePos;
+  return {
+    N: isTreasureLand(p.r-1, p.c),
+    S: isTreasureLand(p.r+1, p.c),
+    E: isTreasureLand(p.r, p.c+1),
+    W: isTreasureLand(p.r, p.c-1)
+  };
+}
+function treasureStatusText(){
+  if(state.treasureMapComplete) return "You mapped the whole island!";
+  if(state.treasureFound.length>=TREASURE_CHESTS.length) return "All treasure found — keep exploring the map.";
+  var status = state.treasureFound.length+"/"+TREASURE_CHESTS.length+" treasures found.";
+  if(treasureMoveAvailable()) status += " Move ready!";
+  return status;
+}
+function treasureMove(dir){
+  if(!treasureMoveAvailable()) return;
+  var legal = treasureLegalDirections();
+  if(!legal[dir]) return;
+  var p = state.treasurePos;
+  var np = {r:p.r, c:p.c};
+  if(dir==="N") np.r--; else if(dir==="S") np.r++; else if(dir==="E") np.c++; else if(dir==="W") np.c--;
+  state.treasurePos = np;
+  state.treasureMoveDays.push(todayStr());
+  var key = treasureCellKey(np.r, np.c);
+  if(state.treasureFog.indexOf(key)===-1) state.treasureFog.push(key);
+  var chestIdx = treasureChestAt(np.r, np.c);
+  if(chestIdx!==-1 && state.treasureFound.indexOf(chestIdx)===-1){
+    state.treasureFound.push(chestIdx);
+    state.pendingTreasureFound = chestIdx;
+  }
+  // Every land tile walked -- the whole map (water included) opens up as a
+  // finished-map reward, distinct from (and possibly later than) finding
+  // all 3 chests, which only requires walking the *right* tiles.
+  if(!state.treasureMapComplete && state.treasureFog.length>=TREASURE_LAND.length){
+    state.treasureMapComplete = true;
+    state.pendingMapComplete = true;
+  }
+  save(); render();
+}
+// Only reachable once treasureMapComplete (see renderTreasureHuntModal()) --
+// resets every bit of hunt progress back to the fresh-landing state so the
+// player can walk the whole island again, without touching anything else
+// (habits, carrots, the REWARDS chain, or the favorite-heart on this card).
+function treasurePlayAgain(){
+  if(!confirm("Restart the treasure hunt from the beach?")) return;
+  state.treasureFog = [treasureCellKey(TREASURE_START.r, TREASURE_START.c)];
+  state.treasurePos = {r:TREASURE_START.r, c:TREASURE_START.c};
+  state.treasureFound = [];
+  state.treasureMoveDays = [];
+  state.treasureMapComplete = false;
+  state.pendingTreasureFound = null;
+  state.pendingMapComplete = false;
+  save(); render();
+}
 
 // "New Discovery" -- a separate, open-ended collectible track alongside
 // the structured REWARDS chain above. SIGHTINGS_SPRITE is one combined
@@ -846,6 +977,17 @@ function defaultState(){
     // matter how many habits a player is tracking at once.
     discoveryCarrots:0,
     discoveryCarrotDays:[],
+    // Treasure Hunt -- starts pre-revealed at the beach landing tile
+    // (TREASURE_START) so there's always something on the map the moment the
+    // Rewards screen exists, same spirit as the starter REWARDS below always
+    // being unlocked from minute one rather than needing to be earned.
+    treasureFog:[treasureCellKey(TREASURE_START.r, TREASURE_START.c)],
+    treasurePos:{r:TREASURE_START.r, c:TREASURE_START.c},
+    treasureFound:[],
+    treasureMoveDays:[],
+    treasureMapComplete:false,
+    pendingTreasureFound:null,
+    pendingMapComplete:false,
     screen:"logbook",
     pendingCelebration:null,
     toast:null,
@@ -1189,6 +1331,102 @@ function renderNextRewardsDetailModal(){
   return html;
 }
 
+// Shared between the Rewards-grid thumbnail (compact=true) and the full
+// Treasure Hunt detail modal (compact=false) so the fog state never drifts
+// out of sync between the two. Fog is a CSS-grid overlay laid directly on
+// top of the map <img> -- once treasureMapComplete, the overlay is skipped
+// entirely and the whole painted map (water included) just shows through.
+function renderTreasureMapHtml(compact){
+  var html = '<div class="tmap-wrap'+(compact?' compact':'')+'">';
+  html += '<img src="'+ASSET.treasure_map+'" alt="Treasure map">';
+  if(!state.treasureMapComplete){
+    html += '<div class="tmap-grid">';
+    for(var r=0;r<TREASURE_ROWS;r++){
+      for(var c=0;c<TREASURE_COLS;c++){
+        var revealed = state.treasureFog.indexOf(treasureCellKey(r,c))!==-1;
+        var isCurrent = state.treasurePos.r===r && state.treasurePos.c===c;
+        var chestIdx = treasureChestAt(r,c);
+        var inner = '';
+        // Carrot Juice barrel marks the castaway's current position -- no chest
+        // emoji exists in Unicode either (see chestIconSvg() above), but a
+        // barrel reads fine at this size without needing custom art.
+        if(revealed && isCurrent){ inner = '<span class="tmap-pin">🛢️</span>'; }
+        else if(revealed && chestIdx!==-1){ inner = '<span class="tmap-found">🏆</span>'; }
+        html += '<div class="tmap-cell '+(revealed?'revealed':'fogged')+'">'+inner+'</div>';
+      }
+    }
+    html += '</div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+// Shared between the Rewards-grid card (pinned or demoted, see
+// renderRewardsScreen()) and nowhere else -- the detail modal builds its own
+// markup since it needs the D-pad/status layout, not the card chrome.
+function renderTreasureHuntCard(favorited){
+  var html = '<div class="reward-card tmap-card" data-action="show-treasure-hunt">';
+  html += renderTreasureMapHtml(true);
+  html += '<button class="reward-heart '+(favorited?'favorited':'')+'" data-action="toggle-favorite-reward" data-id="treasure_hunt" aria-label="Favorite">'+(favorited?'❤️':'🤍')+'</button>';
+  html += '<div class="reward-body">';
+  html += '<div class="reward-title">Treasure Hunt</div>';
+  html += '<div class="reward-desc">'+treasureStatusText()+'</div>';
+  html += '</div></div>';
+  return html;
+}
+
+function renderTreasureHuntModal(){
+  var html = '<div class="modal-backdrop" data-backdrop="treasure-hunt">';
+  html += '<div class="modal treasure-hunt-modal">';
+  html += '<button class="modal-close" data-action="close-modal">✕</button>';
+  html += '<h3>Treasure Hunt</h3>';
+  html += renderTreasureMapHtml(false);
+  html += '<p class="tmap-status">'+treasureStatusText()+'</p>';
+  if(state.treasureMapComplete){
+    // Restarting is opt-in and requires a confirm() the same way
+    // delete-habit does -- it discards a finished map, so an accidental tap
+    // shouldn't be able to erase it.
+    html += '<button class="btn mt" data-action="treasure-play-again">Play again?</button>';
+  } else {
+    var legal = treasureLegalDirections();
+    var canMove = treasureMoveAvailable();
+    var dirBtn = function(dir, label){
+      var enabled = canMove && legal[dir];
+      return '<button class="tmap-dbtn" data-action="treasure-move" data-dir="'+dir+'" '+(enabled?'':'disabled')+'>'+label+'</button>';
+    };
+    html += '<div class="tmap-dpad">';
+    html += '<span></span>'+dirBtn('N','▲')+'<span></span>';
+    html += dirBtn('W','◀')+'<span class="tmap-dpad-center">🧭</span>'+dirBtn('E','▶');
+    html += '<span></span>'+dirBtn('S','▼')+'<span></span>';
+    html += '</div>';
+    if(!canMove){ html += '<p class="tmap-hint">Log a habit today to earn your next move.</p>'; }
+  }
+  html += '</div></div>';
+  return html;
+}
+
+function renderTreasureFoundModal(idx){
+  var html = '<div class="modal-backdrop" data-backdrop="treasure-found">';
+  html += '<div class="modal celebration">';
+  html += '<div class="confetti">🎉🥕✨</div>';
+  html += '<h3>You found treasure!</h3>';
+  html += '<img class="reward-hero" src="'+ASSET.chest+'" alt="">';
+  html += '<button class="btn mt" data-action="ack-treasure-found">Nice!</button>';
+  html += '</div></div>';
+  return html;
+}
+
+function renderMapCompleteModal(){
+  var html = '<div class="modal-backdrop" data-backdrop="map-complete">';
+  html += '<div class="modal celebration">';
+  html += '<div class="confetti">🎉🗺️✨</div>';
+  html += '<h3>You mapped the whole island!</h3>';
+  html += '<img class="reward-hero" src="'+ASSET.treasure_map+'" alt="">';
+  html += '<button class="btn mt" data-action="ack-map-complete">Nice!</button>';
+  html += '</div></div>';
+  return html;
+}
+
 function renderRewardsScreen(){
   var html = '<section class="screen">';
   html += '<h2 style="color:var(--parchment-hi); margin-bottom:4px;">Your Rewards</h2>';
@@ -1210,6 +1448,18 @@ function renderRewardsScreen(){
     html += '<div class="carrot-counter">🥕 '+(state.carrots%7)+'/7</div>';
     html += '</div></div>';
   }
+
+  // Treasure Hunt sits right after Next Rewards -- it answers the same
+  // "what am I working toward" question via a completely different,
+  // exploration-based track -- for as long as there's still map left to
+  // uncover. Once the whole island is mapped it steps aside so newer
+  // unlocked rewards can take that #2 slot instead (see the un-pinned render
+  // call further down), unless the player has favorited it, which keeps it
+  // pinned here regardless -- same "favoriting keeps it forward" contract as
+  // the reward-heart on every unlocked REWARDS card below.
+  var treasureFavorited = state.favoriteRewards.indexOf("treasure_hunt")!==-1;
+  var treasurePinned = !state.treasureMapComplete || treasureFavorited;
+  if(treasurePinned){ html += renderTreasureHuntCard(treasureFavorited); }
 
   // New Discovery gets one summary card here (not its own inline section)
   // -- "?" placeholder until the first discovery, then the most recently
@@ -1248,6 +1498,10 @@ function renderRewardsScreen(){
     html += '<div class="reward-status unlocked">'+(u.reason?u.reason:'Unlocked '+u.unlockedAt)+'</div>';
     html += '</div></div>';
   });
+
+  // Demoted position: map fully uncovered and not favorited -- see the
+  // pinned render call above for the paired condition.
+  if(!treasurePinned){ html += renderTreasureHuntCard(treasureFavorited); }
 
   html += '</div>';
   html += '</section>';
@@ -1324,8 +1578,11 @@ function renderModals(){
   if(state.screen==="reward-detail-modal"){ html += renderRewardDetailModal(state._detailRewardId); }
   if(state.screen==="sightings-gallery-modal"){ html += renderSightingsGalleryModal(); }
   if(state.screen==="next-rewards-detail-modal"){ html += renderNextRewardsDetailModal(); }
+  if(state.screen==="treasure-hunt-modal"){ html += renderTreasureHuntModal(); }
   if(state.screen==="story-modal"){ html += renderStoryModal(); }
   if(state.pendingCelebration){ html += renderCelebrationModal(REWARDS.filter(function(r){return r.id===state.pendingCelebration;})[0]); }
+  if(state.pendingTreasureFound!==null){ html += renderTreasureFoundModal(state.pendingTreasureFound); }
+  if(state.pendingMapComplete){ html += renderMapCompleteModal(); }
   if(state.toast){ html += '<div class="toast">'+state.toast+'</div>'; }
   return html;
 }
@@ -1486,8 +1743,16 @@ function wireEvents(){
       // closeModal()/history.back(), or tapping its backdrop would pop
       // whatever real screen/modal history entry is actually current out
       // from under it. Mirrors the "Nice!" button's own ack-celebration case.
-      if(bd.getAttribute("data-backdrop")==="celebration"){
+      // Same reasoning applies to the two Treasure Hunt pending overlays.
+      var backdropType = bd.getAttribute("data-backdrop");
+      if(backdropType==="celebration"){
         state.pendingCelebration = null;
+        save(); render();
+      } else if(backdropType==="treasure-found"){
+        state.pendingTreasureFound = null;
+        save(); render();
+      } else if(backdropType==="map-complete"){
+        state.pendingMapComplete = false;
         save(); render();
       } else {
         closeModal();
@@ -1616,6 +1881,15 @@ function onAction(e){
     case "show-next-rewards-detail":
       navigateTo(function(){ state.screen = "next-rewards-detail-modal"; });
       break;
+    case "show-treasure-hunt":
+      navigateTo(function(){ state.screen = "treasure-hunt-modal"; });
+      break;
+    case "treasure-move":
+      treasureMove(el.getAttribute("data-dir"));
+      break;
+    case "treasure-play-again":
+      treasurePlayAgain();
+      break;
     case "show-story":
       navigateTo(function(){ state.screen = "story-modal"; });
       break;
@@ -1681,6 +1955,14 @@ function onAction(e){
       break;
     case "ack-celebration":
       state.pendingCelebration = null;
+      save(); render();
+      break;
+    case "ack-treasure-found":
+      state.pendingTreasureFound = null;
+      save(); render();
+      break;
+    case "ack-map-complete":
+      state.pendingMapComplete = false;
       save(); render();
       break;
     case "install-pill":
@@ -2159,6 +2441,8 @@ function applyRestoredState(parsed){
   merged._draft = { name:"", emoji:"🌴", type:"daily", description:"" };
   merged.toast = null;
   merged.pendingCelebration = null;
+  merged.pendingTreasureFound = null;
+  merged.pendingMapComplete = false;
   merged.screen = "logbook";
   state = merged;
   save();

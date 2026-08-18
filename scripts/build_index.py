@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 def b64(name, mime):
-    data = (ROOT / name).read_bytes()
+    data = (ROOT / "Graphics" / name).read_bytes()
     return f"data:{mime};base64," + base64.b64encode(data).decode("ascii")
 
 
@@ -24,6 +24,7 @@ ASSETS = {
     "__SIGHTINGS_SPRITE__": b64("sightings_sprite.webp", "image/webp"),
     "__CHEST__": b64("chest.webp", "image/webp"),
     "__BOTTLE__": b64("bottle.webp", "image/webp"),
+    "__TREASURE_MAP__": b64("treasure_map.webp", "image/webp"),
 }
 
 template = (ROOT / "scripts" / "index_template.html").read_text(encoding="utf-8")

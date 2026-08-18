@@ -44,7 +44,7 @@ def make_tile(cell):
 
 
 def main():
-    sheets = [Image.open(ROOT / "Rewards1.jpeg"), Image.open(ROOT / "Rewards2.jpeg")]
+    sheets = [Image.open(ROOT / "Graphics" / "Rewards1.jpeg"), Image.open(ROOT / "Graphics" / "Rewards2.jpeg")]
     sw, sh = sheets[0].size
     cw, ch = sw / COLS, sh / ROWS_PER_SHEET
 
@@ -60,7 +60,7 @@ def main():
                 out_row = sheet_i * ROWS_PER_SHEET + row
                 sprite.paste(tile, (col * TILE, out_row * TILE))
 
-    out = ROOT / "sightings_sprite.webp"
+    out = ROOT / "Graphics" / "sightings_sprite.webp"
     sprite.save(out, "WEBP", quality=82, method=6)
     print("wrote", out, sprite.size, out.stat().st_size, "bytes")
 

@@ -55,12 +55,19 @@ def make_home_scene(src_path, out_path, max_w=900):
     im.save(out_path)
     print('wrote', out_path, im.size)
 
-male = os.path.join(BASE, 'Male_rHabbit2.jpeg')
-female = os.path.join(BASE, 'Female_rHabbit.jpeg')
-tree = os.path.join(BASE, 'rHabbitson_Cruscoe.jpeg')
+ASSETS_DIR = os.path.join(BASE, 'Graphics')
 
-make_circle_avatar(male, os.path.join(BASE,'avatar_male.png'))
-make_circle_avatar(female, os.path.join(BASE,'avatar_female.png'))
+male = os.path.join(ASSETS_DIR, 'Male_rHabbit2.jpeg')
+female = os.path.join(ASSETS_DIR, 'Female_rHabbit.jpeg')
+tree = os.path.join(ASSETS_DIR, 'rHabbitson_Cruscoe.jpeg')
+
+make_circle_avatar(male, os.path.join(ASSETS_DIR,'avatar_male.png'))
+make_circle_avatar(female, os.path.join(ASSETS_DIR,'avatar_female.png'))
+# icon-192/512.png are the real deployed PWA icons (served as static files,
+# referenced at root by index_template.html/manifest.json/sw.js) -- unlike
+# every other asset here they are NOT embedded as base64, so they must land
+# at the project root, not alongside the local-only source/intermediate
+# design files in Graphics/.
 make_square_icon(tree, os.path.join(BASE,'icon-192.png'), 192)
 make_square_icon(tree, os.path.join(BASE,'icon-512.png'), 512)
-make_home_scene(tree, os.path.join(BASE,'home_scene.png'))
+make_home_scene(tree, os.path.join(ASSETS_DIR,'home_scene.png'))

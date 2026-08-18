@@ -40,7 +40,7 @@ def autocrop_alpha(im, pad=14):
 
 
 def main():
-    src = ROOT / "Bottle.jpeg"
+    src = ROOT / "Graphics" / "Bottle.jpeg"
     im = Image.open(src)
     im = remove_white_bg(im)
     im = autocrop_alpha(im)
@@ -49,7 +49,7 @@ def main():
     scale = max_dim / max(im.size)
     im = im.resize((round(im.width * scale), round(im.height * scale)), Image.LANCZOS)
 
-    out = ROOT / "bottle.webp"
+    out = ROOT / "Graphics" / "bottle.webp"
     im.save(out, "WEBP", quality=88, method=6)
     print("wrote", out, im.size, out.stat().st_size, "bytes")
 
