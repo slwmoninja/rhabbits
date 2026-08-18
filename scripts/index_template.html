@@ -882,18 +882,19 @@ function sightingTileStyle(index){
 // even though neither pool is itself random. No calendar language anywhere,
 // since discovery pacing varies by how consistently a player logs habits.
 //
-// The arc itself (green -> small routines -> real skill/pride -> calm,
+// The arc itself (scared -> small routines -> real skill/pride -> calm,
 // changed -> full circle) loosely follows the real, documented trajectory
 // of castaways -- most concretely Alexander Selkirk, the actual castaway
 // Robinson Crusoe was based on, who built routines, then got so physically
 // skilled he could outrun dogs chasing the same goat, and by the end was
 // "thoroughly reconciled" to island life -- calm, capable, changed. This
 // castaway is a pirate first, though: the opening beat (see GROWTH_LINE[0]
-// and its paired Mangrove/python flavor entry) is played for bravado, not
-// fear -- growth here is inexperience hardening into real skill, not fear
-// resolving into calm. Genuine natural reactions (a fast retreat from a
-// barracuda, unease at storm clouds) still show up in the regular
-// SIGHTING_FLAVOR entries; they're just not the emotional throughline.
+// and its paired Mangrove/python flavor entry) leads with bravado -- stalked
+// by a python, already planning the belt -- with the fear underneath it as
+// one honest aside, not the headline. Genuine natural reactions (a fast
+// retreat from a barracuda, unease at storm clouds) still show up in the
+// regular SIGHTING_FLAVOR entries too; fear shows up, it's just never the
+// castaway's whole personality.
 // Kept short, plain, and increasingly upbeat (short sentences, concrete
 // feelings, no jargon like "consistency" or "identity") so a child can
 // follow exactly what's growing and why, and each rare appearance reads as
@@ -1013,7 +1014,7 @@ var DAY_ONE_ENTRY = {
 
 var GROWTH_INTERVAL = 4; // one growth beat at the 1st discovery, then every 4th after (~monthly, matching the 1/week discovery pace)
 var GROWTH_LINE = [
-  "Was stalked by a python in the Mangrove swamp again today. It will make a fine new belt.",
+  "Also today: I was scared, but I didn't panic. That's new for me.",
   "One whole week! I didn't think I'd make it this far — and I did.",
   "This is starting to feel less like a test and more like just... me.",
   "I do the habit before I even think about it now. That's real progress.",
@@ -1023,7 +1024,7 @@ var GROWTH_LINE = [
   "I'm not the same castaway who started this. I like who I'm becoming.",
   "I feel proud when I finish now. That feeling wasn't always there.",
   "I've stuck with this longer than anything I've ever tried. On purpose.",
-  "The green castaway from day one feels far away. I grew past him.",
+  "The scared castaway from day one feels far away. I grew past him.",
   "I don't talk myself into it anymore. I just go. That's who I am now.",
   "Halfway through everything here, and I'm still showing up, every time.",
   "I'm actually good at this now. Not lucky. Good.",
@@ -1147,12 +1148,12 @@ function defaultState(){
     pendingTreasureFound:null,
     pendingMapComplete:false,
     // Coco Cannon -- cocoLives IS the in-game life count directly (not a
-    // separate "bank" vs "active" split): earned at most 1/day (same
-    // day-cap pattern as discoveryCarrots/treasureMoveDays, see
-    // evaluateCocoCannon()), capped at 7, and only ever spent when a crow
-    // actually reaches the bottom row. Quitting or clearing a level never
-    // costs anything, so a session can always safely resume wherever the
-    // player left off.
+    // separate "bank" vs "active" split): reset (not accumulated) at most
+    // once/day to that day's ration -- day 1 of play = 1 life, day 2 = 2,
+    // up to a 7-life cap (see evaluateCocoCannon()) -- and only ever spent
+    // when a crow actually reaches the bottom row. Quitting or clearing a
+    // level never costs anything, so a session can always safely resume
+    // wherever the player left off.
     cocoLives:0,
     cocoLivesDays:[],
     cocoHighScore:0,
@@ -1203,37 +1204,28 @@ function evaluateRewards(){
     if(r.condition(state)){
       state.unlocks[r.id] = { unlockedAt: todayStr() };
       state.pendingCelebration = r.id;
-      // Coco Cannon's first-ever life grant is the full 7, not the normal
-      // 1-per-day trickle -- a week's worth of carrots up front, so a
-      // brand new player can actually play a real game immediately
-      // instead of starting with a single life.
-      if(r.id==="coco_cannon") grantCocoCannonStarterLives();
     }
   }
   evaluateSightings();
   evaluateCocoCannon();
 }
 
-// Coco Cannon lives: same one-credit-per-calendar-day cap as New Discovery/
-// Treasure Hunt (see hasCompletionToday() below) -- at most +1 life per
-// day, capped at 7, regardless of how many habits get completed that day.
+// Coco Cannon lives reset (not accumulate) on each new day a habit gets
+// logged: day 1 of play = 1 life, day 2 = 2, and so on up to a 7-life cap --
+// an increasing reward for continued logging, rather than a bank that just
+// trickles +1/day on top of whatever's left over from playing. Losing
+// lives in-game only ever reduces cocoLives within the same day; the next
+// new day resets it back up to that day's ration regardless of how many
+// were spent. Same one-credit-per-calendar-day cap as New Discovery/
+// Treasure Hunt (see hasCompletionToday() below) -- at most one reset per
+// day, regardless of how many habits get completed that day.
 function evaluateCocoCannon(){
   if(!state.onboarded) return;
   var t = todayStr();
   if(state.cocoLivesDays.indexOf(t)===-1 && hasCompletionToday(state)){
     state.cocoLivesDays.push(t);
-    state.cocoLives = Math.min(7, state.cocoLives+1);
+    state.cocoLives = Math.min(7, state.cocoLivesDays.length);
   }
-}
-// Called once, exactly when coco_cannon's REWARDS condition first becomes
-// true (see evaluateRewards() above) -- also marks today as already used
-// for the day-cap, so the ordinary evaluateCocoCannon() call right after
-// it in the same evaluateRewards() pass doesn't also add an extra life on
-// top for today.
-function grantCocoCannonStarterLives(){
-  state.cocoLives = 7;
-  var t = todayStr();
-  if(state.cocoLivesDays.indexOf(t)===-1) state.cocoLivesDays.push(t);
 }
 
 // True the first time, on a given calendar day, that any habit has a
@@ -1292,11 +1284,11 @@ function evaluateSightings(){
 // on how consistently they log. Called once, on brand-new state, so
 // state.sightings is always empty here -- no duplicate-index check needed.
 // Position 0's growth-arc line (GROWTH_LINE[0], see growthLineForPosition())
-// is a deliberately unbothered "stared down a python, kept the belt idea"
-// beat -- it only makes narrative sense paired with that exact close call,
-// so the free first discovery is pinned to "Roots Everywhere" (the
-// Mangroves entry) by title lookup rather than random, unlike every
-// discovery after it. Falls back to random if that title ever
+// is the "scared, but didn't panic" admission that follows the bravado of
+// the python encounter -- it only makes narrative sense paired with that
+// exact close call, so the free first discovery is pinned to "Roots
+// Everywhere" (the Mangroves entry) by title lookup rather than random,
+// unlike every discovery after it. Falls back to random if that title ever
 // changes/moves, rather than silently unlocking nothing.
 function unlockFirstDiscoveryFree(){
   var idx = -1;
@@ -3154,8 +3146,10 @@ function syncBottombarUI(){
    falls faster than any regular crow, and respawns rather than being
    skipped if he reaches the ground undefeated -- then it loops back to
    level 1. cocoLives IS state.cocoLives directly (see evaluateCocoCannon()
-   above): earning is day-capped and persistent, but spending only happens
-   when a crow reaches the bottom row, so quitting never costs anything.
+   above): it resets, once per day, to that day's ration (day 1 = 1 life,
+   day 2 = 2, up to 7) rather than accumulating +1 on top of whatever's
+   left, and spending only happens when a crow reaches the bottom row, so
+   quitting mid-level never costs anything.
    ========================================================= */
 var COCO_MAX_LEVEL = 7; // Captain Crow is the encounter right after this, then it loops back to 1
 
@@ -3290,8 +3284,6 @@ function initCocoCannon(){
   var cannon, coconut, crows, level, score, phase, sinceLevelStart, smoke, stars, levelKills;
 
   var MAX_ANGLE = Math.PI/2; // full turret sweep: straight left/ground to straight right/ground
-  var TAP_MS = 220, TAP_NUDGE = 0.09; // ~5 degrees -- a quick tap nudges precisely instead of relying on hold-timing luck
-  var leftDownAt = 0, rightDownAt = 0;
 
   function resizeCanvas(){
     var rect = canvas.parentNode.getBoundingClientRect();
@@ -3334,8 +3326,8 @@ function initCocoCannon(){
   }
   function resetGame(){
     // The base is fixed at bottom-center and never moves -- only the
-    // barrel's aim angle changes (see update()'s moveLeft/moveRight
-    // handling and the tap-nudge in dirUp() below).
+    // barrel's aim angle changes, by holding a direction button/key (see
+    // update()'s moveLeft/moveRight handling).
     cannon = { x0: W/2, angle: 0, w: 26, rotSpeed: 1.85 }; // rad/sec while held; x0 is the fixed base position
     coconut = null;
     smoke = []; stars = [];
@@ -3519,23 +3511,14 @@ function initCocoCannon(){
     if(rafId){ cancelAnimationFrame(rafId); rafId = null; }
   }
 
-  // Holding a direction button/key sweeps continuously (see update()'s
-  // moveLeft/moveRight handling); releasing quickly (under TAP_MS) instead
-  // applies one small precise TAP_NUDGE -- without this, a genuinely fast
-  // tap could land entirely between two rAF frames and move the barrel not
-  // at all, since continuous rotation only accumulates while a frame
-  // actually observes the flag set.
+  // Hold-only aiming -- no tap-to-nudge. A quick-tap gesture on Android is
+  // reserved by the OS/browser for double-tap-to-zoom, so a tap-based nudge
+  // on these buttons would fight that system gesture instead of aiming.
   function dirDown(sign){
-    if(sign<0){ moveLeft=true; leftDownAt=Date.now(); }
-    else { moveRight=true; rightDownAt=Date.now(); }
+    if(sign<0) moveLeft=true; else moveRight=true;
   }
   function dirUp(sign){
-    var held;
-    if(sign<0){ held=Date.now()-leftDownAt; moveLeft=false; }
-    else { held=Date.now()-rightDownAt; moveRight=false; }
-    if(held<TAP_MS && cannon && phase==="playing"){
-      cannon.angle = clampAngle(cannon.angle + sign*TAP_NUDGE);
-    }
+    if(sign<0) moveLeft=false; else moveRight=false;
   }
   // Wired exactly once here, like initBottombar() -- never from wireEvents().
   function bindDir(btn, sign){
@@ -3551,10 +3534,8 @@ function initCocoCannon(){
   backBtn.addEventListener("click", function(){ closeModal(); });
   document.addEventListener("keydown", function(e){
     if(state.screen!=="coco-cannon") return;
-    // Guard against key-repeat re-triggering dirDown() on every repeated
-    // keydown while held -- that would keep resetting *DownAt, making a
-    // long hold look like a fresh tap on every repeat and breaking the
-    // hold-vs-tap distinction for keyboard users.
+    // Guard against key-repeat re-firing dirDown() on every repeated
+    // keydown while a key is held -- harmless either way, just noise.
     if(e.key==="ArrowLeft"){ if(!moveLeft) dirDown(-1); }
     else if(e.key==="ArrowRight"){ if(!moveRight) dirDown(1); }
     else if(e.key===" "){ e.preventDefault(); fire(); }
