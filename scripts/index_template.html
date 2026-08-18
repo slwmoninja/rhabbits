@@ -122,11 +122,19 @@ img{max-width:100%; display:block;}
 
 .field{width:100%; max-width:340px; text-align:left; margin:0 auto 16px;}
 .field label{display:block; color:var(--parchment-edge); font-size:.78rem; text-transform:uppercase; letter-spacing:.1em; margin-bottom:6px;}
-.field input[type=text], .field textarea{
+.field input[type=text], .field input[type=date], .field input[type=number], .field select, .field textarea{
   width:100%; padding:13px 14px; border-radius:10px; border:1px solid var(--parchment-edge);
   background:var(--parchment-hi); color:var(--ink); font-size:1rem; font-family:inherit;
 }
 .field textarea{resize:vertical; min-height:52px;}
+/* ---------- Frequency picker sub-fields (Once's due date, Every X's
+   number+unit) -- nested inside .type-picker right under the selected
+   option, rather than styled as a standalone .field, so it reads as part
+   of that option rather than a separate form section. ---------- */
+.freq-subfield{max-width:none; margin:-4px 0 4px; padding:0 2px;}
+.freq-every-inputs{display:flex; gap:8px;}
+.freq-every-inputs input[type=number]{width:80px; flex-shrink:0;}
+.freq-every-inputs select{flex:1;}
 .emoji-picker{display:flex; flex-wrap:wrap; gap:8px; max-width:340px; margin:0 auto 18px; justify-content:center;}
 .emoji-opt{
   width:42px; height:42px; border-radius:10px; border:2px solid transparent;
@@ -167,6 +175,21 @@ img{max-width:100%; display:block;}
     box in most fonts, which reads as low once centered -- nudge up */
 }
 .add-habit-fab:active{transform:translateY(1px);}
+.topbar-right{display:flex; align-items:center; gap:8px; flex-shrink:0;}
+.due-today-btn{
+  position:relative; width:40px; height:40px; border-radius:50%; flex-shrink:0;
+  background:linear-gradient(180deg, var(--danger), #7a2318);
+  font-size:1.1rem; line-height:1;
+  display:flex; align-items:center; justify-content:center;
+  border:2px solid var(--gold); box-shadow:var(--shadow);
+}
+.due-today-btn:active{transform:translateY(1px);}
+.due-today-badge{
+  position:absolute; top:-4px; right:-4px; min-width:16px; height:16px; padding:0 3px;
+  border-radius:8px; background:var(--gold); color:var(--wood-darker);
+  font-size:.62rem; font-weight:800; line-height:16px; text-align:center;
+  box-shadow:0 1px 2px rgba(0,0,0,.4);
+}
 
 /* ---------- Install pill (topbar + Profile) ---------- */
 .topbar-install-btn{
@@ -271,6 +294,7 @@ img{max-width:100%; display:block;}
   padding:10px 12px; margin-bottom:8px;
 }
 .habit-row:active{transform:translateY(1px);}
+.due-today-empty{color:var(--wood); font-size:.9rem; text-align:center; padding:12px 0 4px;}
 .habit-status{width:30px; flex-shrink:0; text-align:center; font-size:1rem;}
 .habit-status.done{color:var(--leaf-deep); font-weight:800;}
 .habit-status.streak{font-size:.8rem; font-weight:700; color:var(--carrot-deep);}
@@ -667,20 +691,18 @@ var REWARDS = [
     progress: function(){ return "Log a habit to unlock"; }
   },
   {
+    // Folds what used to be two separate rewards (this one, plus a
+    // "Monthly & Once-off Tasks" reward that unlocked at 28 days) into one
+    // -- the 28-day gate became redundant once this 7-carrot one also
+    // grants every other schedule type, and 7 carrots is comfortably
+    // reachable well before day 28 for most players, so keeping both would
+    // have meant the slower one almost never actually gated anything.
     id: "second_garden",
-    title: "Second Habit",
-    desc: "Earn 7 carrots to plant a second daily habit.",
+    title: "Second Habit & Flexible Scheduling",
+    desc: "Earn 7 carrots to plant a second habit and unlock new schedules: weekly, monthly, once-off (with a due date), or a custom every-X-days/weeks/months interval.",
     medallion: "🥕",
     condition: function(state){ return state.carrots >= 7; },
     progress: function(state){ return Math.min(state.carrots,7) + "/7 carrots"; }
-  },
-  {
-    id: "new_task_types",
-    title: "Monthly & Once-off Tasks",
-    desc: "4 weeks in — unlock new habit types to track.",
-    medallion: "🗓️",
-    condition: function(state){ return daysSince(state.startDate) >= 28; },
-    progress: function(state){ return Math.min(daysSince(state.startDate),28) + "/28 days"; }
   },
   {
     id: "seven_seasons",
@@ -1081,6 +1103,18 @@ function onceoffCompletedCount(state){
 }
 function todayStr(){ return new Date().toISOString().slice(0,10); }
 function monthStr(d){ return (d||new Date()).toISOString().slice(0,7); }
+// ISO-8601 week key ("2026-W34") -- used the same way monthStr() is for
+// monthly habits, just at week grain: one credit per Mon-Sun week rather
+// than per calendar month. Aligns to the week's Thursday first (standard
+// ISO trick) so the week-numbering year is correct right at year boundaries.
+function isoWeekStr(d){
+  var dt = new Date(Date.UTC((d||new Date()).getFullYear(), (d||new Date()).getMonth(), (d||new Date()).getDate()));
+  var dayNum = (dt.getUTCDay() + 6) % 7; // Mon=0 .. Sun=6
+  dt.setUTCDate(dt.getUTCDate() - dayNum + 3);
+  var firstThursday = new Date(Date.UTC(dt.getUTCFullYear(), 0, 4));
+  var week = 1 + Math.round(((dt - firstThursday) / 86400000 - 3 + ((firstThursday.getUTCDay()+6)%7)) / 7);
+  return dt.getUTCFullYear() + "-W" + (week<10?"0":"") + week;
+}
 
 function daysSince(iso){
   if(!iso) return 0;
@@ -1088,6 +1122,25 @@ function daysSince(iso){
   return Math.max(0, Math.floor(ms/86400000));
 }
 function uid(){ return Math.random().toString(36).slice(2,10) + Date.now().toString(36); }
+
+// "Every N days/weeks/months" habits (see the frequency picker unlocked by
+// the second_garden reward) track completions as plain dates, same as
+// daily, and become due again once enough days have rolled by since the
+// last one -- a rolling interval, unlike the named Weekly/Monthly presets
+// above which reset on a fixed calendar boundary instead. Months are
+// approximated as 30 days each (good enough for a personal habit tracker;
+// exact calendar-month arithmetic isn't worth the complexity here).
+function habitEveryUnitDays(h){
+  return h.everyUnit==="months" ? h.everyN*30 : h.everyUnit==="weeks" ? h.everyN*7 : h.everyN;
+}
+function habitEveryDue(h){
+  if(!h.completions.length) return true;
+  return daysSince(h.completions[h.completions.length-1]) >= habitEveryUnitDays(h);
+}
+function habitEveryDaysRemaining(h){
+  if(!h.completions.length) return 0;
+  return Math.max(0, habitEveryUnitDays(h) - daysSince(h.completions[h.completions.length-1]));
+}
 
 function maxDailySlots(state){
   var n = 1;
@@ -1106,11 +1159,29 @@ function countActive(state, type){
 
 function canAddAnyHabit(state){
   if(countActive(state,"daily") < maxDailySlots(state)) return true;
-  if(state.unlocks.new_task_types){
+  if(state.unlocks.second_garden){
     if(countActive(state,"monthly") < 3) return true;
     if(countActive(state,"onceoff") < 3) return true;
+    if(countActive(state,"weekly") < 3) return true;
+    if(countActive(state,"every") < 3) return true;
   }
   return false;
+}
+
+// Centralizes what a brand-new add-habit draft looks like -- used both by
+// "open-add-habit" (so the type pre-selects the first slot with room) and
+// anywhere else a fresh draft is needed. dueDate/everyUnit/everyN are
+// always present (not just once "every"/"onceoff" get picked) so those
+// fields are ready to render the instant the user switches to them.
+function freshHabitDraft(){
+  return {
+    name:"", emoji:"🌴",
+    type: countActive(state,"daily")<maxDailySlots(state) ? "daily" : (state.unlocks.second_garden ? "monthly":"daily"),
+    description:"",
+    dueDate: todayStr(),
+    everyUnit: "days",
+    everyN: 2
+  };
 }
 
 function defaultState(){
@@ -1153,14 +1224,23 @@ function defaultState(){
     // up to a 7-life cap (see evaluateCocoCannon()) -- and only ever spent
     // when a crow actually reaches the bottom row. Quitting or clearing a
     // level never costs anything, so a session can always safely resume
-    // wherever the player left off.
+    // wherever the player left off. cocoTrialGrantedOn is separate: the
+    // calendar date (or null, if never granted) of a one-time top-up to 7,
+    // the very first time Start is actually pressed (see startPlaying()),
+    // so a brand new player isn't stuck on a 1-life first session just
+    // because they unlocked the game on day 1. evaluateCocoCannon() checks
+    // this date to keep the trial's leftover lives intact for the rest of
+    // that exact calendar day even if a habit gets logged afterward, but
+    // still lets the very next new day resume the normal ration reset,
+    // exactly as if the trial had never happened.
     cocoLives:0,
     cocoLivesDays:[],
+    cocoTrialGrantedOn:null,
     cocoHighScore:0,
     screen:"logbook",
     pendingCelebration:null,
     toast:null,
-    _draft:{ name:"", emoji:"🌴", type:"daily", description:"" },
+    _draft:{ name:"", emoji:"🌴", type:"daily", description:"", dueDate:todayStr(), everyUnit:"days", everyN:2 },
     _detailHabitId:null,
     _detailRewardId:null,
     // Which date/month key the currently-open habit-note-modal is for --
@@ -1224,7 +1304,13 @@ function evaluateCocoCannon(){
   var t = todayStr();
   if(state.cocoLivesDays.indexOf(t)===-1 && hasCompletionToday(state)){
     state.cocoLivesDays.push(t);
-    state.cocoLives = Math.min(7, state.cocoLivesDays.length);
+    // The one-time trial bonus (see startPlaying()) stays intact for the
+    // rest of the exact calendar day it was granted, even if today's
+    // ration gets credited (or credited late) that same day -- only a
+    // genuinely later day resumes the normal reset-to-ration behavior.
+    if(state.cocoTrialGrantedOn !== t){
+      state.cocoLives = Math.min(7, state.cocoLivesDays.length);
+    }
   }
 }
 
@@ -1357,7 +1443,7 @@ function renderOnboarding(){
   return (
     '<div class="onb-screen">' +
       '<h2 style="color:var(--parchment-hi)">Let\'s get started!</h2>' +
-      '<p class="onb-copy">Choose one habit you\'d like to track daily. (Later you can unlock monthly and once-off tasks too.) After you earn 7 carrots, you\'ll unlock your next reward.</p>' +
+      '<p class="onb-copy">Choose one habit you\'d like to track daily. (Later you can unlock weekly, monthly, once-off, and custom schedules too.) After you earn 7 carrots, you\'ll unlock your next reward.</p>' +
       '<div class="field"><label>Habit name</label><input type="text" id="firstHabitName" maxlength="40" placeholder="e.g. Drink 8 glasses of water" value="'+escapeAttr(d.name)+'"></div>' +
       '<div class="field"><label>Habit description (optional)</label><textarea id="firstHabitDescription" maxlength="140" placeholder="e.g. A big glass with breakfast, lunch, and dinner">'+escapeHtml(d.description)+'</textarea></div>' +
       '<div class="emoji-picker">'+EMOJI_CHOICES.map(function(e){return '<button class="emoji-opt '+(d.emoji===e?'selected':'')+'" data-action="pick-emoji" data-emoji="'+e+'">'+e+'</button>';}).join('')+'</div>' +
@@ -1372,11 +1458,21 @@ function renderTopbar(){
   html += '<div class="topbar-row1">';
   html += '  <button class="icon-btn" data-action="show-profile" aria-label="Profile"><img class="avatar-thumb" src="'+avatarImg+'" alt=""></button>';
   html += '  <div class="wordmark">rHabbits</div>';
+  html += '  <div class="topbar-right">';
+  // Due-today icon only on the Logbook itself (not Rewards, not while a
+  // modal is layered over it) -- Rewards has nothing to do with today's
+  // habits, and a modal's own screen value already overwrote "logbook" in
+  // state.screen at that point (see onAction()'s navigateTo() calls).
+  var dueCount = state.screen==="logbook" ? dueTodayHabits(state).length : 0;
+  if(dueCount>0){
+    html += '  <button class="icon-btn due-today-btn" data-action="show-due-today" aria-label="'+dueCount+' habit'+(dueCount===1?'':'s')+' due today"><span>📅</span><span class="due-today-badge">'+dueCount+'</span></button>';
+  }
   if(canAddAnyHabit(state)){
     html += '  <button class="icon-btn add-habit-fab" data-action="open-add-habit" aria-label="Add a habit" title="You have unlocked a new habit">+</button>';
-  } else {
+  } else if(dueCount===0){
     html += '  <span class="topbar-spacer"></span>';
   }
+  html += '  </div>';
   html += '</div>';
   // On every main screen, the Install pill disappears entirely once
   // installed -- there's nothing left to act on here. Profile is the one
@@ -1431,10 +1527,16 @@ function renderLogbookScreen(){
   html += '</div></div>';
 
   html += renderHabitGroup("daily","Habits: Activity Tracking");
-  if(state.unlocks.new_task_types || countActive(state,"monthly")>0){
+  if(state.unlocks.second_garden || countActive(state,"weekly")>0){
+    html += renderHabitGroup("weekly","Weekly Habits");
+  }
+  if(state.unlocks.second_garden || countActive(state,"monthly")>0){
     html += renderHabitGroup("monthly","Monthly Habits");
   }
-  if(state.unlocks.new_task_types || countActive(state,"onceoff")>0 || state.habits.some(function(h){return h.type==="onceoff";})){
+  if(state.unlocks.second_garden || countActive(state,"every")>0){
+    html += renderHabitGroup("every","Custom Schedule");
+  }
+  if(state.unlocks.second_garden || countActive(state,"onceoff")>0 || state.habits.some(function(h){return h.type==="onceoff";})){
     html += renderHabitGroup("onceoff","Once-off Tasks");
   }
 
@@ -1452,8 +1554,33 @@ function renderHabitGroup(type, label){
 
 function habitLogged(h){
   if(h.type==="daily") return h.completions.indexOf(todayStr())!==-1;
+  if(h.type==="weekly") return h.completions.indexOf(isoWeekStr())!==-1;
   if(h.type==="monthly") return h.completions.indexOf(monthStr())!==-1;
-  return h.completions.length>0;
+  if(h.type==="every") return !habitEveryDue(h);
+  return h.completions.length>0; // onceoff
+}
+function habitTypeBadge(h){
+  if(h.type==="daily") return "Daily";
+  if(h.type==="weekly") return "Weekly";
+  if(h.type==="monthly") return "Monthly";
+  if(h.type==="every") return "Every "+h.everyN+" "+h.everyUnit;
+  return "Once-off";
+}
+// A habit is "due" right now if it's not currently satisfied for its
+// period/interval -- daily/weekly/monthly/every all reduce to "not
+// logged"; once-off additionally needs its due date to have arrived (a
+// future due date isn't due *yet*, though it's still tracked normally).
+// Legacy once-offs from before this feature has no dueDate at all -- those
+// stay "always due until done", matching how they behaved before.
+function habitDueToday(h){
+  if(h.type==="onceoff"){
+    if(h.completions.length) return false;
+    return !h.dueDate || h.dueDate<=todayStr();
+  }
+  return !habitLogged(h);
+}
+function dueTodayHabits(state){
+  return state.habits.filter(habitDueToday);
 }
 
 // Compact single-line row -- this is deliberately minimal (emoji, name, type,
@@ -1462,7 +1589,7 @@ function habitLogged(h){
 // across daily/monthly/once-off. Tapping opens renderHabitDetailModal() for
 // everything else (log/toggle, streak, delete).
 function renderHabitCard(h){
-  var badge = h.type==="daily"?"Daily":h.type==="monthly"?"Monthly":"Once-off";
+  var badge = habitTypeBadge(h);
   var logged = habitLogged(h);
   var status = logged ? '<span class="habit-status done">✓</span>'
     : (h.type==="daily" && dailyStreak(h)>0) ? '<span class="habit-status streak">🔥'+dailyStreak(h)+'</span>'
@@ -1480,7 +1607,7 @@ function renderHabitCard(h){
 function renderHabitDetailModal(id){
   var h = findHabit(id);
   if(!h) return '';
-  var badge = h.type==="daily"?"Daily":h.type==="monthly"?"Monthly":"Once-off";
+  var badge = habitTypeBadge(h);
   var html = '<div class="modal-backdrop" data-backdrop="habit-detail">';
   html += '<div class="modal">';
   html += '<button class="modal-close" data-action="close-modal">✕</button>';
@@ -1527,6 +1654,25 @@ function renderHabitDetailModal(id){
       html += '<button class="log-btn" data-action="toggle-monthly" data-id="'+h.id+'">Log this Month  +1 🥕</button>';
     }
     html += '<div class="habit-meta">'+h.completions.length+'/7 months toward next reward</div>';
+  } else if(h.type==="weekly"){
+    var w = isoWeekStr();
+    var doneWeek = h.completions.indexOf(w)!==-1;
+    if(doneWeek){
+      html += '<button class="log-btn done" data-action="open-habit-note" data-id="'+h.id+'">'+(habitHasNote(h)?'📝':'✓')+' Logged this week</button>';
+    } else {
+      html += '<button class="log-btn" data-action="toggle-weekly" data-id="'+h.id+'">Log this Week  +1 🥕</button>';
+    }
+    html += '<div class="habit-meta">'+h.completions.length+' week'+(h.completions.length===1?'':'s')+' logged</div>';
+  } else if(h.type==="every"){
+    var everyDue = habitEveryDue(h);
+    if(!everyDue){
+      html += '<button class="log-btn done" data-action="open-habit-note" data-id="'+h.id+'">'+(habitHasNote(h)?'📝':'✓')+' Logged</button>';
+      var remaining = habitEveryDaysRemaining(h);
+      html += '<div class="habit-meta">Due again in '+remaining+' day'+(remaining===1?'':'s')+'</div>';
+    } else {
+      html += '<button class="log-btn" data-action="toggle-every" data-id="'+h.id+'">Log Now  +1 🥕</button>';
+      html += '<div class="habit-meta">Repeats every '+h.everyN+' '+h.everyUnit+'</div>';
+    }
   } else {
     var done = h.completions.length>0;
     if(done){
@@ -1534,6 +1680,7 @@ function renderHabitDetailModal(id){
       html += '<div class="habit-meta">'+h.completions[0]+'</div>';
     } else {
       html += '<button class="log-btn" data-action="toggle-onceoff" data-id="'+h.id+'">Mark Complete  +1 🥕</button>';
+      if(h.dueDate){ html += '<div class="habit-meta">Due '+h.dueDate+'</div>'; }
     }
   }
   html += '<button class="btn btn-danger btn-block mt" data-action="delete-habit" data-id="'+h.id+'">Remove this habit</button>';
@@ -1779,7 +1926,7 @@ function renderRewardsScreen(){
   // enough unlocked rewards to actually scroll past, a player can choose
   // which ones they want to keep front-and-center. Everything still locked
   // beyond the "Next Rewards" teaser above is intentionally not spelled out
-  // individually -- seeing "Monthly & Once-off Tasks" or "Bucket List
+  // individually -- seeing "Seven Seasons Strong" or "Bucket List
   // Buccaneer" as their own locked cards on day one is just clutter/overwhelm
   // before they're even relevant.
   var newDiscoveryFavorited = state.favoriteRewards.indexOf("new_discovery")!==-1;
@@ -1870,6 +2017,31 @@ function renderRewardDetailModal(id){
   return html;
 }
 
+// Centered (not bottom-sheet) like the install-prompt popups -- see the
+// .modal-backdrop.center comment above -- since this is reached from a
+// top-right topbar tap, not a bottom-nav/inline action, so a bottom sheet
+// would visually run away from where the tap happened.
+function renderDueTodayModal(){
+  var due = dueTodayHabits(state);
+  var html = '<div class="modal-backdrop center" data-backdrop="due-today">';
+  html += '<div class="modal">';
+  html += '<button class="modal-close" data-action="close-modal">✕</button>';
+  html += '<h3>Due Today</h3>';
+  if(due.length===0){
+    html += '<p class="due-today-empty">Nothing due right now -- nice work!</p>';
+  } else {
+    due.forEach(function(h){
+      html += '<button class="habit-row" data-action="show-habit-detail" data-id="'+h.id+'">' +
+        '<span class="habit-emoji">'+h.emoji+'</span>' +
+        '<span class="habit-name">'+escapeHtml(h.name)+'</span>' +
+        '<span class="habit-type-badge">'+habitTypeBadge(h)+'</span>' +
+      '</button>';
+    });
+  }
+  html += '</div></div>';
+  return html;
+}
+
 function renderModals(){
   var html = '';
   if(state.screen==="add-habit-modal"){ html += renderAddHabitModal(); }
@@ -1878,6 +2050,7 @@ function renderModals(){
   if(state.screen==="habit-note-modal"){ html += renderHabitNoteModal(state._detailHabitId); }
   if(state.screen==="reward-detail-modal"){ html += renderRewardDetailModal(state._detailRewardId); }
   if(state.screen==="sightings-gallery-modal"){ html += renderSightingsGalleryModal(); }
+  if(state.screen==="due-today-modal"){ html += renderDueTodayModal(); }
   if(state.screen==="next-rewards-detail-modal"){ html += renderNextRewardsDetailModal(); }
   if(state.screen==="treasure-hunt-modal"){ html += renderTreasureHuntModal(); }
   if(state.screen==="story-modal"){ html += renderStoryModal(); }
@@ -1891,15 +2064,21 @@ function renderModals(){
 function renderAddHabitModal(){
   var d = state._draft;
   var dailyCount = countActive(state,"daily"), dailyMax = maxDailySlots(state);
-  var typesUnlocked = !!state.unlocks.new_task_types;
+  var typesUnlocked = !!state.unlocks.second_garden;
   var monthlyCount = countActive(state,"monthly"), monthlyMax = 3;
   var onceoffCount = countActive(state,"onceoff"), onceoffMax = 3;
+  var weeklyCount = countActive(state,"weekly"), weeklyMax = 3;
+  var everyCount = countActive(state,"every"), everyMax = 3;
 
   var dailyDisabled = dailyCount >= dailyMax;
   var monthlyDisabled = !typesUnlocked || monthlyCount >= monthlyMax;
   var onceoffDisabled = !typesUnlocked || onceoffCount >= onceoffMax;
+  var weeklyDisabled = !typesUnlocked || weeklyCount >= weeklyMax;
+  var everyDisabled = !typesUnlocked || everyCount >= everyMax;
 
-  if(dailyDisabled && d.type==="daily"){ d.type = !monthlyDisabled ? "monthly" : (!onceoffDisabled ? "onceoff" : "daily"); }
+  if(dailyDisabled && d.type==="daily"){
+    d.type = !monthlyDisabled ? "monthly" : (!onceoffDisabled ? "onceoff" : (!weeklyDisabled ? "weekly" : (!everyDisabled ? "every" : "daily")));
+  }
 
   var html = '<div class="modal-backdrop" data-backdrop="add-habit">';
   html += '<div class="modal">';
@@ -1909,11 +2088,37 @@ function renderAddHabitModal(){
   html += '<div class="field"><label>Habit description (optional)</label><textarea id="addHabitDescription" maxlength="140" placeholder="e.g. Right after brushing my teeth">'+escapeHtml(d.description)+'</textarea></div>';
   html += '<div class="emoji-picker">'+EMOJI_CHOICES.map(function(e){return '<button class="emoji-opt '+(d.emoji===e?'selected':'')+'" data-action="pick-emoji" data-emoji="'+e+'">'+e+'</button>';}).join('')+'</div>';
   html += '<div class="type-picker">';
-  html += typeOptRow("daily","Daily", dailyCount+"/"+dailyMax+" habits used", d.type==="daily", dailyDisabled);
-  html += typeOptRow("monthly","Monthly", typesUnlocked ? (monthlyCount+"/"+monthlyMax+" used") : "🔒 Unlocks after 4 weeks", d.type==="monthly", monthlyDisabled);
-  html += typeOptRow("onceoff","Once-off", typesUnlocked ? (onceoffCount+"/"+onceoffMax+" used") : "🔒 Unlocks after 4 weeks", d.type==="onceoff", onceoffDisabled);
+  if(!typesUnlocked){
+    // Pre-unlock: the original 3-way picker, unchanged in spirit -- just
+    // re-pointed at the reward that now actually gates it (see the
+    // second_garden REWARDS entry, which folded in the old 28-day gate).
+    html += typeOptRow("daily","Daily", dailyCount+"/"+dailyMax+" habits used", d.type==="daily", dailyDisabled);
+    html += typeOptRow("monthly","Monthly", "🔒 Unlocks at 7 carrots", d.type==="monthly", monthlyDisabled);
+    html += typeOptRow("onceoff","Once-off", "🔒 Unlocks at 7 carrots", d.type==="onceoff", onceoffDisabled);
+  } else {
+    html += typeOptRow("onceoff","Once", onceoffCount+"/"+onceoffMax+" used", d.type==="onceoff", onceoffDisabled);
+    if(d.type==="onceoff"){
+      html += '<div class="field freq-subfield"><label>Due date</label><input type="date" id="addHabitDueDate" value="'+escapeAttr(d.dueDate||todayStr())+'"></div>';
+    }
+    html += typeOptRow("daily","Daily", dailyCount+"/"+dailyMax+" habits used", d.type==="daily", dailyDisabled);
+    html += typeOptRow("weekly","Weekly", weeklyCount+"/"+weeklyMax+" used", d.type==="weekly", weeklyDisabled);
+    html += typeOptRow("monthly","Monthly", monthlyCount+"/"+monthlyMax+" used", d.type==="monthly", monthlyDisabled);
+    html += typeOptRow("every","Every X", everyCount+"/"+everyMax+" used", d.type==="every", everyDisabled);
+    if(d.type==="every"){
+      html += '<div class="field freq-subfield"><label>Repeat every</label><div class="freq-every-inputs">' +
+        '<input type="number" id="addHabitEveryN" min="2" max="365" value="'+(d.everyN||2)+'">' +
+        '<select id="addHabitEveryUnit">' +
+          '<option value="days"'+(d.everyUnit==="days"?' selected':'')+'>days</option>' +
+          '<option value="weeks"'+(d.everyUnit==="weeks"?' selected':'')+'>weeks</option>' +
+          '<option value="months"'+(d.everyUnit==="months"?' selected':'')+'>months</option>' +
+        '</select>' +
+      '</div></div>';
+    }
+  }
   html += '</div>';
-  var canSubmit = d.name.trim() && !(d.type==="daily"&&dailyDisabled) && !(d.type==="monthly"&&monthlyDisabled) && !(d.type==="onceoff"&&onceoffDisabled);
+  var canSubmit = d.name.trim() &&
+    !(d.type==="daily"&&dailyDisabled) && !(d.type==="monthly"&&monthlyDisabled) &&
+    !(d.type==="onceoff"&&onceoffDisabled) && !(d.type==="weekly"&&weeklyDisabled) && !(d.type==="every"&&everyDisabled);
   html += '<button class="btn btn-block" data-action="confirm-add-habit" '+(canSubmit?'':'disabled')+'>Start tracking 🌴</button>';
   html += '</div></div>';
   return html;
@@ -2085,6 +2290,24 @@ function wireEvents(){
   if(addDescInput){
     addDescInput.addEventListener("input", function(e){ state._draft.description = e.target.value; });
   }
+  // Once/Every X sub-fields (see renderAddHabitModal()) -- only present in
+  // the DOM while that option is actually selected, same pattern as the
+  // name/description inputs above (write straight to _draft, no render()).
+  var addDueDateInput = root.querySelector("#addHabitDueDate");
+  if(addDueDateInput){
+    addDueDateInput.addEventListener("input", function(e){ state._draft.dueDate = e.target.value; });
+  }
+  var addEveryNInput = root.querySelector("#addHabitEveryN");
+  if(addEveryNInput){
+    addEveryNInput.addEventListener("input", function(e){
+      var n = parseInt(e.target.value,10);
+      state._draft.everyN = (!n || n<2) ? 2 : n;
+    });
+  }
+  var addEveryUnitSelect = root.querySelector("#addHabitEveryUnit");
+  if(addEveryUnitSelect){
+    addEveryUnitSelect.addEventListener("change", function(e){ state._draft.everyUnit = e.target.value; });
+  }
   // Habit-detail edit fields write straight to the habit object (not a
   // _draft) and only save(), never render() -- re-rendering on every
   // keystroke would rebuild the input out from under itself and drop focus/
@@ -2160,7 +2383,7 @@ function onAction(e){
       break;
     case "open-add-habit":
       navigateTo(function(){
-        state._draft = { name:"", emoji:"🌴", type: countActive(state,"daily")<maxDailySlots(state) ? "daily" : (state.unlocks.new_task_types ? "monthly":"daily"), description:"" };
+        state._draft = freshHabitDraft();
         state.screen = "add-habit-modal";
       });
       break;
@@ -2178,6 +2401,9 @@ function onAction(e){
       break;
     case "show-sightings-gallery":
       navigateTo(function(){ state.screen = "sightings-gallery-modal"; });
+      break;
+    case "show-due-today":
+      navigateTo(function(){ state.screen = "due-today-modal"; });
       break;
     case "open-coco-cannon":
       navigateTo(function(){ state.screen = "coco-cannon"; });
@@ -2221,6 +2447,12 @@ function onAction(e){
       break;
     case "toggle-onceoff":
       toggleOnceoff(el.getAttribute("data-id"));
+      break;
+    case "toggle-weekly":
+      toggleWeekly(el.getAttribute("data-id"));
+      break;
+    case "toggle-every":
+      toggleEvery(el.getAttribute("data-id"));
       break;
     case "open-habit-note":
       // data-date is only present on a daily habit's day-pip (any of the 7,
@@ -2313,7 +2545,10 @@ function addHabit(){
   var d = state._draft;
   var name = d.name.trim();
   if(!name) return;
-  state.habits.push({ id:uid(), name:name, emoji:d.emoji, type:d.type, description:d.description.trim(), createdAt:todayStr(), completions:[] });
+  var habit = { id:uid(), name:name, emoji:d.emoji, type:d.type, description:d.description.trim(), createdAt:todayStr(), completions:[] };
+  if(d.type==="onceoff") habit.dueDate = d.dueDate || todayStr();
+  if(d.type==="every"){ habit.everyUnit = d.everyUnit; habit.everyN = Math.max(2, parseInt(d.everyN,10)||2); }
+  state.habits.push(habit);
   save();
   // Pops the add-habit-modal's history entry (pushed by navigateTo() when it
   // was opened) rather than setting state.screen directly -- keeps the
@@ -2353,6 +2588,29 @@ function toggleMonthly(id){
   evaluateRewards();
   save(); render();
 }
+function toggleWeekly(id){
+  var h = findHabit(id); if(!h) return;
+  var w = isoWeekStr();
+  var idx = h.completions.indexOf(w);
+  // Same reasoning as toggleMonthly() -- period key, note goes with it.
+  if(idx===-1){ h.completions.push(w); state.carrots++; }
+  else { h.completions.splice(idx,1); state.carrots=Math.max(0,state.carrots-1); deleteHabitNoteFor(h,w); }
+  evaluateRewards();
+  save(); render();
+}
+function toggleEvery(id){
+  var h = findHabit(id); if(!h) return;
+  var t = todayStr();
+  // "Every" logs a fresh date each time it's due, like daily, but only
+  // ever un-toggles *today's* specific entry (the log-btn only ever shows
+  // "Log Now" when due, so a re-tap always means "undo today's own log",
+  // never an older logged date).
+  var idx = h.completions.indexOf(t);
+  if(idx===-1){ h.completions.push(t); state.carrots++; }
+  else { h.completions.splice(idx,1); state.carrots=Math.max(0,state.carrots-1); deleteHabitNoteFor(h,t); }
+  evaluateRewards();
+  save(); render();
+}
 function toggleOnceoff(id){
   var h = findHabit(id); if(!h) return;
   // Once-off is the one type whose note key (habitNoteKey() -> h.completions[0])
@@ -2378,7 +2636,9 @@ function toggleOnceoff(id){
    just see an array of strings) so nothing else has to change shape. */
 function habitNoteKey(h){
   if(h.type==="daily") return todayStr();
+  if(h.type==="weekly") return isoWeekStr();
   if(h.type==="monthly") return monthStr();
+  if(h.type==="every") return h.completions[h.completions.length-1]; // most recently logged date
   return h.completions[0]; // onceoff -- undefined if not yet completed
 }
 function getHabitNote(h){
@@ -2454,7 +2714,22 @@ function renderHabitNoteModal(id){
 }
 function deleteHabit(id){
   if(!confirm("Remove this habit?")) return;
-  state.habits = state.habits.filter(function(h){return h.id!==id;});
+  var h = findHabit(id);
+  // Closes a carrot-farming loophole: create a habit, log it, delete it to
+  // free its slot, create another, log it, delete it again... would
+  // otherwise out-earn what the slot limits intend, since a fresh habit id
+  // sidesteps every period-based "already logged" check. Only claws back a
+  // habit that's BOTH still within its very first day AND currently
+  // logged -- exactly as if the player had unlogged it themselves right
+  // before deleting -- so a long-lived habit keeps every carrot it ever
+  // earned, deleted or not. Rewards already unlocked stay unlocked
+  // regardless (see evaluateRewards()'s "already unlocked, skip" guard) --
+  // this only protects the raw carrot count itself, which is the one
+  // number with no day-cap of its own.
+  if(h && h.createdAt===todayStr() && habitLogged(h)){
+    state.carrots = Math.max(0, state.carrots-1);
+  }
+  state.habits = state.habits.filter(function(hb){return hb.id!==id;});
   save();
   // Only ever called from inside the habit-detail modal now (the compact
   // Logbook row has no inline delete) -- pop that history entry the same way
@@ -2845,7 +3120,7 @@ function validBackupShape(parsed){
 function applyRestoredState(parsed){
   var merged = Object.assign(defaultState(), parsed);
   merged.unlocks = Object.assign({}, parsed.unlocks || {});
-  merged._draft = { name:"", emoji:"🌴", type:"daily", description:"" };
+  merged._draft = { name:"", emoji:"🌴", type:"daily", description:"", dueDate:todayStr(), everyUnit:"days", everyN:2 };
   merged.toast = null;
   merged.pendingCelebration = null;
   merged.pendingTreasureFound = null;
@@ -3383,8 +3658,41 @@ function initCocoCannon(){
       phase = "playing";
     }, 1600);
   }
+  // Shown exactly once, right after the one-time trial top-up in
+  // startPlaying() below -- unlike showWinBanner() this needs a tap (not a
+  // timeout) since it's the very first thing a brand new player sees, and
+  // it's worth making sure the expiry warning actually registers rather
+  // than risking it flashing by unread.
+  function showTrialBanner(){
+    phase = "trial-intro";
+    overlay.classList.remove("hidden");
+    overlay.innerHTML =
+      '<h3>🥕 7 Free Carrots!</h3>' +
+      '<p>You\'ve got a full week\'s worth of lives today only, so you can really get a feel for the game. They expire tomorrow -- make them count!</p>' +
+      '<button class="btn" id="cocoTrialOkBtn">Let\'s Go!</button>';
+    var okBtn = document.getElementById("cocoTrialOkBtn");
+    if(okBtn) okBtn.addEventListener("click", function(){
+      phase = "playing";
+      hideOverlay();
+      updateHud();
+    });
+  }
 
   function startPlaying(){
+    // One-time practice budget: the very first time the player actually
+    // presses Start (not just when the reward unlocks), top them up to the
+    // full 7 lives so their first session has room to see most of what the
+    // game does, regardless of which day's ration they'd otherwise have --
+    // then explain the tradeoff via showTrialBanner() instead of dropping
+    // straight into gameplay, since it's a one-time deal worth reading.
+    if(!state.cocoTrialGrantedOn){
+      state.cocoTrialGrantedOn = todayStr();
+      state.cocoLives = 7;
+      save();
+      updateHud();
+      showTrialBanner();
+      return;
+    }
     if(state.cocoLives<=0){ showOverlay(); return; }
     if(phase==="gameover"){ level=1; levelKills=0; score=0; spawnLevel(); }
     phase = "playing";
@@ -3502,7 +3810,7 @@ function initCocoCannon(){
     if(running) return;
     running = true;
     resizeCanvas();
-    if(!cannon) resetGame(); else { updateHud(); draw(); if(phase!=="playing" && phase!=="banner") showOverlay(); }
+    if(!cannon) resetGame(); else { updateHud(); draw(); if(phase!=="playing" && phase!=="banner" && phase!=="trial-intro") showOverlay(); }
     lastTs = (window.performance && performance.now) ? performance.now() : Date.now();
     rafId = requestAnimationFrame(loop);
   }
