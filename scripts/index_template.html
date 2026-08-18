@@ -260,7 +260,6 @@ img{max-width:100%; display:block;}
    the wider Logbook plaque instead. */
 .pip-row.compact{gap:2px; flex-wrap:nowrap; justify-content:flex-start; margin-top:6px;}
 .pip-row.compact .pip{font-size:.78rem;}
-.carrot-counter{font-size:.78rem; font-weight:700; color:var(--wood-dark); margin-top:6px;}
 .plaque-progress-text{text-align:center; color:var(--parchment-edge); font-size:.76rem; margin-top:8px;}
 
 /* ---------- Habit rows (compact, tap for detail) ---------- */
@@ -296,10 +295,11 @@ img{max-width:100%; display:block;}
 }
 .habit-week{display:flex; gap:5px; margin-bottom:10px;}
 .day-pip{
-  flex:1; height:22px; border-radius:5px; background:rgba(107,69,38,.15);
+  flex:1; height:22px; border-radius:5px; background:rgba(107,69,38,.15); position:relative;
   display:flex; align-items:center; justify-content:center; font-size:.7rem; color:var(--wood);
 }
 .day-pip.done{background:var(--leaf); color:#fff;}
+.day-pip-note{position:absolute; top:-6px; right:-4px; font-size:.6rem; filter:drop-shadow(0 1px 1px rgba(0,0,0,.5));}
 .day-pip.today{outline:2px solid var(--carrot); outline-offset:1px;}
 .log-btn{
   width:100%; border:none; border-radius:9px; padding:11px; font-weight:700; font-size:.92rem;
@@ -330,12 +330,6 @@ img{max-width:100%; display:block;}
 .sighting-tile{
   border-radius:8px; border:1px solid var(--parchment-edge); box-shadow:var(--shadow);
   background-repeat:no-repeat; width:100%; aspect-ratio:1/1; position:relative; padding:0;
-}
-.sighting-tile.favorited{border:2px solid var(--gold); box-shadow:0 0 0 1px var(--gold), var(--shadow);}
-.sighting-star{position:absolute; top:-6px; right:-6px; font-size:.85rem; filter:drop-shadow(0 1px 2px rgba(0,0,0,.6));}
-.favorites-link{
-  display:inline-block; background:rgba(198,153,47,.15); border:1px solid var(--gold); color:var(--gold);
-  font-size:.75rem; font-weight:700; border-radius:20px; padding:5px 12px; margin-bottom:10px;
 }
 .sightings-footer{color:var(--parchment-edge); font-size:.78rem; margin-top:10px;}
 /* The single most recent discovery, picture + its Castaway's Log story
@@ -1041,9 +1035,7 @@ function defaultState(){
     habits:[],
     unlocks:{},
     sightings:[],
-    favoriteSightings:[],
     favoriteRewards:[],
-    sightingsFilter:"all",
     // Discovery pacing runs on its own day-capped counter rather than
     // state.carrots directly -- see evaluateSightings() -- so New Discovery
     // sightings (and their paired Castaway's Log entries, see
@@ -1371,11 +1363,19 @@ function renderHabitDetailModal(id){
       var ds = d.toISOString().slice(0,10);
       var done = h.completions.indexOf(ds)!==-1;
       var isToday = ds===today;
-      pips += '<div class="day-pip '+(done?'done':'')+' '+(isToday?'today':'')+'">'+(done?'✓':'')+'</div>';
+      // A note badge on the specific day it belongs to (not just today) --
+      // h.notes can hold entries for past days too (nothing deletes them
+      // when the day rolls over, only an explicit unlog does, see
+      // deleteHabitNoteFor()), so this lets a note from a couple of days
+      // ago still show up here even though only today's is reachable via
+      // the "logged" button below (habitNoteKey() always resolves to
+      // today for a daily habit).
+      var hasNote = h.notes && (ds in h.notes);
+      pips += '<div class="day-pip '+(done?'done':'')+' '+(isToday?'today':'')+'">'+(done?'✓':'')+(hasNote?'<span class="day-pip-note">📝</span>':'')+'</div>';
     }
     html += '<div class="habit-week">'+pips+'</div>';
     if(doneToday){
-      html += '<button class="log-btn done" data-action="open-habit-note" data-id="'+h.id+'">'+(habitHasNote(h)?'📝':'✓')+' Logged Today</button>';
+      html += '<button class="log-btn done" data-action="open-habit-note" data-id="'+h.id+'">✓ Logged Today</button>';
     } else {
       html += '<button class="log-btn" data-action="toggle-daily" data-id="'+h.id+'">Log Today  +1 🥕</button>';
     }
@@ -1433,7 +1433,7 @@ function renderNextRewardsDetailModal(){
   html += '<img class="reward-hero" src="'+ASSET.chest+'" alt="">';
   html += '<h3>Next Rewards</h3>';
   html += renderNextRewardsList(chainNext, sightingsActive);
-  html += '<div class="carrot-counter" style="text-align:center; margin-top:10px;">🥕 '+(state.carrots%7)+'/7</div>';
+  html += '<div class="pip-row compact" style="justify-content:center; margin-top:10px;">'+carrotPipsHtml(state.carrots%7,7)+'</div>';
   html += '</div></div>';
   return html;
 }
@@ -1595,7 +1595,7 @@ function renderRewardsScreen(){
     html += '<div class="reward-body">';
     html += '<div class="reward-title">Next Rewards</div>';
     html += renderNextRewardsList(chainNext, sightingsActive);
-    html += '<div class="carrot-counter">🥕 '+(state.carrots%7)+'/7</div>';
+    html += '<div class="pip-row compact">'+carrotPipsHtml(state.carrots%7,7)+'</div>';
     html += '</div></div>';
   }
 
@@ -1642,8 +1642,6 @@ function renderRewardsScreen(){
   return html;
 }
 
-var SIGHTINGS_FAVORITE_MAX = 5;
-
 // Reached by tapping the New Discovery summary card on the Rewards
 // screen. Pre-discovery this is just "No discoveries yet" -- the full
 // gallery (grid + favorites filter) only has anything to show from the
@@ -1670,21 +1668,11 @@ function renderSightingsGalleryModal(){
   html += '<p class="log-entry-body">'+latestEntry.body+'</p>';
   html += '</div></div>';
 
-  var showingFavorites = state.sightingsFilter==="favorites";
-  html += '<button class="favorites-link" data-action="toggle-sightings-filter">'+
-    (showingFavorites ? '📖 Show all' : '⭐ Favorites ('+state.favoriteSightings.length+'/'+SIGHTINGS_FAVORITE_MAX+')') +
-    '</button>';
-  var shown = showingFavorites ? state.sightings.filter(function(idx){ return state.favoriteSightings.indexOf(idx)!==-1; }) : state.sightings;
-  if(showingFavorites && shown.length===0){
-    html += '<p class="sightings-teaser">No favorites yet — tap a sighting below to save it here (up to '+SIGHTINGS_FAVORITE_MAX+').</p>';
-  } else {
-    html += '<div class="sightings-grid">';
-    shown.forEach(function(idx){
-      var fav = state.favoriteSightings.indexOf(idx)!==-1;
-      html += '<div class="sighting-tile '+(fav?'favorited':'')+'" data-action="toggle-favorite-sighting" data-id="'+idx+'" style="'+sightingTileStyle(idx)+'">'+(fav?'<span class="sighting-star">⭐</span>':'')+'</div>';
-    });
-    html += '</div>';
-  }
+  html += '<div class="sightings-grid">';
+  state.sightings.forEach(function(idx){
+    html += '<div class="sighting-tile" style="'+sightingTileStyle(idx)+'"></div>';
+  });
+  html += '</div>';
   if(state.sightings.length < SIGHTINGS_TOTAL){
     // Mirrors evaluateSightings()'s earnedCount math -- the free discovery
     // (see unlockFirstDiscoveryFree()) doesn't count against the carrot
@@ -2043,23 +2031,6 @@ function onAction(e){
       break;
     case "show-story":
       navigateTo(function(){ state.screen = "story-modal"; });
-      break;
-    case "toggle-sightings-filter":
-      state.sightingsFilter = state.sightingsFilter==="favorites" ? "all" : "favorites";
-      save(); render();
-      break;
-    case "toggle-favorite-sighting":
-      var sightingIdx = parseInt(el.getAttribute("data-id"), 10);
-      var favIdx = state.favoriteSightings.indexOf(sightingIdx);
-      if(favIdx!==-1){
-        state.favoriteSightings.splice(favIdx,1);
-      } else if(state.favoriteSightings.length < SIGHTINGS_FAVORITE_MAX){
-        state.favoriteSightings.push(sightingIdx);
-      } else {
-        showToast("You can favorite up to "+SIGHTINGS_FAVORITE_MAX+" — remove one first.");
-        break;
-      }
-      save(); render();
       break;
     case "toggle-favorite-reward":
       // Nested inside the reward-card's own show-reward-detail element --
