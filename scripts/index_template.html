@@ -311,18 +311,8 @@ img{max-width:100%; display:block;}
 .habit-meta{color:var(--wood); font-size:.78rem; margin-top:8px;}
 .habit-meta.done{color:var(--leaf-deep); font-weight:700;}
 
-/* ---------- Habit log notes ---------- */
-.habit-note{margin-top:10px;}
-.habit-note-add{
-  width:100%; text-align:left; background:rgba(107,69,38,.08); border:1px dashed var(--parchment-edge);
-  border-radius:9px; padding:8px 12px; color:var(--wood); font-size:.82rem; font-weight:700;
-}
-.habit-note-preview{
-  width:100%; text-align:left; background:rgba(107,69,38,.08); border:1px solid var(--parchment-edge);
-  border-radius:9px; padding:8px 12px;
-}
-.habit-note-text{color:var(--wood-dark); font-size:.85rem; line-height:1.4; word-break:break-word;}
-.habit-note-meta{color:var(--carrot-deep); font-size:.68rem; font-weight:700; margin-top:4px;}
+/* ---------- Habit log notes (see renderHabitNoteModal()) ---------- */
+.habit-note-meta{color:var(--carrot-deep); font-size:.68rem; font-weight:700; margin-bottom:8px;}
 .habit-note-input{
   width:100%; min-height:70px; resize:vertical; border-radius:9px; border:1px solid var(--parchment-edge);
   background:var(--parchment-hi); color:var(--wood-dark); font:inherit; font-size:.85rem; padding:8px 12px;
@@ -1083,10 +1073,6 @@ function defaultState(){
     _draft:{ name:"", emoji:"🌴", type:"daily", description:"" },
     _detailHabitId:null,
     _detailRewardId:null,
-    // Whether the habit-detail modal's note editor (textarea + Save/Delete)
-    // is currently open -- reset to false every time show-habit-detail
-    // opens a (possibly different) habit, see onAction() below.
-    _noteEditorOpen:false,
     // Install-state bookkeeping -- see isInstalled()/triggerInstall() below.
     // installPromptAccepted also covers a manual/native install this session
     // hasn't relaunched from the real Home Screen icon yet (display-mode
@@ -1388,20 +1374,26 @@ function renderHabitDetailModal(id){
       pips += '<div class="day-pip '+(done?'done':'')+' '+(isToday?'today':'')+'">'+(done?'✓':'')+'</div>';
     }
     html += '<div class="habit-week">'+pips+'</div>';
-    html += '<button class="log-btn '+(doneToday?'done':'')+'" data-action="toggle-daily" data-id="'+h.id+'">'+(doneToday?'✓ Logged Today':'Log Today  +1 🥕')+'</button>';
+    if(doneToday){
+      html += '<button class="log-btn done" data-action="open-habit-note" data-id="'+h.id+'">'+(habitHasNote(h)?'📝':'✓')+' Logged Today</button>';
+    } else {
+      html += '<button class="log-btn" data-action="toggle-daily" data-id="'+h.id+'">Log Today  +1 🥕</button>';
+    }
     html += '<div class="habit-meta">Streak: '+dailyStreak(h)+' day'+(dailyStreak(h)===1?'':'s')+'</div>';
-    if(doneToday){ html += renderHabitNoteSection(h); }
   } else if(h.type==="monthly"){
     var m = monthStr();
     var doneMonth = h.completions.indexOf(m)!==-1;
-    html += '<button class="log-btn '+(doneMonth?'done':'')+'" data-action="toggle-monthly" data-id="'+h.id+'">'+(doneMonth?'✓ Logged this month':'Log this Month  +1 🥕')+'</button>';
+    if(doneMonth){
+      html += '<button class="log-btn done" data-action="open-habit-note" data-id="'+h.id+'">'+(habitHasNote(h)?'📝':'✓')+' Logged this month</button>';
+    } else {
+      html += '<button class="log-btn" data-action="toggle-monthly" data-id="'+h.id+'">Log this Month  +1 🥕</button>';
+    }
     html += '<div class="habit-meta">'+h.completions.length+'/7 months toward next reward</div>';
-    if(doneMonth){ html += renderHabitNoteSection(h); }
   } else {
     var done = h.completions.length>0;
     if(done){
-      html += '<div class="habit-meta done">✓ Completed '+h.completions[0]+'</div>';
-      html += renderHabitNoteSection(h);
+      html += '<button class="log-btn done" data-action="open-habit-note" data-id="'+h.id+'">'+(habitHasNote(h)?'📝':'✓')+' Completed</button>';
+      html += '<div class="habit-meta">'+h.completions[0]+'</div>';
     } else {
       html += '<button class="log-btn" data-action="toggle-onceoff" data-id="'+h.id+'">Mark Complete  +1 🥕</button>';
     }
@@ -1712,6 +1704,7 @@ function renderModals(){
   if(state.screen==="add-habit-modal"){ html += renderAddHabitModal(); }
   if(state.screen==="profile-modal"){ html += renderProfileModal(); }
   if(state.screen==="habit-detail-modal"){ html += renderHabitDetailModal(state._detailHabitId); }
+  if(state.screen==="habit-note-modal"){ html += renderHabitNoteModal(state._detailHabitId); }
   if(state.screen==="reward-detail-modal"){ html += renderRewardDetailModal(state._detailRewardId); }
   if(state.screen==="sightings-gallery-modal"){ html += renderSightingsGalleryModal(); }
   if(state.screen==="next-rewards-detail-modal"){ html += renderNextRewardsDetailModal(); }
@@ -2003,7 +1996,6 @@ function onAction(e){
     case "show-habit-detail":
       navigateTo(function(){
         state._detailHabitId = el.getAttribute("data-id");
-        state._noteEditorOpen = false;
         state.screen = "habit-detail-modal";
       });
       break;
@@ -2074,8 +2066,7 @@ function onAction(e){
       toggleOnceoff(el.getAttribute("data-id"));
       break;
     case "open-habit-note":
-      state._noteEditorOpen = true;
-      render();
+      navigateTo(function(){ state.screen = "habit-note-modal"; });
       break;
     case "save-habit-note":
       var noteInput = root.querySelector("#habitNoteText");
@@ -2216,9 +2207,16 @@ function habitNoteKey(h){
 function getHabitNote(h){
   return (h.notes||{})[habitNoteKey(h)];
 }
+function habitHasNote(h){
+  return !!getHabitNote(h);
+}
 function deleteHabitNoteFor(h, key){
   if(h.notes && key in h.notes) delete h.notes[key];
 }
+// Both close the pop-up (history.back(), same as addHabit()/deleteHabit())
+// rather than just re-rendering in place -- the note modal is reached via
+// navigateTo() (see "open-habit-note" below) so it owns a real history
+// entry that needs popping, exactly like every other modal in this file.
 function saveHabitNote(id, text){
   var h = findHabit(id); if(!h) return;
   text = text.trim();
@@ -2228,41 +2226,40 @@ function saveHabitNote(id, text){
   var existing = h.notes[key];
   var now = new Date().toISOString();
   h.notes[key] = { text: text, loggedAt: existing ? existing.loggedAt : now, updatedAt: now };
-  state._noteEditorOpen = false;
-  save(); render();
+  save();
+  closeModal();
 }
 function deleteHabitNote(id){
   var h = findHabit(id); if(!h) return;
   deleteHabitNoteFor(h, habitNoteKey(h));
-  state._noteEditorOpen = false;
-  save(); render();
+  save();
+  closeModal();
 }
 function formatNoteTimestamp(iso){
   var d = new Date(iso);
   return d.toLocaleDateString(undefined,{month:"short",day:"numeric"})+" "+d.toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"});
 }
-// Shared across the daily/monthly/once-off branches of
-// renderHabitDetailModal() -- only ever rendered when that period is
-// already logged (the note is context on a completed entry, not a
-// standalone thing), so h always has a valid habitNoteKey() here.
-function renderHabitNoteSection(h){
+// Reached by tapping the day's checkmark once it's already logged (see the
+// log-btn.done branches in renderHabitDetailModal()) -- only ever opened
+// for a habit whose current period is already logged, so h always has a
+// valid habitNoteKey() here.
+function renderHabitNoteModal(id){
+  var h = findHabit(id);
+  if(!h) return '';
   var note = getHabitNote(h);
-  var html = '<div class="habit-note">';
-  if(state._noteEditorOpen){
-    html += '<textarea class="habit-note-input" id="habitNoteText" maxlength="280" placeholder="Add a note...">'+escapeHtml(note?note.text:"")+'</textarea>';
-    html += '<div class="habit-note-actions">';
-    html += '<button class="btn btn-block" data-action="save-habit-note" data-id="'+h.id+'">Save note</button>';
-    if(note){ html += '<button class="btn-ghost btn-block" data-action="delete-habit-note" data-id="'+h.id+'">Delete note</button>'; }
-    html += '</div>';
-  } else if(note){
-    html += '<button class="habit-note-preview" data-action="open-habit-note" data-id="'+h.id+'">';
-    html += '<div class="habit-note-text">'+escapeHtml(note.text)+'</div>';
+  var html = '<div class="modal-backdrop" data-backdrop="habit-note">';
+  html += '<div class="modal">';
+  html += '<button class="modal-close" data-action="close-modal">✕</button>';
+  html += '<h3>'+h.emoji+' '+escapeHtml(h.name)+'</h3>';
+  if(note){
     html += '<div class="habit-note-meta">'+(note.updatedAt!==note.loggedAt?"Updated ":"Logged ")+formatNoteTimestamp(note.updatedAt)+'</div>';
-    html += '</button>';
-  } else {
-    html += '<button class="habit-note-add" data-action="open-habit-note" data-id="'+h.id+'">📝 Add a note</button>';
   }
+  html += '<textarea class="habit-note-input" id="habitNoteText" maxlength="280" placeholder="Add a note...">'+escapeHtml(note?note.text:"")+'</textarea>';
+  html += '<div class="habit-note-actions">';
+  html += '<button class="btn btn-block" data-action="save-habit-note" data-id="'+h.id+'">Save note</button>';
+  if(note){ html += '<button class="btn-ghost btn-block" data-action="delete-habit-note" data-id="'+h.id+'">Delete note</button>'; }
   html += '</div>';
+  html += '</div></div>';
   return html;
 }
 function deleteHabit(id){
