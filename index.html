@@ -1042,6 +1042,11 @@ function defaultState(){
     // matter how many habits a player is tracking at once.
     discoveryCarrots:0,
     discoveryCarrotDays:[],
+    // Count of discoveries granted for free (see unlockFirstDiscoveryFree())
+    // rather than earned via discoveryCarrots -- evaluateSightings() backs
+    // this out of state.sightings.length so every *paid* discovery still
+    // costs exactly 7 carrots regardless of how many were free.
+    freeSightings:0,
     // Treasure Hunt -- starts pre-revealed at the beach landing tile
     // (TREASURE_START) so there's always something on the map the moment the
     // Rewards screen exists, same spirit as the starter REWARDS below always
@@ -1129,14 +1134,20 @@ function evaluateSightings(){
     state.discoveryCarrotDays.push(t);
     state.discoveryCarrots++;
   }
-  var eligible = Math.min(SIGHTINGS_TOTAL, Math.floor(state.discoveryCarrots/7));
+  // state.sightings.length includes the one free discovery granted at
+  // finishOnboarding (see unlockFirstDiscoveryFree()), which didn't cost
+  // any discoveryCarrots -- earnedCount backs it out so every *paid*
+  // discovery still costs exactly 7 carrots, the free one included or not.
+  var earnedCount = state.sightings.length - state.freeSightings;
+  var eligible = Math.min(SIGHTINGS_TOTAL - state.freeSightings, Math.floor(state.discoveryCarrots/7));
   var unlockedAny = false, lastNewIdx = null;
-  while(state.sightings.length < eligible){
+  while(earnedCount < eligible){
     var remaining = [];
     for(var i=0;i<SIGHTINGS_TOTAL;i++){ if(state.sightings.indexOf(i)===-1) remaining.push(i); }
     if(remaining.length===0) break;
     lastNewIdx = remaining[Math.floor(Math.random()*remaining.length)];
     state.sightings.push(lastNewIdx);
+    earnedCount++;
     unlockedAny = true;
   }
   if(unlockedAny){
@@ -1153,6 +1164,7 @@ function evaluateSightings(){
 function unlockFirstDiscoveryFree(){
   var idx = Math.floor(Math.random()*SIGHTINGS_TOTAL);
   state.sightings.push(idx);
+  state.freeSightings++;
   showToast("Reward issued: 1st rHabbit created!");
 }
 
@@ -1635,7 +1647,11 @@ function renderSightingsGalleryModal(){
     html += '</div>';
   }
   if(state.sightings.length < SIGHTINGS_TOTAL){
-    var nextThreshold = (state.sightings.length+1)*7;
+    // Mirrors evaluateSightings()'s earnedCount math -- the free discovery
+    // (see unlockFirstDiscoveryFree()) doesn't count against the carrot
+    // pacing, so every *paid* discovery, the next one included, is always
+    // exactly a 7-carrot step from the last.
+    var nextThreshold = ((state.sightings.length - state.freeSightings) + 1) * 7;
     html += '<p class="sightings-footer">'+state.sightings.length+' / '+SIGHTINGS_TOTAL+' discovered — next at '+nextThreshold+' carrots.</p>';
   } else {
     html += '<p class="sightings-footer">All '+SIGHTINGS_TOTAL+' island sightings discovered!</p>';
