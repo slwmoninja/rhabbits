@@ -7,7 +7,7 @@
   "background_color": "#0F3A38",
   "theme_color": "#0F3A38",
   "icons": [
-    { "src": "icon-192.png?v=4739f0e8", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "icon-512.png?v=929cab09", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+    { "src": "icon-192.png?v=fb848def", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png?v=f4f166c3", "sizes": "512x512", "type": "image/png", "purpose": "any" }
   ]
 }

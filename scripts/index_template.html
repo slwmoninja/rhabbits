@@ -13,7 +13,7 @@
      this tag or index_template.html. Recompute (sha256 of icon-192.png,
      first 8 hex chars) and bump this whenever icon-192.png's bytes change,
      or iPhone installs will keep showing a stale icon after an update. -->
-<link rel="apple-touch-icon" href="./icon-192.png?v=4739f0e8">
+<link rel="apple-touch-icon" href="./icon-192.png?v=fb848def">
 <meta name="theme-color" content="#0E3634">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -399,20 +399,37 @@ img{max-width:100%; display:block;}
 
 /* ---------- Treasure Hunt ---------- */
 /* Aspect ratio matches Graphics/TreasureMap.jpeg's native 1408x768 exactly
-   -- the 14x8 fog grid below was hand-mapped against those pixel
-   proportions, so any mismatch here would drift the fog off the coastline. */
+   -- the 26x16 fog grid below is the map art's own hand-drawn gridlines
+   (see the TREASURE_COLS/ROWS comment in the script), so any mismatch here
+   would drift the fog off the coastline. */
 .tmap-wrap{position:relative; width:100%; aspect-ratio:1408/768; background:var(--teal-deep); overflow:hidden;}
 .tmap-card .tmap-wrap{border-radius:0;}
 .tmap-wrap img{width:100%; height:100%; object-fit:cover;}
 .tmap-grid{
   position:absolute; inset:0; display:grid;
-  grid-template-columns:repeat(14,1fr); grid-template-rows:repeat(8,1fr);
+  grid-template-columns:repeat(26,1fr); grid-template-rows:repeat(16,1fr);
 }
 .tmap-cell{display:flex; align-items:center; justify-content:center;}
-.tmap-cell.fogged{background:rgba(18,12,7,.93); box-shadow:inset 0 0 0 .5px rgba(0,0,0,.15);}
+/* Fully opaque -- fogged cells must hide the map underneath completely, not
+   just dim it, so background-color (not an alpha channel) carries the
+   white. The two radial-gradient layers add a soft puffy-cloud texture on
+   top of that opaque base rather than relying on transparency for texture. */
+.tmap-cell.fogged{
+  background-color:#f4f1ea;
+  background-image:
+    radial-gradient(circle at 30% 25%, #ffffff 0%, rgba(255,255,255,0) 55%),
+    radial-gradient(circle at 72% 68%, #ffffff 0%, rgba(255,255,255,0) 60%);
+  box-shadow:inset 0 0 0 .5px rgba(120,110,95,.3);
+}
 .tmap-cell.revealed{background:transparent;}
-.tmap-pin, .tmap-found{font-size:.9rem; filter:drop-shadow(0 1px 2px rgba(0,0,0,.6));}
-.tmap-card .tmap-pin, .tmap-card .tmap-found{font-size:.7rem;}
+/* Sized down from the original 4-per-row cardinal-only grid -- 26 columns
+   packs cells much tighter, so the marker must shrink to fit inside one
+   without spilling into its neighbors. tmap-pin is a photo (object-fit,
+   width/height), tmap-found is still an emoji (font-size). */
+.tmap-found{font-size:.55rem; filter:drop-shadow(0 1px 1px rgba(0,0,0,.6));}
+.tmap-pin{width:130%; height:130%; object-fit:contain; filter:drop-shadow(0 1px 1px rgba(0,0,0,.6));}
+.tmap-card .tmap-found{font-size:.36rem;}
+.tmap-card .tmap-pin{width:150%; height:150%;}
 .tmap-status{color:var(--wood-dark); font-weight:700; font-size:.85rem; text-align:center; margin:12px 0 0;}
 .tmap-hint{color:var(--wood); font-size:.75rem; text-align:center; margin:6px 0 0;}
 .tmap-dpad{
@@ -509,7 +526,8 @@ var ASSET = {
   sightings_sprite: "__SIGHTINGS_SPRITE__",
   chest: "__CHEST__",
   bottle: "__BOTTLE__",
-  treasure_map: "__TREASURE_MAP__"
+  treasure_map: "__TREASURE_MAP__",
+  carrot_juice: "__CARROT_JUICE__"
 };
 
 var STORAGE_KEY = "rhabbits_state_v1";
@@ -587,26 +605,54 @@ var STARTER_REASON = "Reward issued: Starting to use the app!";
 // A slow-burn side quest layered on top of daily habit logging: one
 // grid-square move per day (earned exactly like New Discovery credits below,
 // via hasCompletionToday() -- at most one per calendar day, no matter how
-// many habits get completed that day), spent on whichever cardinal
-// direction the player picks among the currently legal ones. The castaway
-// has no ship, so movement -- and fog removal -- only ever happens across
-// island land, never ocean. The 14x8 grid below is hand-mapped directly
-// against Graphics/TreasureMap.jpeg's actual coastline (fixed art, no
-// runtime image analysis) so fog cells line up with the drawn coast.
-var TREASURE_COLS = 14, TREASURE_ROWS = 8;
-// NE-most beach tile on the island -- the small sandy headland north of the
-// main landmass -- so the castaway's very first sighting of solid ground
-// (matching Day One: "Woke up on the beach") reads as an actual point on
-// the coastline, not an arbitrary interior tile.
-var TREASURE_START = {r:1, c:9};
+// many habits get completed that day), spent on whichever of the 8
+// directions (4 cardinal + 4 diagonal) the player picks among the currently
+// legal ones. The castaway has no ship, so movement -- and fog removal --
+// only ever happens across island land, never ocean.
+//
+// The grid is 26x16 -- not an arbitrary resolution, but the *actual* grid
+// hand-drawn onto Graphics/TreasureMap.jpeg itself (every square on the
+// parchment is a unique block), located by detecting the drawn gridline
+// pixel columns/rows in the source art. TREASURE_LAND was derived the same
+// pixel-precise way: classify each cell as land/water by hue+texture
+// (water is bluish; blank parchment margin and true land are told apart by
+// local variance, since the illustration's ink linework has far more of it
+// than a flat parchment stain), then flood-fill (8-connected, matching the
+// diagonal movement above) from a chest cell to keep only the one
+// connected landmass -- automatically dropping the two disconnected
+// northern islets, the ship, and stray misclassified cells. See the
+// grid-detection work in this session's history for the derivation; there
+// is no runtime image analysis, this is fixed data matching fixed art.
+var TREASURE_COLS = 26, TREASURE_ROWS = 16;
+// The very tip of the island's NW headland -- a cell that's genuinely part
+// land, part ocean (the coastline cuts right through it), so the
+// castaway's first sighting of solid ground (matching Day One: "Woke up on
+// the beach") reads as an actual landing point on the coast, not an
+// arbitrary interior tile.
+var TREASURE_START = {r:4, c:5};
 var TREASURE_LAND = [
-  "1,6","1,7","1,9",
-  "2,4","2,5","2,6","2,7","2,8","2,9","2,10",
-  "3,3","3,4","3,5","3,6","3,7","3,8","3,9","3,10",
-  "4,3","4,4","4,5","4,6","4,7","4,8","4,9","4,10",
-  "5,8","5,9","5,10"
+  "1,15",
+  "2,10","2,11","2,12","2,13","2,16","2,17","2,20",
+  "3,9","3,10","3,11","3,12","3,13","3,14","3,16","3,17","3,18","3,19","3,20",
+  "4,5","4,6","4,7","4,8","4,9","4,10","4,11","4,12","4,13","4,14","4,15","4,16","4,17","4,18","4,19","4,20",
+  "5,4","5,5","5,6","5,7","5,8","5,9","5,10","5,11","5,12","5,13","5,14","5,15","5,16","5,17","5,18","5,19",
+  "6,4","6,5","6,6","6,7","6,8","6,9","6,10","6,11","6,12","6,13","6,14","6,15","6,16","6,17","6,18","6,19","6,20",
+  "7,4","7,5","7,6","7,7","7,8","7,9","7,10","7,11","7,12","7,13","7,14","7,15","7,16","7,17","7,18","7,19","7,20",
+  "8,4","8,5","8,6","8,7","8,8","8,9","8,10","8,11","8,12","8,13","8,14","8,15","8,16","8,17","8,18","8,19","8,20",
+  "9,5","9,6","9,9","9,10","9,11","9,12","9,13","9,14","9,15","9,16","9,17","9,18","9,19","9,20","9,21",
+  "10,9","10,10","10,11","10,12","10,13","10,14","10,15","10,16","10,17","10,18","10,19","10,20","10,21",
+  "11,10","11,18","11,19","11,20","11,21","11,22",
+  "12,20","12,21"
 ];
-var TREASURE_CHESTS = [ {r:4,c:3}, {r:3,c:7}, {r:4,c:8} ];
+// Skull Cliffs, The Volcano, The Thicket -- fine-grid coordinates of the
+// map art's 3 red X marks, located the same pixel-detection way as the
+// gridlines above (largest red-hued blob within each cell).
+var TREASURE_CHESTS = [ {r:8,c:6}, {r:6,c:13}, {r:9,c:15} ];
+// 8-directional step deltas, cardinal + diagonal.
+var TREASURE_DIRS = {
+  N:{dr:-1,dc:0}, S:{dr:1,dc:0}, E:{dr:0,dc:1}, W:{dr:0,dc:-1},
+  NE:{dr:-1,dc:1}, NW:{dr:-1,dc:-1}, SE:{dr:1,dc:1}, SW:{dr:1,dc:-1}
+};
 
 function treasureCellKey(r,c){ return r+","+c; }
 function isTreasureLand(r,c){
@@ -627,12 +673,12 @@ function treasureMoveAvailable(){
 }
 function treasureLegalDirections(){
   var p = state.treasurePos;
-  return {
-    N: isTreasureLand(p.r-1, p.c),
-    S: isTreasureLand(p.r+1, p.c),
-    E: isTreasureLand(p.r, p.c+1),
-    W: isTreasureLand(p.r, p.c-1)
-  };
+  var legal = {};
+  for(var dir in TREASURE_DIRS){
+    var d = TREASURE_DIRS[dir];
+    legal[dir] = isTreasureLand(p.r+d.dr, p.c+d.dc);
+  }
+  return legal;
 }
 function treasureStatusText(){
   if(state.treasureMapComplete) return "You mapped the whole island!";
@@ -646,8 +692,8 @@ function treasureMove(dir){
   var legal = treasureLegalDirections();
   if(!legal[dir]) return;
   var p = state.treasurePos;
-  var np = {r:p.r, c:p.c};
-  if(dir==="N") np.r--; else if(dir==="S") np.r++; else if(dir==="E") np.c++; else if(dir==="W") np.c--;
+  var d = TREASURE_DIRS[dir];
+  var np = {r:p.r+d.dr, c:p.c+d.dc};
   state.treasurePos = np;
   state.treasureMoveDays.push(todayStr());
   var key = treasureCellKey(np.r, np.c);
@@ -1347,10 +1393,8 @@ function renderTreasureMapHtml(compact){
         var isCurrent = state.treasurePos.r===r && state.treasurePos.c===c;
         var chestIdx = treasureChestAt(r,c);
         var inner = '';
-        // Carrot Juice barrel marks the castaway's current position -- no chest
-        // emoji exists in Unicode either (see chestIconSvg() above), but a
-        // barrel reads fine at this size without needing custom art.
-        if(revealed && isCurrent){ inner = '<span class="tmap-pin">🛢️</span>'; }
+        // Carrot Juice barrel photo marks the castaway's current position.
+        if(revealed && isCurrent){ inner = '<img class="tmap-pin" src="'+ASSET.carrot_juice+'" alt="">'; }
         else if(revealed && chestIdx!==-1){ inner = '<span class="tmap-found">🏆</span>'; }
         html += '<div class="tmap-cell '+(revealed?'revealed':'fogged')+'">'+inner+'</div>';
       }
@@ -1395,9 +1439,9 @@ function renderTreasureHuntModal(){
       return '<button class="tmap-dbtn" data-action="treasure-move" data-dir="'+dir+'" '+(enabled?'':'disabled')+'>'+label+'</button>';
     };
     html += '<div class="tmap-dpad">';
-    html += '<span></span>'+dirBtn('N','▲')+'<span></span>';
+    html += dirBtn('NW','◤')+dirBtn('N','▲')+dirBtn('NE','◥');
     html += dirBtn('W','◀')+'<span class="tmap-dpad-center">🧭</span>'+dirBtn('E','▶');
-    html += '<span></span>'+dirBtn('S','▼')+'<span></span>';
+    html += dirBtn('SW','◣')+dirBtn('S','▼')+dirBtn('SE','◢');
     html += '</div>';
     if(!canMove){ html += '<p class="tmap-hint">Log a habit today to earn your next move.</p>'; }
   }

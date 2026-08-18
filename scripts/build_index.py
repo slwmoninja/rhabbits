@@ -25,6 +25,7 @@ ASSETS = {
     "__CHEST__": b64("chest.webp", "image/webp"),
     "__BOTTLE__": b64("bottle.webp", "image/webp"),
     "__TREASURE_MAP__": b64("treasure_map.webp", "image/webp"),
+    "__CARROT_JUICE__": b64("carrot_juice.webp", "image/webp"),
 }
 
 template = (ROOT / "scripts" / "index_template.html").read_text(encoding="utf-8")
