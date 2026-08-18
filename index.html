@@ -337,9 +337,13 @@ img{max-width:100%; display:block;}
   background:rgba(107,69,38,.07); border:1px solid var(--parchment-edge); border-radius:9px;
   padding:10px 12px; margin-bottom:8px;
 }
+.log-entry-find{display:flex; align-items:center; gap:8px; margin-bottom:6px;}
+.log-entry-sighting{
+  width:32px; height:32px; border-radius:6px; flex-shrink:0;
+  background-repeat:no-repeat; border:1px solid var(--parchment-edge);
+}
 .log-entry-when{
-  display:block; font-size:.62rem; letter-spacing:.12em; text-transform:uppercase;
-  font-weight:800; color:var(--carrot-deep); margin-bottom:2px;
+  font-size:.72rem; font-style:italic; font-weight:700; color:var(--carrot-deep); line-height:1.3;
 }
 .log-entry-title{font-weight:700; color:var(--wood-dark); font-size:.86rem; margin-bottom:4px;}
 .log-entry-body{color:var(--wood); font-size:.8rem; line-height:1.5; font-style:italic;}
@@ -579,46 +583,242 @@ function sightingTileStyle(index){
     'background-size:'+(SIGHTINGS_COLS*100)+'% '+(SIGHTINGS_ROWS*100)+'%; background-position:'+posX+'% '+posY+'%;';
 }
 
-// The Castaway's Log: weekly entries for the first month, then monthly,
-// unlocking as real days pass since state.startDate (Days Ashore). Oldest
-// first here; unlockedJournalEntries() reverses to newest-first for display.
-var JOURNAL = [
-  { when:"Week 1", title:"The Wreck (Boom!)", unlockDay:1,
-    body:"Woke up on the beach with no ship, soggy, and wondering if I should use less gunpowder next time. (Note to self: cannons are not for opening coconuts.) Built a leaky lean-to out of driftwood — it fell down twice before it stood up once. Found a barrel labeled CARROT JUICE that survived better than my ship did. Day one of my logbook: today I did NOT give up. That counts." },
-  { when:"Week 2", title:"Splinters", unlockDay:8,
-    body:"Tried to build a real shelter today. Hit my thumb with a rock (twice), tripped over the same root three times, and ate something purple that turned out to be totally fine, probably. Found an old treehouse frame already half-built in the palms — somebody beat me to it! Logged my first habit today just so I'd have ONE thing I did right." },
-  { when:"Week 3", title:"Knock Knock", unlockDay:15,
-    body:"Heard three knocks in the night. Told myself it was a coconut. Grabbed my (bent) cutlass and marched out anyway — it was a coconut. Still counts as brave! Sleeping better on the nights I actually DO the habit instead of just writing that I will. Getting the hang of this." },
-  { when:"Week 4", title:"Getting the Hang of It", unlockDay:22,
-    body:"A whole month?! I think. Lost count around day 19 and just started guessing. Fell out of the treehouse once (I'm fine). The knocking stopped, or I stopped noticing — either way, feels like progress. Starting to feel less like a disaster and more like an actual castaway. From here I'll write once a month instead of every week — steady as she goes, Captain Me." },
-  { when:"Month 2", title:"Two Gardens", unlockDay:50,
-    body:"Planted a second habit-garden today! Also fell in a tide pool trying to plant it. Worth it. Swear the treehouse grew an extra room since I last looked — either I'm losing it or something's helping me out here. Carrots are doing a LOT of the emotional heavy lifting on this island, not gonna lie." },
-  { when:"Month 3", title:"The Storm", unlockDay:78,
-    body:"Huge storm blew half my roof clean off. Kept the logbook dry by literally sitting on it. Did my habits out loud during the worst of it, because yelling into a hurricane felt like the right call. Found a rusty ship's wheel washed up after — don't have a ship, keeping it anyway. Might be a captain someday. A captain of nothing. It's fine." },
-  { when:"Month 4", title:"My Best Friend Is a Crab", unlockDay:106,
-    body:"Made a friend! A crab. It steals my stuff constantly. We're basically pirates together. Laughed so hard today I fell out of my hammock (again), and it was worth every bruise. Turns out doing the habits every day makes the falling-down days a lot less bad." },
-  { when:"Month 5", title:"The Map", unlockDay:134,
-    body:"Found half a burnt map stuffed in a crack in the treehouse wall. Someone left here in a HURRY. Spent three nights too spooked to sleep and three mornings doing my habits anyway, because that's just what I do now, apparently. This island has secrets. I intend to find every single one — preferably without falling in another tide pool." },
-  { when:"Month 6", title:"Halfway There", unlockDay:162,
-    body:"Six months! I've got MULTIPLE habit-gardens going now, which past-me (the one who blew up their own ship) would not believe. Still haven't figured out who built the treehouse. Starting to think some mysteries you don't solve — you just build a pretty good life right next to them." },
-  { when:"Month 7", title:"The Light", unlockDay:190,
-    body:"Saw a light out past the reef, three nights straight! Ship? Rescue? My eyes finally giving up? Didn't sleep a wink, did my habits anyway out of pure stubbornness. Turns out being stubborn is basically a superpower if you aim it the right way." },
-  { when:"Month 8", title:"Feathers, No Answers", unlockDay:218,
-    body:"The light's gone. No wreck, no note, no rescue — just a suspicious number of parrot feathers that definitely weren't here before. A year ago that would've kept me up a week. Now I just shrug, log my habits, and go to bed. Growth, probably." },
-  { when:"Month 9", title:"The Second Chest", unlockDay:246,
-    body:"Dug up ANOTHER sea chest today, buried even deeper than mine — older than me, older than the wheel, older than whoever drew that map. Someone survived out here way longer than a year. Suddenly my little logbook feels a lot less impressive and a lot more like a beginning." },
-  { when:"Month 10", title:"Actually Getting Good At This", unlockDay:274,
-    body:"Ten months of logbooks stacked up like the world's most boring treasure. Built a proper fire today — first try, no burnt eyebrows! Old me would've fallen in the fire pit. Hard days don't wreck me anymore. I just log them and keep going. That might be the real treasure. Don't tell the crab I said that." },
-  { when:"Month 11", title:"Something's Coming", unlockDay:302,
-    body:"Birds too loud, tide all wrong, and my crab is hoarding shells like it's the end of the world. Something's brewing out there. A year ago I'd have panicked. Instead I checked my shelter, did my habits, and went to bed on time like a very responsible pirate. Who even am I." },
-  { when:"Month 12", title:"One Year, One Very Determined Castaway", unlockDay:330,
-    body:"A full year on this rock! My wobbly lean-to is a real home now, and the habit-gardens have taken over the whole clearing. Still don't know who built the treehouse, what that light was, or where the second chest came from — and for once, that doesn't scare me, it just makes me curious. Whatever year two brings, I've got my logbook, my carrots, my crab, and a LOT more skill than the guy who washed up here soggy and confused. Bring it on." }
+// The Castaway's Log: every one of the 100 "New Discovery" sightings IS a
+// log entry -- there's no separate curated chapter list. Each entry is two
+// lines: line1 (SIGHTING_FLAVOR) is fixed to that exact icon and always
+// describes it specifically, so the picture and the text always agree.
+// line2 (GROWTH_LINE) is a fixed 100-step personal-growth arc that plays in
+// the *same order* for every player, keyed only to how many discoveries
+// they've made so far -- not to which random icon landed on that step. So
+// line1 differs in order for every player (sightings unlock in random order,
+// same as before); line2 is identical content in identical order for
+// everyone. The pairing of {random icon} with {universal growth beat N} is
+// what makes no two players' logs read the same, even though neither pool
+// is itself random. No calendar language anywhere, since discovery pacing
+// (see evaluateSightings()) varies by how consistently a player logs
+// habits, not by real elapsed time.
+
+var SIGHTING_FLAVOR = [
+  { title:"First Fruit", line1:"A banana palm by the shore. Ripe. Didn't share." },
+  { title:"A Little Color", line1:"Hibiscus outside the lean-to. Didn't plant it." },
+  { title:"Umbrella, Sort Of", line1:"Held a taro leaf over my head through the rain." },
+  { title:"Spiky Victory", line1:"Wrestled a pineapple out of the underbrush. Lost, mostly." },
+  { title:"Too Pretty For This Island", line1:"A wild orchid, growing out of a rotten log." },
+  { title:"Roots Everywhere", line1:"Got turned around in the mangroves. Again." },
+  { title:"It Breathes", line1:"The volcano hissed today. Did not investigate." },
+  { title:"Getting Closer", line1:"Watched the volcano spit lava. From very far away." },
+  { title:"Best Bath On The Island", line1:"Found a waterfall past the tree line. Best shower yet." },
+  { title:"Green Everywhere", line1:"This whole island is basically one giant fern." },
+  { title:"Feathers, No Answers", line1:"A parrot. Finally. After all those feathers." },
+  { title:"Local Landlord", line1:"An iguana's claimed my rock. Every morning this week." },
+  { title:"Thief #2", line1:"A monkey stole my hat. Watched me from a branch." },
+  { title:"The Committee", line1:"Three seabirds watch me do my habits now." },
+  { title:"Almost Lost A Toe", line1:"Nearly lost a toe to a dinner-plate-sized clam." },
+  { title:"Silver Everywhere", line1:"Surrounded by a whole cloud of small fish today." },
+  { title:"Not Today", line1:"A moray eel eyeballed me from the reef. Not today." },
+  { title:"Gliding By", line1:"A manta ray passed under me like a slow shadow." },
+  { title:"Nervous Swim", line1:"Swam a lot faster after spotting a barracuda." },
+  { title:"Look, Don't Touch", line1:"Pretty little fish in the reef. Did NOT touch it." },
+  { title:"Not Mine", line1:"A carved totem, half-buried. Definitely not mine." },
+  { title:"Somebody's Handiwork", line1:"A woven basket, wedged in the rocks. Better than mine." },
+  { title:"Found, Not Made", line1:"A proper spear, half-buried. Better made than anything I own." },
+  { title:"Empty, Sadly", line1:"Dug up a clay jar. Empty. Hoped for carrot juice." },
+  { title:"Actually Getting Good At This", line1:"Flint and tinder. Fire on the first strike." },
+  { title:"Fishing, Sort Of", line1:"Rigged up rope and hooks. Caught nothing." },
+  { title:"Water Duty", line1:"A gourd that holds water. Upgrade from cupped hands." },
+  { title:"Knock Knock", line1:"The knife I grabbed to go fight a coconut." },
+  { title:"Another One", line1:"ANOTHER logbook. Blank. Under a rock." },
+  { title:"Proper Equipment", line1:"A working quill and inkwell. Handwriting's never looked better." },
+  { title:"Told No One", line1:"Saw something in the water. Not writing it down." },
+  { title:"Salvage", line1:"Torn sailcloth, washed up. Patched the roof with it." },
+  { title:"The Wreck (Boom!)", line1:"A stray cannonball. Feet from where my ship went down." },
+  { title:"Chopping Duty", line1:"A solid hatchet, half-buried in the sand." },
+  { title:"Heavy, Rusted, Mine Now", line1:"An old flintlock. Doesn't fire. Looks incredible." },
+  { title:"Rich, Technically", line1:"A small pile of gold coins. Nothing to spend it on." },
+  { title:"Someone Important", line1:"A captain's coat. Moth-eaten. Still sharp." },
+  { title:"Very Fancy", line1:"A fine tricorn hat, feather and all." },
+  { title:"Signed By Someone", line1:"An old treaty scroll. Signature long gone." },
+  { title:"Fancy Navigation", line1:"A sextant in a wooden case. No idea how to use it." },
+  { title:"Cheers, I Guess", line1:"A carved mug. Toasted myself with carrot juice." },
+  { title:"Splinters", line1:"A plank of driftwood, finally straight enough to build with." },
+  { title:"Sneaky", line1:"Tiny footprints, straight to a hermit crab mid-getaway." },
+  { title:"Actual Fruit", line1:"Real grapes on the ridge. Ate the whole bunch." },
+  { title:"New Hobby", line1:"A drum washed ashore. Now I play it badly." },
+  { title:"Accessorizing", line1:"Strung a necklace from shells I've collected." },
+  { title:"Housekeeping", line1:"Made a duster from stray feathers. Treehouse's never been cleaner." },
+  { title:"Plumbing, Kind Of", line1:"A bucket shower, rigged with rope and a hook." },
+  { title:"Not This One", line1:"A smaller island, its own little volcano. Glad it's not mine." },
+  { title:"Not Mine Either", line1:"A ship on the horizon. Waved. It didn't stop." },
+  { title:"Home Base", line1:"The two palms by my shelter. My porch now." },
+  { title:"Old Fire", line1:"A scorched palm stump. Something burned here before I did." },
+  { title:"New View", line1:"Climbed the big dune, just to see the whole island." },
+  { title:"Tiny Treasure", line1:"A perfect sand dollar. Not a single crack." },
+  { title:"It's Loud", line1:"A conch shell. Blew it like in the stories." },
+  { title:"Sparkly Rocks", line1:"Tide-pool rocks with something sparkly in them. Kept three." },
+  { title:"The View From Here", line1:"Watched the sun set tonight. Just sat, for once." },
+  { title:"Two Gardens", line1:"A starfish, stuck to my sleeve out of the tide pool." },
+  { title:"Every Corner of This Island", line1:"A path worn through the jungle. All my own footsteps." },
+  { title:"Not Mine", line1:"A footprint on the far beach. Not my size." },
+  { title:"Almost Lost The Logbook", line1:"A wave nearly took the logbook out to sea." },
+  { title:"Showing Off", line1:"A dolphin, jumping clean out of the water. Showoff." },
+  { title:"Slow And Steady", line1:"A sea turtle came up onto the beach. We had a moment." },
+  { title:"Nope", line1:"Too many arms near my nets today. Nope." },
+  { title:"Points Somewhere", line1:"An old compass. Needle spins. Nowhere to go anyway." },
+  { title:"Still Can't Use It", line1:"A second sextant. Still can't use one. At least they match." },
+  { title:"Definitely Not Using This", line1:"A full anchor. No ship. Very heavy paperweight now." },
+  { title:"Nice Day For It", line1:"Calm skies. Logged the habit. No disasters today." },
+  { title:"Just A Drizzle", line1:"A light storm rolled through. Barely noticed." },
+  { title:"Something's Coming", line1:"Storm clouds building on the horizon. Don't like the look of it." },
+  { title:"More Gardens Than I Can Count", line1:"This treehouse. Still don't know who built it." },
+  { title:"Getting the Hang of It", line1:"The rope bridge that gave out under me. First crossing." },
+  { title:"Feels Official", line1:"A Jolly Roger, half-buried. Hung it up. Feels official now." },
+  { title:"Someone Tried", line1:"The remains of somebody's half-built raft. Didn't get far." },
+  { title:"The Storm", line1:"A rusty ship's wheel. Washed up. No ship in sight." },
+  { title:"Always Useful", line1:"A long coil of good rope. Already used four ways." },
+  { title:"The Light", line1:"A lantern, hung from the tallest palm. Signaling back." },
+  { title:"Nothing Out There", line1:"A spyglass. Scanned the horizon. Nothing but water." },
+  { title:"What's Inside", line1:"Another barrel washed up. Empty, this time." },
+  { title:"Somebody's Cargo", line1:"A stack of crates in the rocks. All empty." },
+  { title:"Not From Me", line1:"A message in a bottle. Not one I wrote." },
+  { title:"Snack Duty", line1:"A bunch of coconuts, down. No cannon required this time." },
+  { title:"Treat Yourself", line1:"Cracked a coconut. Drank it like a fancy drink, straw and all." },
+  { title:"Dinner, Sorted", line1:"A handful of root vegetables. Actual dinner tonight." },
+  { title:"Kept My Distance", line1:"A wild boar in camp. Looked at me. Left." },
+  { title:"Accidental Luxury", line1:"Cacao pods, growing wild. Never leaving if I figure these out." },
+  { title:"Upgrade", line1:"A machete, in good shape. Jungle-clearing's never been easier." },
+  { title:"The Map", line1:"Half a burnt map. Stuffed in a wall crack." },
+  { title:"Fancy Canteen", line1:"A two-chambered gourd. Water on one side, carrot juice the other." },
+  { title:"Dinner Is Served", line1:"A full net, for once. Didn't fall in the water." },
+  { title:"Backup Hat", line1:"A second tricorn hat. Fancy one, work one now." },
+  { title:"A Matching Set", line1:"A second flintlock. Still doesn't fire. Still incredible." },
+  { title:"On The Wall Now", line1:"A matched pair of cutlasses. Mounted over the door." },
+  { title:"Unlocked", line1:"A chest, and the key that opens it. Empty inside." },
+  { title:"The Second Chest", line1:"A second sea chest. Buried even deeper than mine." },
+  { title:"Roommate #2", line1:"A second hermit crab, moved in. My crab is thrilled. Lying, probably." },
+  { title:"My Best Friend Is a Crab", line1:"My best friend. Caught red-clawed, mid-heist. Again." },
+  { title:"Watching Me Work", line1:"A monkey, same branch, every day. Watching me log habits." },
+  { title:"Overhead Again", line1:"The same seagull, three days straight. Named it Steve." },
+  { title:"Puffed Up", line1:"Startled a pufferfish. It startled right back. Twice the size." }
 ];
+
+var GROWTH_LINE = [
+  "Didn't figure this out yet. Did it anyway.",
+  "Two in a row. Fragile streak. Doing it anyway.",
+  "Is this actually going to stick? No idea yet.",
+  "Missed nothing so far. Waiting for that to feel normal.",
+  "Trusting myself a little more than last week.",
+  "Still counting these out loud. Still counts.",
+  "First full stretch, no slips. Didn't wreck me.",
+  "Feels less like an experiment. More like a routine.",
+  "Easy day or hard day, both count the same.",
+  "Not thinking about quitting anymore.",
+  "Double digits. Didn't see that coming.",
+  "Noticing the days I forget to think about it.",
+  "This is just what I do now, apparently.",
+  "Doing it before I even decide to.",
+  "Longest streak I've had at anything. Still going.",
+  "The excuses are getting worse. Good sign.",
+  "Actually looking forward to logging it now.",
+  "Nobody's watching. Doing it anyway.",
+  "Bad day. Did it anyway. Maybe that's the point.",
+  "Who even is this guy? Not sure yet.",
+  "Feels less like a stunt, more like a life.",
+  "Planning around the habit instead of squeezing it in.",
+  "Forgot to dread it today. First time.",
+  "Hard days are still hard. Just shorter now.",
+  "Don't need a reason anymore. It's just reason enough.",
+  "People who give up don't get this far.",
+  "Never stuck with anything before. Might be now.",
+  "Stopped negotiating with myself. Just do it. Done.",
+  "Wouldn't recognize this version of me from the start.",
+  "Still here. Still doing it. Still surprised.",
+  "The habit's carrying me on the days I can't.",
+  "Easier isn't the same as boring. Glad about that.",
+  "Consistency's starting to feel a lot like pride.",
+  "Stopped worrying about tomorrow. Just did today's.",
+  "Guess that answers whether this was going to stick.",
+  "Used to need a reason to start. Not anymore.",
+  "Outlasted everything else I've tried to stick with.",
+  "The habit's just an ordinary Tuesday now.",
+  "Did the hard thing on an easy day. Practice.",
+  "Logbook's getting heavier. Good kind of heavy.",
+  "Stopped wondering if this sticks. It's stuck.",
+  "That early version of me feels very far away.",
+  "Did it on a day I really didn't want to.",
+  "Longer than most things I've stuck with, ever.",
+  "The habit doesn't need convincing anymore. Neither do I.",
+  "Stopped counting these. Just doing them. That's the goal.",
+  "Halfway through what's here. Still showing up.",
+  "Helping the habit along instead of just surviving it.",
+  "Hard days used to be the whole story. Now a footnote.",
+  "The surprise now is how normal this feels.",
+  "Doesn't feel like the middle anymore. Feels steady.",
+  "Not keeping score in my head. Just doing it.",
+  "Nobody warned me it'd get this quiet.",
+  "Strange thing, earning confidence from something this small.",
+  "Still asking who this guy is. Like the answer, though.",
+  "Not the same castaway who washed up here.",
+  "The doubts still show up. Don't stay as long.",
+  "Handled a bad stretch without it becoming a slide.",
+  "Less about willpower now. More about who I am.",
+  "This stopped being hard somewhere back there. Became mine.",
+  "Doing this for the version of me not here yet.",
+  "Longer than some jobs I've had.",
+  "The habit's tracking who I've become, not the other way.",
+  "Still finding reasons to keep at it, deep in.",
+  "Island got easier. Or I got harder to shake.",
+  "Didn't bet on getting this far. Here anyway.",
+  "Long stretch now. Still hard to believe.",
+  "Stopped being about surviving. Started being about living.",
+  "Outlasted the doubts, the excuses, one very rough storm.",
+  "'Giving up' doesn't come up as an option anymore.",
+  "Helping myself the way I hoped someone else would.",
+  "Island didn't get smaller. I got bigger than it.",
+  "This is just who I am here now.",
+  "Doesn't feel like proof anymore. Feels like home.",
+  "Still choosing it. One ordinary day at a time.",
+  "Stopped being amazed I'm still doing this. Just glad.",
+  "Didn't notice when the doubt got quiet. It just did.",
+  "Long past needing to prove anything to that guy.",
+  "Hard days still happen. None of them end the streak.",
+  "Never planned on getting this far. Earned it anyway.",
+  "The habit's background now, like breathing. Still matters.",
+  "That guy who couldn't build a lean-to? Stranger now.",
+  "Still logging. Still here. Still a little surprised.",
+  "No audience but myself. Turned out to be enough.",
+  "Stopped counting. Started just living it.",
+  "The habit built the island as much as the reverse.",
+  "Doing the hard thing on good days too. Keeps it honest.",
+  "Not a streak anymore. A life with this in it.",
+  "The doubts still visit. Know better than to stay now.",
+  "Whatever this island was supposed to break, it didn't.",
+  "Helping the next version of me, like the last one helped this one.",
+  "Stopped wondering if it'll stick. Know it already has.",
+  "Outlived the shipwreck, the storm, every excuse I tried.",
+  "Still turning the page every day, this far in.",
+  "Whatever's left here, I'll still be logging when I find it.",
+  "That guy who washed up here wouldn't believe this.",
+  "Close to the end of what's here. Not close to the end of this.",
+  "However many islands are left, the habit's coming along.",
+  "One discovery short of everything. Still turning pages.",
+  "Every corner of this island, found. Every day, logged. Both the treasure."
+];
+
 function daysAshore(state){ return daysSince(state.startDate) + 1; }
+// Builds one log entry per discovered sighting, in discovery order (index
+// 0 = first ever discovery), pairing that sighting's fixed flavor line with
+// the growth-arc line for that position. Newest-first for display.
 function unlockedJournalEntries(state){
-  var d = daysAshore(state);
-  return JOURNAL.filter(function(e){ return d >= e.unlockDay; }).slice().reverse();
+  return state.sightings.map(function(sightingIdx, position){
+    var f = SIGHTING_FLAVOR[sightingIdx];
+    return {
+      title: f.title,
+      sightingIdx: sightingIdx,
+      body: f.line1 + " " + GROWTH_LINE[position]
+    };
+  }).slice().reverse();
 }
+
 
 function onceoffCompletedCount(state){
   return state.habits.filter(function(h){ return h.type==="onceoff" && h.completions.length>0; }).length;
@@ -626,23 +826,6 @@ function onceoffCompletedCount(state){
 function todayStr(){ return new Date().toISOString().slice(0,10); }
 function monthStr(d){ return (d||new Date()).toISOString().slice(0,7); }
 
-// The Castaway's Log is dated in-world as if it were the 1700s: real month
-// and day pass through unchanged, but the year is compressed onto 17xx (e.g.
-// 2026 -> 1726) so entries always read like an old ship's logbook while still
-// tracking the real calendar.
-var JOURNAL_MONTH_NAMES = ["January","February","March","April","May","June",
-  "July","August","September","October","November","December"];
-function fictionalDate(d){
-  return JOURNAL_MONTH_NAMES[d.getMonth()]+" "+d.getDate()+", "+(1700+(d.getFullYear()%100));
-}
-// Each entry's in-world date is the real calendar date it unlocked on
-// (startDate + unlockDay-1 days), not the day the user happens to be reading it.
-function journalEntryDate(state, entry){
-  var start = state.startDate ? new Date(state.startDate+"T00:00:00") : new Date();
-  var d = new Date(start.getTime());
-  d.setDate(d.getDate() + (entry.unlockDay - 1));
-  return fictionalDate(d);
-}
 function daysSince(iso){
   if(!iso) return 0;
   var ms = Date.now() - new Date(iso+"T00:00:00").getTime();
@@ -687,6 +870,13 @@ function defaultState(){
     favoriteSightings:[],
     favoriteRewards:[],
     sightingsFilter:"all",
+    // Discovery pacing runs on its own day-capped counter rather than
+    // state.carrots directly -- see evaluateSightings() -- so New Discovery
+    // sightings (and their paired Castaway's Log entries, see
+    // unlockedJournalEntries()) unlock at a constant max of one per week no
+    // matter how many habits a player is tracking at once.
+    discoveryCarrots:0,
+    discoveryCarrotDays:[],
     screen:"logbook",
     pendingCelebration:null,
     toast:null,
@@ -735,24 +925,47 @@ function evaluateRewards(){
   evaluateSightings();
 }
 
+// True the first time, on a given calendar day, that any habit has a
+// completion logged for that day (month-token for monthly habits) -- used
+// to cap discovery pacing at one credit per day regardless of how many
+// habits get completed that day.
+function hasCompletionToday(state){
+  var t = todayStr(), m = monthStr();
+  return state.habits.some(function(h){
+    if(h.type==="monthly") return h.completions.indexOf(m)!==-1;
+    return h.completions.indexOf(t)!==-1;
+  });
+}
+
 // New Discovery: an open-ended collectible track, separate from the
 // structured REWARDS chain above. One random not-yet-discovered sighting
-// unlocks at every 7-carrot milestone, in step with the REWARDS chain's own
-// carrot-gated reward (Second Habit-Garden) rather than waiting for it --
-// both unlock together in the very first batch at 7 carrots, then every 7
-// after that (14, 21, 28...).
+// unlocks every 7 "discovery carrots" -- a separate, day-capped counter
+// (at most +1/day, see hasCompletionToday() above) rather than raw
+// state.carrots, so a player tracking several habits at once earns
+// discoveries at the exact same pace as a player tracking one: a constant
+// max of one discovery -- and one new Castaway's Log entry, see
+// unlockedJournalEntries() -- per week. Extra habits still grow
+// state.carrots normally to fund the REWARDS chain above.
 function evaluateSightings(){
   if(!state.onboarded) return;
-  var eligible = Math.min(SIGHTINGS_TOTAL, Math.floor(state.carrots/7));
-  var unlockedAny = false;
+  var t = todayStr();
+  if(state.discoveryCarrotDays.indexOf(t)===-1 && hasCompletionToday(state)){
+    state.discoveryCarrotDays.push(t);
+    state.discoveryCarrots++;
+  }
+  var eligible = Math.min(SIGHTINGS_TOTAL, Math.floor(state.discoveryCarrots/7));
+  var unlockedAny = false, lastNewIdx = null;
   while(state.sightings.length < eligible){
     var remaining = [];
     for(var i=0;i<SIGHTINGS_TOTAL;i++){ if(state.sightings.indexOf(i)===-1) remaining.push(i); }
     if(remaining.length===0) break;
-    state.sightings.push(remaining[Math.floor(Math.random()*remaining.length)]);
+    lastNewIdx = remaining[Math.floor(Math.random()*remaining.length)];
+    state.sightings.push(lastNewIdx);
     unlockedAny = true;
   }
-  if(unlockedAny){ showToast("🔭 New discovery!"); }
+  if(unlockedAny){
+    showToast(lastNewIdx!==null ? '🔭 New discovery! "'+SIGHTING_FLAVOR[lastNewIdx].title+'"' : "🔭 New discovery!");
+  }
 }
 
 function unlockStarterRewards(){
@@ -1245,8 +1458,10 @@ function renderJournalEntries(state){
   var html = '<div class="log-entries">';
   entries.forEach(function(e){
     html += '<div class="log-entry">';
-    html += '<span class="log-entry-when">'+journalEntryDate(state, e)+'</span>';
-    html += '<div class="log-entry-title">'+e.title+'</div>';
+    html += '<div class="log-entry-find">';
+    html += '<div class="log-entry-sighting" style="'+sightingTileStyle(e.sightingIdx)+'"></div>';
+    html += '<span class="log-entry-when">'+e.title+'</span>';
+    html += '</div>';
     html += '<p class="log-entry-body">'+e.body+'</p>';
     html += '</div>';
   });
