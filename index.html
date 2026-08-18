@@ -523,6 +523,42 @@ img.reward-hero{max-height:240px; max-width:100%; margin:0 auto 10px; border-rad
   background:var(--wood-dark); color:var(--parchment-hi); padding:10px 18px; border-radius:20px;
   font-size:.85rem; box-shadow:var(--shadow); z-index:80; animation:fadeIn .2s ease;
 }
+
+/* ---------- Coco Cannon ---------- */
+.coco-screen{
+  position:fixed; inset:0; z-index:65; display:flex; flex-direction:column;
+  background:linear-gradient(180deg,#233a24 0%, #14210f 70%, #0b1508 100%); color:var(--parchment-hi);
+}
+.coco-screen.hidden{display:none;}
+.coco-header{
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  padding:calc(10px + env(safe-area-inset-top)) 14px 8px;
+}
+.coco-back{background:none; border:none; color:var(--parchment-hi); font-size:1.25rem; padding:4px; line-height:1;}
+.coco-lives{display:flex; gap:2px; font-size:1rem; min-width:0;}
+.coco-lives .pip{font-size:1rem;}
+.coco-score{font-weight:700; font-size:.85rem; color:var(--gold); white-space:nowrap;}
+.coco-canvas-wrap{flex:1; position:relative; min-height:0;}
+.coco-canvas{width:100%; height:100%; display:block; touch-action:none;}
+.coco-overlay{
+  position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  text-align:center; gap:12px; padding:24px; background:rgba(8,14,7,.68);
+}
+.coco-overlay.hidden{display:none;}
+.coco-overlay h3{color:var(--parchment-hi); font-size:1.35rem; margin:0; text-shadow:0 2px 0 rgba(0,0,0,.5);}
+.coco-overlay p{color:var(--parchment-edge); font-size:.85rem; max-width:280px; margin:0; line-height:1.5;}
+.coco-overlay .coco-sub{color:var(--gold); font-size:.8rem; font-weight:700;}
+.coco-controls{
+  display:flex; align-items:center; justify-content:center; gap:16px;
+  padding:14px calc(14px + env(safe-area-inset-left)) calc(14px + env(safe-area-inset-bottom)) calc(14px + env(safe-area-inset-right));
+}
+.coco-btn{
+  width:64px; height:56px; border-radius:12px; background:var(--wood); color:var(--parchment-hi);
+  border:1px solid var(--wood-dark); font-size:1.3rem; box-shadow:0 3px 0 var(--wood-darker);
+}
+.coco-btn:active{transform:translateY(2px); box-shadow:0 1px 0 var(--wood-darker);}
+.coco-fire{background:var(--carrot); border-color:var(--carrot-deep); box-shadow:0 3px 0 var(--carrot-deep); font-size:1.5rem;}
+.coco-card-lives{margin-top:4px;}
 </style>
 </head>
 <body>
@@ -536,6 +572,29 @@ img.reward-hero{max-height:240px; max-width:100%; margin:0 auto 10px; border-rad
   <button class="bottom-tab" data-nav="logbook"><span class="bt-icon">&#128214;</span><span class="bt-label">Logbook</span></button>
   <button class="bottom-tab" data-nav="rewards"><span class="bt-icon"><svg viewBox="0 0 24 24" width="1.15em" height="1.15em" style="vertical-align:-2px" aria-hidden="true"><path d="M3 11 C3 6 6 4 12 4 C18 4 21 6 21 11 Z" fill="#6b4526" stroke="#3e2714" stroke-width="0.8"/><rect x="3" y="11" width="18" height="8" rx="1.5" fill="#6b4526" stroke="#3e2714" stroke-width="0.8"/><rect x="6.4" y="4" width="1.7" height="15" fill="#c6992f"/><rect x="15.9" y="4" width="1.7" height="15" fill="#c6992f"/><rect x="3" y="10.4" width="18" height="1.4" fill="#c6992f"/><rect x="10.1" y="9.2" width="3.8" height="4.4" rx="1" fill="#c6992f" stroke="#3e2714" stroke-width="0.5"/></svg></span><span class="bt-label">Rewards</span></button>
 </nav>
+<!-- Coco Cannon -- same "lives outside #app, wired once" reasoning as the
+     bottombar above, but for a stronger reason: this holds a <canvas> with
+     a live requestAnimationFrame loop. If it were part of #app's innerHTML,
+     any render() during a game (which happens constantly -- every habit
+     toggle, every toast) would destroy and recreate the canvas, losing its
+     2D context and killing the loop mid-frame. See initCocoCannon()/
+     syncCocoScreenUI() in the script below. -->
+<div class="coco-screen hidden" id="cocoScreen">
+  <div class="coco-header">
+    <button class="coco-back" data-coco-back aria-label="Close Coco Cannon">✕</button>
+    <div class="coco-lives" id="cocoLivesDisplay"></div>
+    <div class="coco-score" id="cocoScoreDisplay">Score: 0</div>
+  </div>
+  <div class="coco-canvas-wrap">
+    <canvas class="coco-canvas" id="cocoCanvas"></canvas>
+    <div class="coco-overlay hidden" id="cocoOverlay"></div>
+  </div>
+  <div class="coco-controls">
+    <button class="coco-btn" id="cocoLeftBtn" aria-label="Move left">◀</button>
+    <button class="coco-btn coco-fire" id="cocoFireBtn" aria-label="Fire coconut">🥥</button>
+    <button class="coco-btn" id="cocoRightBtn" aria-label="Move right">▶</button>
+  </div>
+</div>
 <script>
 (function(){
 "use strict";
@@ -585,6 +644,23 @@ var REWARDS = [
     // The road not taken -- a glimpse of the *other* castaway look, as a
     // small surprise alongside your own chosen portrait.
     image: function(state){ return state.avatar === "female" ? ASSET.cutout_male : ASSET.cutout_female; }
+  },
+  {
+    // Not rendered via the generic unlocked-rewards loop below (see
+    // renderRewardsScreen(), which filters this id out and instead renders
+    // its own interactive renderCocoCannonCard() at a fixed position right
+    // after Treasure Hunt) -- kept in this array purely so the existing
+    // condition-check + "New Reward Unlocked!" celebration machinery in
+    // evaluateRewards() applies to it same as everything else. Placed
+    // right after the starters so it's the very first thing "Next
+    // Rewards" points to -- logging a first habit is meant to unlock it
+    // almost immediately.
+    id: "coco_cannon",
+    title: "Coco Cannon",
+    desc: "Defend your carrot seeds from Captain Crow and his evil garden invaders.",
+    medallion: "🥥",
+    condition: function(state){ return state.habits.some(function(h){ return h.completions.length>0; }); },
+    progress: function(){ return "Log a habit to unlock"; }
   },
   {
     id: "second_garden",
@@ -1061,6 +1137,16 @@ function defaultState(){
     treasureMapComplete:false,
     pendingTreasureFound:null,
     pendingMapComplete:false,
+    // Coco Cannon -- cocoLives IS the in-game life count directly (not a
+    // separate "bank" vs "active" split): earned at most 1/day (same
+    // day-cap pattern as discoveryCarrots/treasureMoveDays, see
+    // evaluateCocoCannon()), capped at 7, and only ever spent when a crow
+    // actually reaches the bottom row. Quitting or clearing a level never
+    // costs anything, so a session can always safely resume wherever the
+    // player left off.
+    cocoLives:0,
+    cocoLivesDays:[],
+    cocoHighScore:0,
     screen:"logbook",
     pendingCelebration:null,
     toast:null,
@@ -1111,6 +1197,19 @@ function evaluateRewards(){
     }
   }
   evaluateSightings();
+  evaluateCocoCannon();
+}
+
+// Coco Cannon lives: same one-credit-per-calendar-day cap as New Discovery/
+// Treasure Hunt (see hasCompletionToday() below) -- at most +1 life per
+// day, capped at 7, regardless of how many habits get completed that day.
+function evaluateCocoCannon(){
+  if(!state.onboarded) return;
+  var t = todayStr();
+  if(state.cocoLivesDays.indexOf(t)===-1 && hasCompletionToday(state)){
+    state.cocoLivesDays.push(t);
+    state.cocoLives = Math.min(7, state.cocoLives+1);
+  }
 }
 
 // True the first time, on a given calendar day, that any habit has a
@@ -1199,6 +1298,7 @@ function render(){
   root.innerHTML = state.onboarded ? renderApp() : renderOnboarding();
   wireEvents();
   syncBottombarUI(); // bottombar lives outside #app -- keep it in sync separately, see initBottombar()
+  syncCocoScreenUI(); // same reasoning -- see initCocoCannon()
 }
 
 function renderOnboarding(){
@@ -1582,6 +1682,21 @@ function renderNewDiscoveryCard(favorited){
   return html;
 }
 
+// Lives shown here are read live from state.cocoLives -- the same value
+// the game itself plays with directly (see initCocoCannon()), not a
+// separate summary/snapshot.
+function renderCocoCannonCard(favorited){
+  var html = '<div class="reward-card" data-action="open-coco-cannon">';
+  html += '<div class="reward-media"><div class="medallion">🥥</div></div>';
+  html += '<button class="reward-heart '+(favorited?'favorited':'')+'" data-action="toggle-favorite-reward" data-id="coco_cannon" aria-label="Favorite">'+(favorited?'❤️':'🤍')+'</button>';
+  html += '<div class="reward-body">';
+  html += '<div class="reward-title">Coco Cannon</div>';
+  html += '<div class="reward-desc">Defend your carrot seeds from Captain Crow and his evil garden invaders.</div>';
+  html += '<div class="pip-row compact coco-card-lives">'+carrotPipsHtml(state.cocoLives,7)+'</div>';
+  html += '</div></div>';
+  return html;
+}
+
 function renderUnlockedRewardCard(r, favorited){
   var html = '<div class="reward-card" data-action="show-reward-detail" data-id="'+r.id+'">';
   html += '<div class="reward-media">';
@@ -1632,6 +1747,15 @@ function renderRewardsScreen(){
   var treasurePinned = !state.treasureMapComplete || treasureFavorited;
   if(treasurePinned){ html += renderTreasureHuntCard(treasureFavorited); }
 
+  // Coco Cannon sits right after Treasure Hunt, once unlocked (see its
+  // REWARDS-array condition -- logging a first habit) -- a fixed position
+  // rather than something that competes in the favorite-sort below,
+  // mirroring Treasure Hunt's own placement immediately above it.
+  if(state.unlocks.coco_cannon){
+    var cocoFavorited = state.favoriteRewards.indexOf("coco_cannon")!==-1;
+    html += renderCocoCannonCard(cocoFavorited);
+  }
+
   // Every other card (New Discovery + each unlocked REWARDS entry) can be
   // favorited from its own main card (the heart button rendered on each,
   // never tucked into a detail view) to jump the queue ahead of whichever
@@ -1644,7 +1768,7 @@ function renderRewardsScreen(){
   // before they're even relevant.
   var newDiscoveryFavorited = state.favoriteRewards.indexOf("new_discovery")!==-1;
   var otherCards = [{ favorited: newDiscoveryFavorited, html: renderNewDiscoveryCard(newDiscoveryFavorited) }];
-  REWARDS.filter(function(r){ return !!state.unlocks[r.id]; }).forEach(function(r){
+  REWARDS.filter(function(r){ return !!state.unlocks[r.id] && r.id!=="coco_cannon"; }).forEach(function(r){
     var favorited = state.favoriteRewards.indexOf(r.id)!==-1;
     otherCards.push({ favorited: favorited, html: renderUnlockedRewardCard(r, favorited) });
   });
@@ -2038,6 +2162,9 @@ function onAction(e){
       break;
     case "show-sightings-gallery":
       navigateTo(function(){ state.screen = "sightings-gallery-modal"; });
+      break;
+    case "open-coco-cannon":
+      navigateTo(function(){ state.screen = "coco-cannon"; });
       break;
     case "show-next-rewards-detail":
       navigateTo(function(){ state.screen = "next-rewards-detail-modal"; });
@@ -2988,6 +3115,312 @@ function syncBottombarUI(){
 }
 
 /* =========================================================
+   COCO CANNON -- Space-Invaders-style mini-game reward. Runs on a
+   persistent canvas kept OUTSIDE the render()-owned #app subtree (see the
+   HTML comment above #cocoScreen) -- render() replaces #app's entire
+   innerHTML on every state change, which would tear down a live canvas +
+   its 2D context mid-frame, every single habit toggle.
+
+   Levels 1-7 spawn that many crows at once (level N = N crows); clearing
+   all of them (shot or escaped past the danger line) advances to the next
+   level. After level 7, Captain Crow appears alone -- a red crow that
+   takes 3 hits instead of 1 and falls faster than any regular crow -- then
+   it loops back to level 1. cocoLives IS state.cocoLives directly (see
+   evaluateCocoCannon() above): earning is day-capped and persistent, but
+   spending only happens when a crow reaches the bottom row, so quitting
+   or clearing a level never costs anything.
+   ========================================================= */
+var COCO_MAX_LEVEL = 7; // Captain Crow is the encounter right after this, then it loops back to 1
+
+// No crow/cannon/coconut emoji reads consistently across devices (ZWJ
+// sequences like the crow one especially), so these are hand-drawn canvas
+// shapes instead -- same reasoning as chestIconSvg() elsewhere in this file.
+function cocoDrawCrow(ctx, x, y, isCaptain){
+  var body = isCaptain ? "#a33a2c" : "#241a10";
+  var wing = isCaptain ? "#7a2a20" : "#3e2e1c";
+  var s = isCaptain ? 16 : 12;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = wing;
+  ctx.beginPath();
+  ctx.moveTo(-s*1.4, 0); ctx.lineTo(-s*0.3, -s*0.35); ctx.lineTo(-s*0.3, s*0.35);
+  ctx.closePath(); ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(s*1.4, 0); ctx.lineTo(s*0.3, -s*0.35); ctx.lineTo(s*0.3, s*0.35);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = body;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, s*0.55, s*0.4, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = "#c6992f";
+  ctx.beginPath();
+  ctx.moveTo(0, s*0.08); ctx.lineTo(s*0.55, 0); ctx.lineTo(0, -s*0.08);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+function cocoDrawCannon(ctx, x, y, w){
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = "#241a10";
+  ctx.beginPath(); ctx.arc(-w*0.35, w*0.28, w*0.22, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(w*0.35, w*0.28, w*0.22, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = "#6b4526";
+  ctx.fillRect(-w*0.55, w*0.05, w*1.1, w*0.32);
+  ctx.fillStyle = "#3e2714";
+  ctx.save();
+  ctx.rotate(-0.12);
+  ctx.fillRect(-w*0.22, -w*0.9, w*0.44, w*0.9);
+  ctx.restore();
+  ctx.restore();
+}
+function cocoDrawCoconut(ctx, x, y){
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = "#6b4526";
+  ctx.beginPath(); ctx.arc(0, 0, 6, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = "#3e2714"; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(-4,-2); ctx.lineTo(4,-2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-3,3); ctx.lineTo(3,3); ctx.stroke();
+  ctx.restore();
+}
+
+// Reassigned by initCocoCannon() (called once at bootstrap, below) --
+// declared up front so syncCocoScreenUI() always has something callable
+// even on the very first render() before bootstrap finishes wiring it.
+var cocoStart = function(){}, cocoStop = function(){};
+
+function initCocoCannon(){
+  var screenEl = document.getElementById("cocoScreen");
+  if(!screenEl) return; // defensive -- always present in the real page shell
+  var canvas = document.getElementById("cocoCanvas");
+  var ctx = canvas.getContext("2d");
+  var overlay = document.getElementById("cocoOverlay");
+  var livesEl = document.getElementById("cocoLivesDisplay");
+  var scoreEl = document.getElementById("cocoScoreDisplay");
+  var leftBtn = document.getElementById("cocoLeftBtn");
+  var rightBtn = document.getElementById("cocoRightBtn");
+  var fireBtn = document.getElementById("cocoFireBtn");
+  var backBtn = screenEl.querySelector("[data-coco-back]");
+
+  var W = 320, H = 480; // logical (CSS-pixel) play-field size, recomputed on resize
+  var running = false, rafId = null, lastTs = 0;
+  var moveLeft = false, moveRight = false;
+  var cannon, coconut, crows, level, score, phase, sinceLevelStart;
+
+  function resizeCanvas(){
+    var rect = canvas.parentNode.getBoundingClientRect();
+    W = Math.max(200, rect.width);
+    H = Math.max(280, rect.height);
+    var dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(W*dpr);
+    canvas.height = Math.round(H*dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  function cannonY(){ return H*0.90; }
+  function dangerY(){ return H*0.84; }
+
+  function newCrow(isCaptain){
+    return {
+      baseX: 30 + Math.random()*(W-60),
+      y: -20 - Math.random()*40,
+      phase: Math.random()*Math.PI*2,
+      hp: isCaptain ? 3 : 1,
+      captain: !!isCaptain,
+      alive: true
+    };
+  }
+  function levelCrowSpeed(isCaptain){
+    // Captain Crow moves a bit faster than any regular level -- levels 1-7
+    // ramp gently, level 7's own speed is the ceiling for "regular" crows.
+    if(isCaptain) return (40 + (COCO_MAX_LEVEL-1)*3.5) * 1.35;
+    return 40 + (level-1)*3.5; // px/sec
+  }
+  function spawnLevel(){
+    crows = [];
+    if(level > COCO_MAX_LEVEL){ crows.push(newCrow(true)); }
+    else { for(var i=0;i<level;i++){ crows.push(newCrow(false)); } }
+    sinceLevelStart = 0;
+  }
+  function resetGame(){
+    cannon = { x: W/2, w: 30, speed: 190 }; // px/sec
+    coconut = null;
+    level = 1;
+    score = 0;
+    phase = "ready";
+    spawnLevel();
+    updateHud();
+    draw();
+    showOverlay();
+  }
+  function updateHud(){
+    livesEl.innerHTML = carrotPipsHtml(state.cocoLives, 7);
+    scoreEl.textContent = "Score: " + score;
+  }
+  function showOverlay(){
+    overlay.classList.remove("hidden");
+    if(phase==="ready"){
+      overlay.innerHTML =
+        '<h3>Coco Cannon</h3>' +
+        '<p>Captain Crow and his flock are after your carrot seeds. Shoot them down before they land!</p>' +
+        (state.cocoHighScore ? '<div class="coco-sub">Best score: '+state.cocoHighScore+'</div>' : '') +
+        (state.cocoLives>0
+          ? '<button class="btn" id="cocoStartBtn">Start</button>'
+          : '<p>You\'re out of carrots -- log a habit today to earn one.</p>');
+    } else if(phase==="gameover"){
+      var beat = score>0 && score===state.cocoHighScore;
+      overlay.innerHTML =
+        '<h3>Garden Overrun!</h3>' +
+        '<p>Final score: '+score+(beat?' -- new best!':'')+'</p>' +
+        (state.cocoLives>0
+          ? '<button class="btn" id="cocoStartBtn">Play Again</button>'
+          : '<p>Log a habit today to earn another life.</p>');
+    }
+    var startBtn = document.getElementById("cocoStartBtn");
+    if(startBtn) startBtn.addEventListener("click", startPlaying);
+  }
+  function hideOverlay(){ overlay.classList.add("hidden"); overlay.innerHTML = ""; }
+
+  function startPlaying(){
+    if(state.cocoLives<=0){ showOverlay(); return; }
+    if(phase==="gameover"){ level=1; score=0; spawnLevel(); }
+    phase = "playing";
+    hideOverlay();
+    updateHud();
+  }
+  function loseLife(){
+    state.cocoLives = Math.max(0, state.cocoLives-1);
+    save();
+    updateHud();
+    if(state.cocoLives<=0) endGame();
+  }
+  function endGame(){
+    phase = "gameover";
+    if(score > state.cocoHighScore){ state.cocoHighScore = score; save(); }
+    showOverlay();
+  }
+  function fire(){
+    if(phase!=="playing" || coconut) return; // one coconut in flight at a time, classic Space Invaders balance
+    coconut = { x: cannon.x, y: cannonY()-14, speed: 260 };
+  }
+
+  function update(dt){
+    if(phase!=="playing") return;
+    sinceLevelStart += dt;
+    if(moveLeft) cannon.x -= cannon.speed*dt;
+    if(moveRight) cannon.x += cannon.speed*dt;
+    cannon.x = Math.max(cannon.w/2+4, Math.min(W-cannon.w/2-4, cannon.x));
+
+    if(coconut){
+      coconut.y -= coconut.speed*dt;
+      if(coconut.y < -10) coconut = null;
+    }
+
+    var anyAlive = false;
+    for(var i=0;i<crows.length;i++){
+      var c = crows[i];
+      if(!c.alive) continue;
+      anyAlive = true;
+      c.y += levelCrowSpeed(c.captain)*dt;
+      c.drawX = c.baseX + Math.sin(sinceLevelStart*2 + c.phase) * 14;
+      if(coconut){
+        var dx = c.drawX - coconut.x, dy = c.y - coconut.y;
+        if(Math.abs(dx) < 14 && Math.abs(dy) < 14){
+          c.hp--;
+          coconut = null;
+          if(c.hp<=0){
+            c.alive = false;
+            score += c.captain ? 500 : 10*level;
+            updateHud();
+          }
+        }
+      }
+      if(c.alive && c.y >= dangerY()){
+        c.alive = false;
+        loseLife();
+      }
+    }
+    if(!anyAlive && phase==="playing"){
+      level++;
+      if(level > COCO_MAX_LEVEL+1) level = 1;
+      spawnLevel();
+    }
+  }
+
+  function draw(){
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = "#2a1f14";
+    ctx.fillRect(0, H-28, W, 28); // soil floor band
+    cocoDrawCannon(ctx, cannon.x, cannonY(), cannon.w);
+    if(coconut) cocoDrawCoconut(ctx, coconut.x, coconut.y);
+    for(var i=0;i<crows.length;i++){
+      var c = crows[i];
+      if(!c.alive) continue;
+      cocoDrawCrow(ctx, c.drawX!==undefined ? c.drawX : c.baseX, c.y, c.captain);
+    }
+  }
+
+  function loop(ts){
+    if(!running) return;
+    var dt = Math.min(0.05, (ts-lastTs)/1000 || 0);
+    lastTs = ts;
+    update(dt);
+    draw();
+    rafId = requestAnimationFrame(loop);
+  }
+  function start(){
+    if(running) return;
+    running = true;
+    resizeCanvas();
+    if(!cannon) resetGame(); else { updateHud(); draw(); if(phase!=="playing") showOverlay(); }
+    lastTs = (window.performance && performance.now) ? performance.now() : Date.now();
+    rafId = requestAnimationFrame(loop);
+  }
+  function stop(){
+    running = false;
+    if(rafId){ cancelAnimationFrame(rafId); rafId = null; }
+  }
+
+  // Press-and-hold buttons (not just click, so movement continues while
+  // held) plus arrow keys/space for desktop testing. All wired exactly
+  // once here, like initBottombar() -- never from wireEvents().
+  function bindHold(btn, onDown, onUp){
+    btn.addEventListener("touchstart", function(e){ e.preventDefault(); onDown(); }, {passive:false});
+    btn.addEventListener("touchend", function(e){ e.preventDefault(); onUp(); }, {passive:false});
+    btn.addEventListener("mousedown", onDown);
+    btn.addEventListener("mouseup", onUp);
+    btn.addEventListener("mouseleave", onUp);
+  }
+  bindHold(leftBtn, function(){ moveLeft=true; }, function(){ moveLeft=false; });
+  bindHold(rightBtn, function(){ moveRight=true; }, function(){ moveRight=false; });
+  fireBtn.addEventListener("click", fire);
+  backBtn.addEventListener("click", function(){ closeModal(); });
+  document.addEventListener("keydown", function(e){
+    if(state.screen!=="coco-cannon") return;
+    if(e.key==="ArrowLeft") moveLeft = true;
+    else if(e.key==="ArrowRight") moveRight = true;
+    else if(e.key===" "){ e.preventDefault(); fire(); }
+  });
+  document.addEventListener("keyup", function(e){
+    if(e.key==="ArrowLeft") moveLeft = false;
+    else if(e.key==="ArrowRight") moveRight = false;
+  });
+  window.addEventListener("resize", function(){ if(running) resizeCanvas(); });
+
+  cocoStart = start;
+  cocoStop = stop;
+}
+// Called at the end of every render() (see render() above) to start/stop
+// the game loop and show/hide the persistent canvas based on state.screen
+// -- same reasoning as syncBottombarUI().
+function syncCocoScreenUI(){
+  var el = document.getElementById("cocoScreen");
+  if(!el) return;
+  var active = state.screen === "coco-cannon";
+  el.classList.toggle("hidden", !active);
+  if(active) cocoStart(); else cocoStop();
+}
+
+/* =========================================================
    PULL-TO-REFRESH -- forces an update check on demand instead of waiting
    for backgrounding/foregrounding to trigger one. Only activates when the
    touch starts at the very top of the page's scroll (this app's screens all
@@ -3051,6 +3484,7 @@ save();
 render();
 try{ history.replaceState(currentNavState(), ""); }catch(e){} // the first screen shown on load establishes the baseline
 initBottombar();
+initCocoCannon();
 
 if(!state.onboarded){
   maybeOfferAutoRestore();
