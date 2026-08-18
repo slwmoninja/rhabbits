@@ -1536,6 +1536,47 @@ function renderMapCompleteModal(){
   return html;
 }
 
+// New Discovery's own Rewards-grid card -- the favorite heart lives here
+// (the main card view), not inside the sightings-gallery detail modal,
+// same contract as every other favoritable card below: favoriting pins it
+// forward, right after Next Rewards.
+function renderNewDiscoveryCard(favorited){
+  var html = '<div class="reward-card" data-action="show-sightings-gallery">';
+  if(state.sightings.length===0){
+    // "?" placeholder pre-discovery -- only ever seen on pre-existing saves
+    // from before unlockFirstDiscoveryFree() shipped; every new player gets
+    // sightings[0] for free at finishOnboarding, so this branch is
+    // otherwise unreachable.
+    html += '<div class="reward-media"><div class="medallion">❓</div></div>';
+  } else {
+    var latestIdx = state.sightings[state.sightings.length-1];
+    html += '<div class="reward-media square"><div class="sighting-hero" style="'+sightingTileStyle(latestIdx)+'"></div></div>';
+  }
+  html += '<button class="reward-heart '+(favorited?'favorited':'')+'" data-action="toggle-favorite-reward" data-id="new_discovery" aria-label="Favorite">'+(favorited?'❤️':'🤍')+'</button>';
+  html += '<div class="reward-body">';
+  html += '<div class="reward-title">New Discovery</div>';
+  html += '<div class="pip-row compact">'+carrotPipsHtml(state.discoveryCarrots%7,7)+'</div>';
+  html += '</div></div>';
+  return html;
+}
+
+function renderUnlockedRewardCard(r, favorited){
+  var html = '<div class="reward-card" data-action="show-reward-detail" data-id="'+r.id+'">';
+  html += '<div class="reward-media">';
+  if(r.image){ html += '<img src="'+r.image(state)+'" alt="">'; }
+  else { html += '<div class="medallion">'+r.medallion+'</div>'; }
+  html += '</div>';
+  html += r.starter ? '<div class="reward-ribbon">Starter</div>' : '<div class="reward-ribbon">Unlocked</div>';
+  html += '<button class="reward-heart '+(favorited?'favorited':'')+'" data-action="toggle-favorite-reward" data-id="'+r.id+'" aria-label="Favorite">'+(favorited?'❤️':'🤍')+'</button>';
+  html += '<div class="reward-body">';
+  html += '<div class="reward-title">'+r.title+'</div>';
+  html += '<div class="reward-desc">'+r.desc+'</div>';
+  var u = state.unlocks[r.id];
+  html += '<div class="reward-status unlocked">'+(u.reason?u.reason:'Unlocked '+u.unlockedAt)+'</div>';
+  html += '</div></div>';
+  return html;
+}
+
 function renderRewardsScreen(){
   var html = '<section class="screen">';
   html += '<h2 style="color:var(--parchment-hi); margin-bottom:4px;">Your Rewards</h2>';
@@ -1561,56 +1602,36 @@ function renderRewardsScreen(){
   // Treasure Hunt sits right after Next Rewards -- it answers the same
   // "what am I working toward" question via a completely different,
   // exploration-based track -- for as long as there's still map left to
-  // uncover. Once the whole island is mapped it steps aside so newer
-  // unlocked rewards can take that #2 slot instead (see the un-pinned render
-  // call further down), unless the player has favorited it, which keeps it
-  // pinned here regardless -- same "favoriting keeps it forward" contract as
-  // the reward-heart on every unlocked REWARDS card below.
+  // uncover, taking priority over every other favorited card below. Once
+  // the whole island is mapped it steps aside (see the un-pinned render
+  // call further down) unless the player has favorited it, which keeps it
+  // pinned here regardless.
   var treasureFavorited = state.favoriteRewards.indexOf("treasure_hunt")!==-1;
   var treasurePinned = !state.treasureMapComplete || treasureFavorited;
   if(treasurePinned){ html += renderTreasureHuntCard(treasureFavorited); }
 
-  // New Discovery gets one summary card here (not its own inline section)
-  // -- "?" placeholder pre-discovery (only ever seen by pre-existing saves
-  // from before unlockFirstDiscoveryFree() shipped; every new player gets
-  // sightings[0] for free at finishOnboarding, so this branch is otherwise
-  // unreachable), then always the most recently discovered sighting as its
-  // thumbnail. Progress toward the *next* discovery is a compact carrot-pip
-  // row -- same visual language as the Logbook's carrot-pip row -- instead
-  // of a text count, to keep the card to one line no matter the state.
-  html += '<div class="reward-card" data-action="show-sightings-gallery">';
-  if(state.sightings.length===0){
-    html += '<div class="reward-media"><div class="medallion">❓</div></div>';
-  } else {
-    var latestIdx = state.sightings[state.sightings.length-1];
-    html += '<div class="reward-media square"><div class="sighting-hero" style="'+sightingTileStyle(latestIdx)+'"></div></div>';
-  }
-  html += '<div class="reward-body">';
-  html += '<div class="reward-title">New Discovery</div>';
-  html += '<div class="pip-row compact">'+carrotPipsHtml(state.discoveryCarrots%7,7)+'</div>';
-  html += '</div></div>';
-
-  // Unlocked rewards each get their own real card. Everything still locked
+  // Every other card (New Discovery + each unlocked REWARDS entry) can be
+  // favorited from its own main card (the heart button rendered on each,
+  // never tucked into a detail view) to jump the queue ahead of whichever
+  // of these aren't favorited -- the whole point being that once there are
+  // enough unlocked rewards to actually scroll past, a player can choose
+  // which ones they want to keep front-and-center. Everything still locked
   // beyond the "Next Rewards" teaser above is intentionally not spelled out
   // individually -- seeing "Monthly & Once-off Tasks" or "Bucket List
   // Buccaneer" as their own locked cards on day one is just clutter/overwhelm
   // before they're even relevant.
+  var newDiscoveryFavorited = state.favoriteRewards.indexOf("new_discovery")!==-1;
+  var otherCards = [{ favorited: newDiscoveryFavorited, html: renderNewDiscoveryCard(newDiscoveryFavorited) }];
   REWARDS.filter(function(r){ return !!state.unlocks[r.id]; }).forEach(function(r){
     var favorited = state.favoriteRewards.indexOf(r.id)!==-1;
-    html += '<div class="reward-card" data-action="show-reward-detail" data-id="'+r.id+'">';
-    html += '<div class="reward-media">';
-    if(r.image){ html += '<img src="'+r.image(state)+'" alt="">'; }
-    else { html += '<div class="medallion">'+r.medallion+'</div>'; }
-    html += '</div>';
-    html += r.starter ? '<div class="reward-ribbon">Starter</div>' : '<div class="reward-ribbon">Unlocked</div>';
-    html += '<button class="reward-heart '+(favorited?'favorited':'')+'" data-action="toggle-favorite-reward" data-id="'+r.id+'" aria-label="Favorite">'+(favorited?'❤️':'🤍')+'</button>';
-    html += '<div class="reward-body">';
-    html += '<div class="reward-title">'+r.title+'</div>';
-    html += '<div class="reward-desc">'+r.desc+'</div>';
-    var u = state.unlocks[r.id];
-    html += '<div class="reward-status unlocked">'+(u.reason?u.reason:'Unlocked '+u.unlockedAt)+'</div>';
-    html += '</div></div>';
+    otherCards.push({ favorited: favorited, html: renderUnlockedRewardCard(r, favorited) });
   });
+  // Stable partition, not a full re-sort -- favorited cards keep their
+  // relative order among themselves (New Discovery first, then REWARDS
+  // array order), same for the unfavorited ones, so favoriting one card
+  // never reshuffles any other pair's relative order.
+  otherCards.filter(function(c){ return c.favorited; }).forEach(function(c){ html += c.html; });
+  otherCards.filter(function(c){ return !c.favorited; }).forEach(function(c){ html += c.html; });
 
   // Demoted position: map fully uncovered and not favorited -- see the
   // pinned render call above for the paired condition.
