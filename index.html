@@ -342,6 +342,10 @@ img{max-width:100%; display:block;}
   width:32px; height:32px; border-radius:6px; flex-shrink:0;
   background-repeat:no-repeat; border:1px solid var(--parchment-edge);
 }
+.log-entry-sighting-icon{
+  background-color:var(--parchment); display:flex; align-items:center; justify-content:center;
+}
+.log-entry-sighting-icon img{width:70%; height:70%; object-fit:contain;}
 .log-entry-when{
   font-size:.72rem; font-style:italic; font-weight:700; color:var(--carrot-deep); line-height:1.3;
 }
@@ -712,6 +716,15 @@ var SIGHTING_FLAVOR = [
   { title:"Puffed Up", line1:"Startled a pufferfish. It startled right back. Twice the size." }
 ];
 
+// The opening act -- unlike every other Castaway's Log entry (gated behind
+// discovery pacing, see evaluateSightings()), this one is always present
+// the moment a player is onboarded: it's the reason the story starts at
+// all, not a milestone earned along the way.
+var DAY_ONE_ENTRY = {
+  title: "Day One",
+  body: "Woke up on the beach, soaked through. No ship in sight -- just smoke still hanging over the water. Might've loaded that last cannon a little heavy. Lesson learned, the hard way."
+};
+
 var GROWTH_INTERVAL = 4; // one growth beat at the 1st discovery, then every 4th after (~monthly, matching the 1/week discovery pace)
 var GROWTH_LINE = [
   "I was scared. I did it anyway. That's how every good story starts.",
@@ -760,7 +773,7 @@ function daysAshore(state){ return daysSince(state.startDate) + 1; }
 // a growth-arc line where growthLineForPosition() returns one (most
 // discoveries are pure discovery, line1 alone). Newest-first for display.
 function unlockedJournalEntries(state){
-  return state.sightings.map(function(sightingIdx, position){
+  var entries = state.sightings.map(function(sightingIdx, position){
     var f = SIGHTING_FLAVOR[sightingIdx];
     var growth = growthLineForPosition(position);
     return {
@@ -769,6 +782,10 @@ function unlockedJournalEntries(state){
       body: growth ? (f.line1 + " " + growth) : f.line1
     };
   }).slice().reverse();
+  // Day One always unlocks immediately -- it's appended last so it always
+  // sits at the bottom of the newest-first list, as the oldest entry.
+  entries.push(DAY_ONE_ENTRY);
+  return entries;
 }
 
 
@@ -1411,7 +1428,11 @@ function renderJournalEntries(state){
   entries.forEach(function(e){
     html += '<div class="log-entry">';
     html += '<div class="log-entry-find">';
-    html += '<div class="log-entry-sighting" style="'+sightingTileStyle(e.sightingIdx)+'"></div>';
+    if(e.sightingIdx !== undefined){
+      html += '<div class="log-entry-sighting" style="'+sightingTileStyle(e.sightingIdx)+'"></div>';
+    }else{
+      html += '<div class="log-entry-sighting log-entry-sighting-icon"><img src="'+ASSET.bottle+'" alt=""></div>';
+    }
     html += '<span class="log-entry-when">'+e.title+'</span>';
     html += '</div>';
     html += '<p class="log-entry-body">'+e.body+'</p>';
