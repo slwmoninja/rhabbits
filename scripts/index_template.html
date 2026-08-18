@@ -882,14 +882,19 @@ function sightingTileStyle(index){
 // even though neither pool is itself random. No calendar language anywhere,
 // since discovery pacing varies by how consistently a player logs habits.
 //
-// The arc itself (scared -> small routines -> real skill/pride -> calm,
-// changed -> full circle) is modeled on the real, documented emotional
-// trajectory of castaways -- most concretely Alexander Selkirk, the actual
-// castaway Robinson Crusoe was based on: he was reportedly suicidal with
-// fear his first months, then built routines, then got so physically
+// The arc itself (green -> small routines -> real skill/pride -> calm,
+// changed -> full circle) loosely follows the real, documented trajectory
+// of castaways -- most concretely Alexander Selkirk, the actual castaway
+// Robinson Crusoe was based on, who built routines, then got so physically
 // skilled he could outrun dogs chasing the same goat, and by the end was
-// "thoroughly reconciled" to island life -- calm, capable, changed. Kept
-// short, plain, and increasingly upbeat (short sentences, concrete
+// "thoroughly reconciled" to island life -- calm, capable, changed. This
+// castaway is a pirate first, though: the opening beat (see GROWTH_LINE[0]
+// and its paired Mangrove/python flavor entry) is played for bravado, not
+// fear -- growth here is inexperience hardening into real skill, not fear
+// resolving into calm. Genuine natural reactions (a fast retreat from a
+// barracuda, unease at storm clouds) still show up in the regular
+// SIGHTING_FLAVOR entries; they're just not the emotional throughline.
+// Kept short, plain, and increasingly upbeat (short sentences, concrete
 // feelings, no jargon like "consistency" or "identity") so a child can
 // follow exactly what's growing and why, and each rare appearance reads as
 // a genuine, positive milestone rather than routine commentary.
@@ -900,9 +905,9 @@ var SIGHTING_FLAVOR = [
   { title:"Umbrella, Sort Of", line1:"Held a taro leaf over my head through the rain." },
   { title:"Spiky Victory", line1:"Wrestled a pineapple out of the underbrush. Lost, mostly." },
   { title:"Too Pretty For This Island", line1:"A wild orchid, growing out of a rotten log." },
-  { title:"Roots Everywhere", line1:"Got lost in the Mangrove swamp. Again." },
-  { title:"It Breathes", line1:"The volcano hissed today. Did not investigate." },
-  { title:"Getting Closer", line1:"Watched the volcano spit lava. From very far away." },
+  { title:"Roots Everywhere", line1:"Was stalked by a python in the Mangrove swamp again today. It will make a fine new belt." },
+  { title:"It Breathes", line1:"The volcano hissed today. Climbed halfway up to see why." },
+  { title:"Getting Closer", line1:"Watched the volcano spit lava. Got close enough to feel it." },
   { title:"Best Bath On The Island", line1:"Found a waterfall past the tree line. Best shower yet." },
   { title:"Green Everywhere", line1:"This whole island is basically one giant fern." },
   { title:"Feathers, No Answers", line1:"A parrot. Finally. After all those feathers." },
@@ -911,10 +916,10 @@ var SIGHTING_FLAVOR = [
   { title:"The Committee", line1:"Three seabirds watch me do my habits now." },
   { title:"Almost Lost A Toe", line1:"Nearly lost a toe to a dinner-plate-sized clam." },
   { title:"Silver Everywhere", line1:"Surrounded by a whole cloud of small fish today." },
-  { title:"Not Today", line1:"A moray eel eyeballed me from the reef. Not today." },
+  { title:"Not Blinking First", line1:"A moray eel eyeballed me from the reef. Eyeballed it right back." },
   { title:"Gliding By", line1:"A manta ray passed under me like a slow shadow." },
-  { title:"Nervous Swim", line1:"Swam a lot faster after spotting a barracuda." },
-  { title:"Look, Don't Touch", line1:"Pretty little fish in the reef. Did NOT touch it." },
+  { title:"Won That Race", line1:"A barracuda showed up. Raced it back to the reef. I won." },
+  { title:"Touched It Anyway", line1:"Pretty little fish in the reef. Touched it. Regretted it a little." },
   { title:"Not Mine", line1:"A carved totem, half-buried. Definitely not mine." },
   { title:"Somebody's Handiwork", line1:"A woven basket, wedged in the rocks. Better than mine." },
   { title:"Found, Not Made", line1:"A proper spear, half-buried. Better made than anything I own." },
@@ -958,7 +963,7 @@ var SIGHTING_FLAVOR = [
   { title:"Almost Lost The Logbook", line1:"A wave nearly took the logbook out to sea." },
   { title:"Showing Off", line1:"A dolphin, jumping clean out of the water. Showoff." },
   { title:"Slow And Steady", line1:"A sea turtle came up onto the beach. We had a moment." },
-  { title:"Nope", line1:"Too many arms near my nets today. Nope." },
+  { title:"Wrestled It Back", line1:"Too many arms near my nets today. Wrestled the net back anyway." },
   { title:"Points Somewhere", line1:"An old compass. Needle spins. Nowhere to go anyway." },
   { title:"Still Can't Use It", line1:"A second sextant. Still can't use one. At least they match." },
   { title:"Definitely Not Using This", line1:"A full anchor. No ship. Very heavy paperweight now." },
@@ -979,7 +984,7 @@ var SIGHTING_FLAVOR = [
   { title:"Snack Duty", line1:"A bunch of coconuts, down. No cannon required this time." },
   { title:"Treat Yourself", line1:"Cracked a coconut. Drank it like a fancy drink, straw and all." },
   { title:"Dinner, Sorted", line1:"A handful of root vegetables. Actual dinner tonight." },
-  { title:"Kept My Distance", line1:"A wild boar in camp. Looked at me. Left." },
+  { title:"Staring Contest, Won", line1:"A wild boar in camp. Stared it down. It left first." },
   { title:"Accidental Luxury", line1:"Cacao pods, growing wild. Never leaving if I figure these out." },
   { title:"Upgrade", line1:"A machete, in good shape. Jungle-clearing's never been easier." },
   { title:"The Map", line1:"Half a burnt map. Stuffed in a wall crack." },
@@ -1008,7 +1013,7 @@ var DAY_ONE_ENTRY = {
 
 var GROWTH_INTERVAL = 4; // one growth beat at the 1st discovery, then every 4th after (~monthly, matching the 1/week discovery pace)
 var GROWTH_LINE = [
-  "Also today: I was scared, but I didn't panic. That's new for me.",
+  "Was stalked by a python in the Mangrove swamp again today. It will make a fine new belt.",
   "One whole week! I didn't think I'd make it this far — and I did.",
   "This is starting to feel less like a test and more like just... me.",
   "I do the habit before I even think about it now. That's real progress.",
@@ -1018,7 +1023,7 @@ var GROWTH_LINE = [
   "I'm not the same castaway who started this. I like who I'm becoming.",
   "I feel proud when I finish now. That feeling wasn't always there.",
   "I've stuck with this longer than anything I've ever tried. On purpose.",
-  "The scared castaway from day one feels far away. I grew past him.",
+  "The green castaway from day one feels far away. I grew past him.",
   "I don't talk myself into it anymore. I just go. That's who I am now.",
   "Halfway through everything here, and I'm still showing up, every time.",
   "I'm actually good at this now. Not lucky. Good.",
@@ -1287,12 +1292,12 @@ function evaluateSightings(){
 // on how consistently they log. Called once, on brand-new state, so
 // state.sightings is always empty here -- no duplicate-index check needed.
 // Position 0's growth-arc line (GROWTH_LINE[0], see growthLineForPosition())
-// is specifically a "got scared, got lost, found my way back" beat -- it
-// only makes narrative sense paired with a getting-lost flavor entry, so
-// the free first discovery is pinned to "Roots Everywhere" (the Mangroves
-// entry) by title lookup rather than random, unlike every discovery after
-// it. Falls back to random if that title ever changes/moves, rather than
-// silently unlocking nothing.
+// is a deliberately unbothered "stared down a python, kept the belt idea"
+// beat -- it only makes narrative sense paired with that exact close call,
+// so the free first discovery is pinned to "Roots Everywhere" (the
+// Mangroves entry) by title lookup rather than random, unlike every
+// discovery after it. Falls back to random if that title ever
+// changes/moves, rather than silently unlocking nothing.
 function unlockFirstDiscoveryFree(){
   var idx = -1;
   for(var i=0;i<SIGHTING_FLAVOR.length;i++){
