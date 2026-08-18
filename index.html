@@ -1358,7 +1358,7 @@ function dailyStreak(h){
 function renderNextRewardsList(chainNext, sightingsActive){
   var html = '<ul class="next-rewards-list">';
   if(chainNext){ html += '<li>'+chestIconSvg("0.8rem")+' '+chainNext.title+'</li>'; }
-  if(sightingsActive){ html += '<li>🔭 New Discovery</li>'; }
+  if(sightingsActive){ html += '<li>👁️ New Discovery</li>'; }
   html += '</ul>';
   return html;
 }
@@ -1443,7 +1443,7 @@ function renderTreasureHuntModal(){
     html += dirBtn('W','◀')+'<span class="tmap-dpad-center">🧭</span>'+dirBtn('E','▶');
     html += dirBtn('SW','◣')+dirBtn('S','▼')+dirBtn('SE','◢');
     html += '</div>';
-    if(!canMove){ html += '<p class="tmap-hint">Log a habit today to earn your next move.</p>'; }
+    if(!canMove){ html += '<p class="tmap-hint">Log a habit today to earn your next move.<br>Up to 1 move earned per day.</p>'; }
   }
   html += '</div></div>';
   return html;
@@ -1518,7 +1518,7 @@ function renderRewardsScreen(){
   }
   html += '<div class="reward-body">';
   html += '<div class="reward-title">New Discovery</div>';
-  html += '<div class="reward-desc">'+(state.sightings.length===0 ? 'No discoveries yet.' : state.sightings.length+' / '+SIGHTINGS_TOTAL+' discovered.')+'</div>';
+  html += '<div class="reward-desc">'+(state.sightings.length===0 ? (state.discoveryCarrots%7)+'/7 carrots toward a new discovery.' : state.sightings.length+' / '+SIGHTINGS_TOTAL+' discovered.')+'</div>';
   html += '</div></div>';
 
   // Unlocked rewards each get their own real card. Everything still locked
