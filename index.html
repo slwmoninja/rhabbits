@@ -386,6 +386,11 @@ img{max-width:100%; display:block;}
   background:rgba(107,69,38,.08); border:1px solid var(--parchment-edge); border-radius:9px;
   padding:8px 12px; margin:2px 0 14px; color:var(--wood-dark); font-weight:700; font-size:.85rem;
 }
+/* Profile's "Story So Far" link sits on the light parchment modal, where
+   --wood-dark reads fine -- the Special Days link sits directly on the
+   dark teal Logbook background instead, where that same dark text is
+   nearly invisible, so it needs its own bright color. */
+.story-link.on-dark{color:var(--parchment-hi);}
 .story-icon{width:36px; height:36px; flex-shrink:0; display:flex; align-items:center; justify-content:center;}
 .story-icon img{width:100%; height:100%; object-fit:contain;}
 .story-icon.emoji{font-size:1.5rem;}
@@ -1748,7 +1753,7 @@ function renderLogbookScreen(){
 // reward-grid card, since Special Days sits outside the carrot/reward
 // economy entirely (no unlocking, no carrots earned).
 function renderSpecialDaysLink(){
-  return '<button class="story-link" data-action="show-special-days"><span class="story-icon emoji">🎂</span><span>Special days</span></button>';
+  return '<button class="story-link on-dark" data-action="show-special-days"><span class="story-icon emoji">🎂</span><span>Special days</span></button>';
 }
 
 function renderHabitGroup(type, label){
