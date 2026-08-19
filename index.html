@@ -768,26 +768,37 @@ var REWARDS = [
     progress: function(state){ return Math.min(state.carrots,7) + "/7 carrots"; }
   },
   {
+    // Long-term (a ~7-month goal) -- see imminent() below and
+    // nextLockedReward()'s use of it: this only surfaces in the Logbook's
+    // "Next reward" teaser once it's genuinely close, rather than sitting
+    // there as a many-months-away line item from day one. New Discovery
+    // (the 7-carrot picture+story pair, see evaluateSightings()) isn't
+    // gated this way -- that one's on a short, ever-recurring cycle, not a
+    // single long-term goal, so it stays visible in the teaser as usual.
     id: "seven_seasons",
     title: "7-Month Streak Badge",
     desc: "Log a monthly rHabbit 7 times.",
     medallion: "🌙",
-    condition: function(state){ return state.habits.some(function(h){ return h.type==="monthly" && h.completions.length>=7; }); },
-    progress: function(state){
-      var best = state.habits.filter(function(h){return h.type==="monthly";})
-        .reduce(function(m,h){ return Math.max(m,h.completions.length); },0);
-      return Math.min(best,7) + "/7 months";
-    }
+    condition: function(state){ return monthlyStreakBest(state)>=7; },
+    progress: function(state){ return Math.min(monthlyStreakBest(state),7) + "/7 months"; },
+    imminent: function(state){ return monthlyStreakBest(state) >= 5; } // last 2 months
   },
   {
+    // Same "long-term, only tease once imminent" treatment as seven_seasons
+    // above.
     id: "bucket_list",
     title: "7 Once-Offs Completed Badge",
     desc: "Complete 7 once-off adventures.",
     medallion: "🏴‍☠️",
     condition: function(state){ return onceoffCompletedCount(state) >= 7; },
-    progress: function(state){ return Math.min(onceoffCompletedCount(state),7) + "/7 once-offs"; }
+    progress: function(state){ return Math.min(onceoffCompletedCount(state),7) + "/7 once-offs"; },
+    imminent: function(state){ return onceoffCompletedCount(state) >= 5; } // last 2 once-offs
   }
 ];
+function monthlyStreakBest(state){
+  return state.habits.filter(function(h){return h.type==="monthly";})
+    .reduce(function(m,h){ return Math.max(m,h.completions.length); },0);
+}
 var STARTER_REASON = "Reward issued: Starting to use the app!";
 
 // ---------------- Treasure Hunt ----------------
@@ -1917,10 +1928,13 @@ function renderApp(){
   return html;
 }
 
+// Skips a locked long-term reward (r.imminent set -- see seven_seasons/
+// bucket_list) until it's actually close, rather than surfacing a
+// many-months-away goal as "Next" from day one.
 function nextLockedReward(){
   for(var i=0;i<REWARDS.length;i++){
     var r = REWARDS[i];
-    if(!r.starter && !state.unlocks[r.id]) return r;
+    if(!r.starter && !state.unlocks[r.id] && (!r.imminent || r.imminent(state))) return r;
   }
   return null;
 }
@@ -1938,20 +1952,22 @@ function renderLogbookScreen(){
   html += '<span class="plaque-rivet tl"></span><span class="plaque-rivet tr"></span><span class="plaque-rivet bl"></span><span class="plaque-rivet br"></span>';
   html += '<div class="plaque-label">Carrots earned</div>';
   var sightingsActiveLB = state.sightings.length < SIGHTINGS_TOTAL;
-  if(next || sightingsActiveLB){
-    // Generic 7-carrot cycle progress -- used to point specifically at
-    // second_garden (7 carrots for a 2nd habit slot) back when that was
-    // the gate; now that it's a starter unlock, this is just a running
-    // visual of carrot-earning pace rather than progress toward one
-    // specific reward.
-    html += '<div class="pip-row">'+carrotPipsHtml(state.carrots%7,7)+'</div>';
-    var nextParts = [];
-    if(next){ nextParts.push(next.title); }
-    if(sightingsActiveLB){ nextParts.push("New Discovery"); }
-    html += '<div class="plaque-progress-text">Next: '+nextParts.join(' + ')+'</div>';
-  } else {
-    html += '<div class="plaque-progress-text">All rewards unlocked — more coming soon!</div>';
-  }
+  // Generic 7-carrot cycle progress -- used to point specifically at
+  // second_garden (7 carrots for a 2nd habit slot) back when that was
+  // the gate; now that it's a starter unlock, this is just a running
+  // visual of carrot-earning pace rather than progress toward one
+  // specific reward.
+  html += '<div class="pip-row">'+carrotPipsHtml(state.carrots%7,7)+'</div>';
+  var nextParts = [];
+  if(next){ nextParts.push(next.title); }
+  if(sightingsActiveLB){ nextParts.push("New Discovery"); }
+  // Streak Bonus (see evaluateStreakBonus()) recurs every 7-day active
+  // streak, refilling Coco Cannon lives and granting a bonus Treasure Hunt
+  // move together -- same short, ever-recurring cadence as New Discovery
+  // above (not a one-time long-term goal), so it's always listed here too,
+  // not gated behind an imminent() check like seven_seasons/bucket_list.
+  nextParts.push("Streak Bonus");
+  html += '<div class="plaque-progress-text">Next: '+nextParts.join(' + ')+'</div>';
   html += '</div></div>';
 
   html += renderSpecialDaysLink();
