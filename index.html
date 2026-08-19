@@ -1356,9 +1356,13 @@ function specialDayIcon(sd){
   if(sd.occasion==="other") return "🎆";
   return "🎂";
 }
+var SPECIAL_DAY_WEEKDAY_ABBR = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+var SPECIAL_DAY_MONTH_ABBR = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 function specialDayDateLabel(sd){
-  var md = resolvedMonthDay(sd, new Date().getFullYear());
-  return SPECIAL_DAY_MONTH_NAMES[md.month-1]+" "+md.day;
+  var year = new Date().getFullYear();
+  var md = resolvedMonthDay(sd, year);
+  var weekday = SPECIAL_DAY_WEEKDAY_ABBR[new Date(year, md.month-1, md.day).getDay()];
+  return weekday+", "+SPECIAL_DAY_MONTH_ABBR[md.month-1]+" "+md.day;
 }
 // Days from today (0 = today) until this year's -- or, if already passed,
 // next year's -- occurrence. A leap-day (Feb 29) entry naturally rolls
