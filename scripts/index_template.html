@@ -1200,6 +1200,14 @@ function specialDayOccasionLabel(sd){
   if(sd.occasion==="anniversary") return "Anniversary";
   return sd.occasionCustom.trim() || "Special Day";
 }
+// Per-occasion icon for list rows -- the topbar cake icon and the generic
+// "Special days" Logbook link stay cake-themed regardless of occasion mix,
+// since those are just a general heads-up, not tied to any one entry.
+function specialDayIcon(sd){
+  if(sd.occasion==="anniversary") return "🎉";
+  if(sd.occasion==="other") return "🎆";
+  return "🎂";
+}
 function specialDayDateLabel(sd){
   return SPECIAL_DAY_MONTH_NAMES[sd.month-1]+" "+sd.day;
 }
@@ -1226,16 +1234,22 @@ function specialDayDaysDiffThisYear(sd){
   return Math.round((thisYear - todayMid) / 86400000);
 }
 // Every entry, always -- nothing is ever hidden. Upcoming (including
-// today) and anything within the last week sort together, soonest/most-
-// recent first, so a birthday from a few days ago stays visible near the
-// top (still worth a belated happy-birthday). Only once more than a week
-// has passed does an entry sink toward the bottom, oldest-last.
+// today) and anything within the last week sort together in true calendar
+// order (a birthday from a few days ago stays visible near the top --
+// still worth a belated happy-birthday). Past that one-week grace period,
+// an entry sinks below every upcoming/recent one, ordered by its genuine
+// next occurrence date (wrapping to next year) -- so the *longest*-passed
+// entry (whose next occurrence, wrapping around, is soonest) sits nearer
+// the top of that sunk group, and whichever one passed *most recently*
+// sits at the very bottom, since its next occurrence is furthest away.
+function specialDaySortKey(sd){
+  var diff = specialDayDaysDiffThisYear(sd);
+  if(diff >= -7) return diff;
+  return 1000 + specialDayNextOccurrenceDays(sd);
+}
 function specialDaysSorted(){
   return state.specialDays.slice().sort(function(a,b){
-    var da = specialDayDaysDiffThisYear(a), db = specialDayDaysDiffThisYear(b);
-    var ka = da>=-7 ? da : 1000-da;
-    var kb = db>=-7 ? db : 1000-db;
-    return ka - kb;
+    return specialDaySortKey(a) - specialDaySortKey(b);
   });
 }
 // Powers the topbar cake icon -- deliberately "exactly tomorrow" only (not
@@ -2287,7 +2301,7 @@ function renderSpecialDaysModal(){
   } else {
     list.forEach(function(sd){
       html += '<button class="habit-row" data-action="show-special-day-detail" data-id="'+sd.id+'">' +
-        '<span class="habit-emoji">🎂</span>' +
+        '<span class="habit-emoji">'+specialDayIcon(sd)+'</span>' +
         '<span class="habit-name">'+escapeHtml(sd.names)+'</span>' +
         '<span class="habit-type-badge">'+escapeHtml(specialDayOccasionLabel(sd))+'</span>' +
         '<span class="special-day-date">'+specialDayDateLabel(sd)+'</span>' +
