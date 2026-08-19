@@ -110,15 +110,22 @@ img{max-width:100%; display:block;}
 .btn-danger{background:linear-gradient(180deg,#c0503b,var(--danger)); color:#fff2ec;}
 .btn-block{width:100%;}
 .mt{margin-top:22px;}
-/* Quieter, denser button style for "management" actions (Profile's account/
-   data controls) that shouldn't visually compete with the castaway story/
-   stats above them -- same padding/border-radius as .habit-row/.toggle-row
-   so that whole lower section reads as one consistent, de-emphasized block
-   rather than a row of big CTA-style buttons. */
-.btn-compact{padding:10px 12px; font-size:.9rem; border-radius:9px; box-shadow:0 2px 0 var(--wood-darker);}
-.btn-compact:active{transform:translateY(2px); box-shadow:0 1px 0 var(--wood-darker);}
-.btn-compact.btn-ghost{box-shadow:none;}
-.btn-compact.btn-ghost:active{transform:translateY(1px);}
+/* Profile's single "Settings" section -- every account/data action (Switch
+   Castaway, Back up, Restore, Reset) and every toggle (holidays shown)
+   share this one small chip style, wrapped multiple-per-row, instead of
+   full-width stacked buttons -- de-emphasized vs. the castaway story/stats
+   above, and visually uniform regardless of whether a given chip is a
+   one-shot action or a toggle (an "on" toggle just fills solid; nothing
+   else about its size/shape differs from a plain action chip). */
+.settings-row{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px;}
+.settings-chip{
+  appearance:none; border:1px solid var(--parchment-edge); border-radius:20px;
+  padding:8px 14px; font-size:.85rem; font-weight:700; font-family:inherit;
+  background:var(--parchment-hi); color:var(--wood-dark);
+}
+.settings-chip:active{transform:translateY(1px);}
+.settings-chip.on{background:var(--leaf); border-color:var(--leaf-deep); color:#fff;}
+.settings-chip.danger{border-color:var(--danger); color:var(--danger);}
 
 .avatar-choice{display:flex; gap:18px; margin:8px 0 26px;}
 .avatar-option{
@@ -586,25 +593,6 @@ img.reward-hero{max-height:240px; max-width:100%; margin:0 auto 10px; border-rad
 .profile-stats{display:flex; justify-content:space-around; margin:14px 0 20px; text-align:center;}
 .profile-stat b{display:block; font-size:1.3rem; color:var(--wood-dark);}
 .profile-stat span{font-size:.68rem; color:var(--wood); text-transform:uppercase; letter-spacing:.06em;}
-.profile-actions{display:flex; flex-direction:column; gap:10px;}
-
-.toggle-row{
-  width:100%; display:flex; align-items:center; justify-content:space-between; gap:10px;
-  background:linear-gradient(180deg, var(--parchment-hi), var(--parchment));
-  border:1px solid var(--parchment-edge); border-radius:9px; padding:10px 12px; margin-bottom:8px;
-}
-.toggle-row-label{display:flex; align-items:center; gap:8px; font-weight:700; color:var(--wood-dark); font-size:.92rem;}
-.toggle-switch{
-  position:relative; width:42px; height:24px; flex-shrink:0; border:none; border-radius:12px;
-  background:rgba(107,69,38,.28); padding:0; cursor:pointer;
-}
-.toggle-switch::after{
-  content:""; position:absolute; top:2px; left:2px; width:20px; height:20px; border-radius:50%;
-  background:var(--parchment-hi); box-shadow:0 1px 3px rgba(0,0,0,.3); transition:left .15s ease;
-}
-.toggle-switch.on{background:var(--leaf);}
-.toggle-switch.on::after{left:20px;}
-
 .toast{
   position:fixed; left:50%; bottom:24px; transform:translateX(-50%);
   background:var(--wood-dark); color:var(--parchment-hi); padding:10px 18px; border-radius:20px;
@@ -2699,11 +2687,13 @@ function typeOptRow(value,title,sub,selected,disabled){
 // Shared by the two Profile holiday toggles below -- a labeled row with a
 // tappable switch on the right, matching the .habit-row visual language
 // used everywhere else rather than a native <input type=checkbox>.
-function toggleRowHtml(action, label, on){
-  return '<button class="toggle-row" data-action="'+action+'">' +
-    '<span class="toggle-row-label">'+label+'</span>' +
-    '<span class="toggle-switch'+(on?' on':'')+'" aria-hidden="true"></span>' +
-  '</button>';
+// Shared by every Profile "Settings" chip below -- one-shot actions and
+// toggles alike, so they're visually indistinguishable except for an
+// active toggle's solid "on" fill (see .settings-chip.on).
+function settingsChipHtml(action, label, opts){
+  opts = opts || {};
+  var cls = "settings-chip" + (opts.on ? " on" : "") + (opts.danger ? " danger" : "");
+  return '<button class="'+cls+'" data-action="'+action+'">'+label+'</button>';
 }
 
 function renderProfileModal(){
@@ -2726,17 +2716,20 @@ function renderProfileModal(){
   html += '<div class="profile-stat"><b>'+daysAshore(state)+'</b><span>Days Ashore</span></div>';
   html += '<div class="profile-stat"><b>'+state.habits.length+'</b><span>rHabbits</span></div>';
   html += '</div>';
-  html += '<div class="section-label">Manage</div>';
-  html += '<div class="profile-actions">';
-  html += '<button class="btn btn-wood btn-compact" data-action="switch-avatar">Switch Castaway</button>';
-  html += '<button class="btn btn-wood btn-compact" data-action="backup-now">Back up</button>';
-  html += '<button class="btn btn-ghost btn-compact" data-action="restore-backup">Restore</button>';
-  html += '<input type="file" id="profileRestoreInput" accept="application/json,.json" class="hidden">';
-  html += '<button class="btn btn-danger btn-compact" data-action="reset-progress">Reset Progress</button>';
+  // One combined "Settings" section -- every account/data action and every
+  // toggle together, as small same-look chips wrapped multiple-per-row
+  // (see .settings-chip) rather than split across separate "Manage"/
+  // "Holidays shown" blocks of full-width buttons.
+  html += '<div class="section-label">Settings</div>';
+  html += '<div class="settings-row">';
+  html += settingsChipHtml("switch-avatar", "Switch Castaway");
+  html += settingsChipHtml("backup-now", "Back up");
+  html += settingsChipHtml("restore-backup", "Restore");
+  html += settingsChipHtml("reset-progress", "Reset Progress", {danger:true});
+  html += settingsChipHtml("toggle-us-holidays", "🇺🇸 USA holidays", {on:state.showUSHolidays});
+  html += settingsChipHtml("toggle-sa-holidays", "🇿🇦 RSA holidays", {on:state.showSAHolidays});
   html += '</div>';
-  html += '<div class="section-label">Holidays shown</div>';
-  html += toggleRowHtml("toggle-us-holidays", "🇺🇸 USA holidays", state.showUSHolidays);
-  html += toggleRowHtml("toggle-sa-holidays", "🇿🇦 RSA holidays", state.showSAHolidays);
+  html += '<input type="file" id="profileRestoreInput" accept="application/json,.json" class="hidden">';
   html += '<div style="margin-top:18px; padding-top:14px; border-top:1px solid var(--parchment-edge); display:flex; justify-content:space-between; font-size:.78rem; color:var(--wood);">';
   html += '<span>Version</span><span>'+APP_VERSION+'</span>';
   html += '</div>';
