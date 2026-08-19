@@ -1194,15 +1194,25 @@ function daysSince(iso){
 }
 function uid(){ return Math.random().toString(36).slice(2,10) + Date.now().toString(36); }
 
-// "Every N days/weeks/months" habits (see the frequency picker unlocked by
-// the second_garden reward) track completions as plain dates, same as
-// daily, and become due again once enough days have rolled by since the
-// last one -- a rolling interval, unlike the named Weekly/Monthly presets
-// above which reset on a fixed calendar boundary instead. Months are
-// approximated as 30 days each (good enough for a personal habit tracker;
-// exact calendar-month arithmetic isn't worth the complexity here).
+// "Every N days/weeks/months/years" habits (see the frequency picker
+// unlocked by the second_garden reward) track completions as plain dates,
+// same as daily, and become due again once enough days have rolled by
+// since the last one -- a rolling interval, unlike the named Weekly/Monthly
+// presets above which reset on a fixed calendar boundary instead. Months
+// and years are approximated as 30/365 days each (good enough for a
+// personal habit tracker; exact calendar-month/leap-year arithmetic isn't
+// worth the complexity here).
 function habitEveryUnitDays(h){
-  return h.everyUnit==="months" ? h.everyN*30 : h.everyUnit==="weeks" ? h.everyN*7 : h.everyN;
+  if(h.everyUnit==="years") return h.everyN*365;
+  if(h.everyUnit==="months") return h.everyN*30;
+  if(h.everyUnit==="weeks") return h.everyN*7;
+  return h.everyN;
+}
+// 1 is a meaningful, common value for "years" (an annual habit -- a
+// checkup, a renewal) rather than a duplicate of one of the fixed
+// daily/weekly/monthly types, so its floor is 1 instead of the usual 2.
+function everyMinN(unit){
+  return unit==="years" ? 1 : 2;
 }
 function habitEveryDue(h){
   if(!h.completions.length) return true;
@@ -1968,11 +1978,17 @@ function habitLogged(h){
   if(h.type==="every") return !habitEveryDue(h);
   return h.completions.length>0; // onceoff
 }
+// "years" is the one everyUnit that can actually be 1 (see everyMinN()) --
+// singular-strip it ("Every 1 year", not "Every 1 years") rather than
+// leaving the raw plural unit string on that one legitimate case.
+function everyUnitLabel(h){
+  return h.everyN===1 ? h.everyUnit.slice(0,-1) : h.everyUnit;
+}
 function habitTypeBadge(h){
   if(h.type==="daily") return "Daily";
   if(h.type==="weekly") return "Weekly";
   if(h.type==="monthly") return "Monthly";
-  if(h.type==="every") return "Every "+h.everyN+" "+h.everyUnit;
+  if(h.type==="every") return "Every "+h.everyN+" "+everyUnitLabel(h);
   return "Once-off";
 }
 // A habit is "due" right now if it's not currently satisfied for its
@@ -2080,7 +2096,7 @@ function renderHabitDetailModal(id){
       html += '<div class="habit-meta">Due again in '+remaining+' day'+(remaining===1?'':'s')+'</div>';
     } else {
       html += '<button class="log-btn" data-action="toggle-every" data-id="'+h.id+'">Log Now  +1 🥕</button>';
-      html += '<div class="habit-meta">Repeats every '+h.everyN+' '+h.everyUnit+'</div>';
+      html += '<div class="habit-meta">Repeats every '+h.everyN+' '+everyUnitLabel(h)+'</div>';
     }
   } else {
     var done = h.completions.length>0;
@@ -2616,12 +2632,17 @@ function renderAddHabitModal(){
     html += typeOptRow("monthly","Monthly", monthlyCount+"/"+monthlyMax+" used", d.type==="monthly", monthlyDisabled);
     html += typeOptRow("every","Every X", everyCount+"/"+everyMax+" used", d.type==="every", everyDisabled);
     if(d.type==="every"){
+      // "years" is the one unit where 1 is a meaningful, common value (an
+      // annual habit -- a checkup, a renewal) rather than a duplicate of
+      // one of the fixed daily/weekly/monthly types above, so its floor is
+      // 1 instead of the usual 2 (see everyMinN()).
       html += '<div class="field freq-subfield"><label>Repeat every</label><div class="freq-every-inputs">' +
-        '<input type="number" id="addHabitEveryN" min="2" max="365" value="'+(d.everyN||2)+'">' +
+        '<input type="number" id="addHabitEveryN" min="'+everyMinN(d.everyUnit)+'" max="365" value="'+(d.everyN||2)+'">' +
         '<select id="addHabitEveryUnit">' +
           '<option value="days"'+(d.everyUnit==="days"?' selected':'')+'>days</option>' +
           '<option value="weeks"'+(d.everyUnit==="weeks"?' selected':'')+'>weeks</option>' +
           '<option value="months"'+(d.everyUnit==="months"?' selected':'')+'>months</option>' +
+          '<option value="years"'+(d.everyUnit==="years"?' selected':'')+'>years</option>' +
         '</select>' +
       '</div></div>';
     }
@@ -2828,12 +2849,22 @@ function wireEvents(){
   if(addEveryNInput){
     addEveryNInput.addEventListener("input", function(e){
       var n = parseInt(e.target.value,10);
-      state._draft.everyN = (!n || n<2) ? 2 : n;
+      var min = everyMinN(state._draft.everyUnit);
+      state._draft.everyN = (!n || n<min) ? min : n;
     });
   }
   var addEveryUnitSelect = root.querySelector("#addHabitEveryUnit");
   if(addEveryUnitSelect){
-    addEveryUnitSelect.addEventListener("change", function(e){ state._draft.everyUnit = e.target.value; });
+    addEveryUnitSelect.addEventListener("change", function(e){
+      state._draft.everyUnit = e.target.value;
+      // Re-clamp on unit change too -- e.g. "1 year" switched to "days"
+      // shouldn't silently leave everyN at 1 (a duplicate of the plain
+      // Daily type), and re-rendering the field's own min= alone wouldn't
+      // fix a value already below the new floor.
+      var min = everyMinN(state._draft.everyUnit);
+      if(state._draft.everyN < min) state._draft.everyN = min;
+      render();
+    });
   }
   // Special Day add/edit form (see renderSpecialDayFormModal()) -- occasion
   // re-renders (unlike month/day/names) since picking "Other" needs to
@@ -3162,7 +3193,7 @@ function addHabit(){
   if(!name) return;
   var habit = { id:uid(), name:name, emoji:d.emoji, type:d.type, description:d.description.trim(), createdAt:todayStr(), completions:[] };
   if(d.type==="onceoff") habit.dueDate = d.dueDate || todayStr();
-  if(d.type==="every"){ habit.everyUnit = d.everyUnit; habit.everyN = Math.max(2, parseInt(d.everyN,10)||2); }
+  if(d.type==="every"){ habit.everyUnit = d.everyUnit; habit.everyN = Math.max(everyMinN(d.everyUnit), parseInt(d.everyN,10)||everyMinN(d.everyUnit)); }
   state.habits.push(habit);
   save();
   // Pops the add-habit-modal's history entry (pushed by navigateTo() when it
