@@ -190,6 +190,14 @@ img{max-width:100%; display:block;}
   font-size:.62rem; font-weight:800; line-height:16px; text-align:center;
   box-shadow:0 1px 2px rgba(0,0,0,.4);
 }
+.special-day-btn{
+  width:40px; height:40px; border-radius:50%; flex-shrink:0;
+  background:linear-gradient(180deg, #d6597a, #a13a56);
+  font-size:1.1rem; line-height:1;
+  display:flex; align-items:center; justify-content:center;
+  border:2px solid var(--gold); box-shadow:var(--shadow);
+}
+.special-day-btn:active{transform:translateY(1px);}
 
 /* ---------- Install pill (topbar + Profile) ---------- */
 .topbar-install-btn{
@@ -380,6 +388,9 @@ img{max-width:100%; display:block;}
 }
 .story-icon{width:36px; height:36px; flex-shrink:0; display:flex; align-items:center; justify-content:center;}
 .story-icon img{width:100%; height:100%; object-fit:contain;}
+.story-icon.emoji{font-size:1.5rem;}
+.special-days-add-btn{background:none; border:none; font-size:1.5rem; font-weight:700; color:var(--carrot-deep); line-height:1; padding:2px 4px;}
+.special-day-date{font-size:.72rem; color:var(--wood); flex-shrink:0; white-space:nowrap;}
 .log-entries{text-align:left; margin-bottom:14px;}
 .log-entry{
   background:rgba(107,69,38,.07); border:1px solid var(--parchment-edge); border-radius:9px;
@@ -1138,7 +1149,14 @@ function isoWeekStr(d){
 
 function daysSince(iso){
   if(!iso) return 0;
-  var ms = Date.now() - new Date(iso+"T00:00:00").getTime();
+  // Parsed as UTC (the "Z" suffix), not local midnight -- every date string
+  // in this app is produced via toISOString().slice(0,10) (todayStr(), the
+  // day-pip loop in renderHabitDetailModal(), etc.), which is inherently a
+  // UTC calendar date. Parsing it back as local time here used to disagree
+  // with that by exactly the local UTC offset, silently rounding this
+  // function down a day for part of the day in any negative-offset
+  // timezone (e.g. US time zones) -- most visible in habitEveryDue().
+  var ms = Date.now() - new Date(iso+"T00:00:00Z").getTime();
   return Math.max(0, Math.floor(ms/86400000));
 }
 function uid(){ return Math.random().toString(36).slice(2,10) + Date.now().toString(36); }
@@ -1160,6 +1178,71 @@ function habitEveryDue(h){
 function habitEveryDaysRemaining(h){
   if(!h.completions.length) return 0;
   return Math.max(0, habitEveryUnitDays(h) - daysSince(h.completions[h.completions.length-1]));
+}
+
+/* ---------------- Special Days (birthdays/anniversaries/custom) ----------
+   Recurring every year -- month+day only, no year, no completions/carrots
+   involved at all. Kept deliberately separate from the habit system. */
+var SPECIAL_DAY_MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+function findSpecialDay(id){
+  return state.specialDays.filter(function(sd){ return sd.id===id; })[0];
+}
+function freshSpecialDayDraft(){
+  return { names:"", occasion:"birthday", occasionCustom:"", month:1, day:1 };
+}
+function specialDayOccasionLabel(sd){
+  if(sd.occasion==="birthday") return "Birthday";
+  if(sd.occasion==="anniversary") return "Anniversary";
+  return sd.occasionCustom.trim() || "Special Day";
+}
+function specialDayDateLabel(sd){
+  return SPECIAL_DAY_MONTH_NAMES[sd.month-1]+" "+sd.day;
+}
+// Days from today (0 = today) until this year's -- or, if already passed,
+// next year's -- occurrence. A leap-day (Feb 29) entry naturally rolls
+// forward to March 1 in a non-leap year, same as plain JS Date math always
+// does -- not worth special-casing for a personal reminder list.
+function specialDayNextOccurrenceDays(sd){
+  var now = new Date();
+  var todayMid = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  var target = new Date(now.getFullYear(), sd.month-1, sd.day);
+  if(target < todayMid) target = new Date(now.getFullYear()+1, sd.month-1, sd.day);
+  return Math.round((target - todayMid) / 86400000);
+}
+// Signed days relative to *this calendar year's* occurrence specifically
+// (negative once it's already passed this year) -- unlike
+// specialDayNextOccurrenceDays() above, this deliberately does NOT wrap
+// forward to next year, since the list view (specialDaysSorted() below)
+// needs to tell "passed 3 days ago" apart from "10 months until next time".
+function specialDayDaysDiffThisYear(sd){
+  var now = new Date();
+  var todayMid = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  var thisYear = new Date(now.getFullYear(), sd.month-1, sd.day);
+  return Math.round((thisYear - todayMid) / 86400000);
+}
+// List order: soonest-upcoming first (today counts as upcoming), then most
+// recently passed last -- entries more than a week past are dropped from
+// this view entirely (they're still in state.specialDays, and will reappear
+// once next year's occurrence comes back within range).
+function specialDaysSorted(){
+  return state.specialDays
+    .map(function(sd){ return { sd:sd, diff:specialDayDaysDiffThisYear(sd) }; })
+    .filter(function(x){ return x.diff >= -7; })
+    .sort(function(a,b){
+      // Future/today (diff>=0) sort by diff directly (0, 1, 2, ...); past
+      // (diff<0) is pushed past every future value and sorted by recency
+      // (-1 "yesterday" before -7 "a week ago") via 1000-diff (1001, 1007).
+      var ka = a.diff>=0 ? a.diff : 1000-a.diff;
+      var kb = b.diff>=0 ? b.diff : 1000-b.diff;
+      return ka - kb;
+    })
+    .map(function(x){ return x.sd; });
+}
+// Powers the topbar cake icon -- deliberately "exactly tomorrow" only (not
+// "tomorrow or today"), so it reads as an advance heads-up to still go get
+// a card/gift, not a same-day notice once that window's already passed.
+function specialDayDueTomorrow(){
+  return state.specialDays.some(function(sd){ return specialDayNextOccurrenceDays(sd)===1; });
 }
 
 function maxDailySlots(state){
@@ -1280,6 +1363,27 @@ function defaultState(){
     _draft:{ name:"", emoji:"🌴", type:"daily", description:"", dueDate:todayStr(), everyUnit:"days", everyN:2 },
     _detailHabitId:null,
     _detailRewardId:null,
+    // Special Days -- birthdays/anniversaries/custom occasions, recurring
+    // every year (month+day only, no year stored) rather than tied to a
+    // specific completion like everything else in this file. See the
+    // "Special days" card (renderSpecialDaysLink()) directly under the
+    // Carrots plaque, and specialDayDueTomorrow() for the topbar cake icon.
+    // Pre-seeded with Russ's own family anniversaries as starting examples.
+    specialDays:[
+      { id: uid(), names:"Cindy & Russ", occasion:"anniversary", occasionCustom:"", month:1, day:1 },
+      { id: uid(), names:"Graham and Daphne", occasion:"anniversary", occasionCustom:"", month:6, day:1 },
+      { id: uid(), names:"Ryan and Margo", occasion:"anniversary", occasionCustom:"", month:3, day:21 },
+      { id: uid(), names:"Russ", occasion:"birthday", occasionCustom:"", month:10, day:22 },
+      { id: uid(), names:"Cindy", occasion:"birthday", occasionCustom:"", month:12, day:7 },
+      { id: uid(), names:"Cole", occasion:"birthday", occasionCustom:"", month:7, day:13 },
+      { id: uid(), names:"Daphne", occasion:"birthday", occasionCustom:"", month:9, day:21 },
+      { id: uid(), names:"Graham", occasion:"birthday", occasionCustom:"", month:5, day:20 },
+      { id: uid(), names:"Ryan", occasion:"birthday", occasionCustom:"", month:3, day:30 },
+      { id: uid(), names:"Margo", occasion:"birthday", occasionCustom:"", month:6, day:23 },
+      { id: uid(), names:"Joanna", occasion:"birthday", occasionCustom:"", month:8, day:4 }
+    ],
+    _specialDayDraft:{ names:"", occasion:"birthday", occasionCustom:"", month:1, day:1 },
+    _detailSpecialDayId:null,
     // Which date/month key the currently-open habit-note-modal is for --
     // set by "open-habit-note" in onAction(), read by renderHabitNoteModal()
     // and the save/delete-habit-note cases.
@@ -1543,17 +1647,23 @@ function renderTopbar(){
   html += '  <button class="icon-btn" data-action="show-profile" aria-label="Profile"><img class="avatar-thumb" src="'+avatarImg+'" alt=""></button>';
   html += '  <div class="wordmark">rHabbits</div>';
   html += '  <div class="topbar-right">';
-  // Due-today icon only on the Logbook itself (not Rewards, not while a
-  // modal is layered over it) -- Rewards has nothing to do with today's
-  // habits, and a modal's own screen value already overwrote "logbook" in
-  // state.screen at that point (see onAction()'s navigateTo() calls).
-  var dueCount = state.screen==="logbook" ? dueTodayHabits(state).length : 0;
+  // Due-today/special-day icons only on the Logbook itself (not Rewards,
+  // not while a modal is layered over it) -- Rewards has nothing to do
+  // with today's habits, and a modal's own screen value already overwrote
+  // "logbook" in state.screen at that point (see onAction()'s
+  // navigateTo() calls).
+  var onLogbook = state.screen==="logbook";
+  var dueCount = onLogbook ? dueTodayHabits(state).length : 0;
+  var cakeDue = onLogbook && specialDayDueTomorrow();
+  if(cakeDue){
+    html += '  <button class="icon-btn special-day-btn" data-action="show-special-days" aria-label="A special day is tomorrow"><span>🎂</span></button>';
+  }
   if(dueCount>0){
     html += '  <button class="icon-btn due-today-btn" data-action="show-due-today" aria-label="'+dueCount+' habit'+(dueCount===1?'':'s')+' due today"><span>📅</span><span class="due-today-badge">'+dueCount+'</span></button>';
   }
   if(canAddAnyHabit(state)){
     html += '  <button class="icon-btn add-habit-fab" data-action="open-add-habit" aria-label="Add a habit" title="You have unlocked a new habit">+</button>';
-  } else if(dueCount===0){
+  } else if(dueCount===0 && !cakeDue){
     html += '  <span class="topbar-spacer"></span>';
   }
   html += '  </div>';
@@ -1610,6 +1720,8 @@ function renderLogbookScreen(){
   }
   html += '</div></div>';
 
+  html += renderSpecialDaysLink();
+
   html += renderHabitGroup("daily","Habits: Activity Tracking");
   if(state.unlocks.second_garden || countActive(state,"weekly")>0){
     html += renderHabitGroup("weekly","Weekly Habits");
@@ -1626,6 +1738,14 @@ function renderLogbookScreen(){
 
   html += '</section>';
   return html;
+}
+
+// Single-line entry point, same "story-link" row pattern used for Profile's
+// "The Story So Far" -- deliberately just an icon + title, not a full
+// reward-grid card, since Special Days sits outside the carrot/reward
+// economy entirely (no unlocking, no carrots earned).
+function renderSpecialDaysLink(){
+  return '<button class="story-link" data-action="show-special-days"><span class="story-icon emoji">🎂</span><span>Special days</span></button>';
 }
 
 function renderHabitGroup(type, label){
@@ -2143,6 +2263,83 @@ function renderDueTodayModal(){
   return html;
 }
 
+// List popup for the "Special days" card -- bottom sheet like habit-detail/
+// add-habit (reached from an inline row tap, not a top-right topbar icon,
+// so unlike renderDueTodayModal() above it doesn't need the centered
+// variant). The "+" sits in the header next to close, same layout renderProfileModal()
+// already uses for pairing an extra header action with the close button.
+function renderSpecialDaysModal(){
+  var html = '<div class="modal-backdrop" data-backdrop="special-days">';
+  html += '<div class="modal">';
+  html += '<div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px;">';
+  html += '  <h3 style="margin:0;">Special Days</h3>';
+  html += '  <div style="display:flex; align-items:center; gap:14px; flex-shrink:0;">';
+  html += '    <button class="special-days-add-btn" data-action="open-add-special-day" aria-label="Add a special day">+</button>';
+  html += '    <button class="modal-close" data-action="close-modal" style="float:none; margin:0;">✕</button>';
+  html += '  </div>';
+  html += '</div>';
+  var list = specialDaysSorted();
+  if(list.length===0){
+    html += '<p class="due-today-empty">No special days added yet. Tap + to add one.</p>';
+  } else {
+    list.forEach(function(sd){
+      html += '<button class="habit-row" data-action="show-special-day-detail" data-id="'+sd.id+'">' +
+        '<span class="habit-emoji">🎂</span>' +
+        '<span class="habit-name">'+escapeHtml(sd.names)+'</span>' +
+        '<span class="habit-type-badge">'+escapeHtml(specialDayOccasionLabel(sd))+'</span>' +
+        '<span class="special-day-date">'+specialDayDateLabel(sd)+'</span>' +
+      '</button>';
+    });
+  }
+  html += '</div></div>';
+  return html;
+}
+
+var SPECIAL_DAY_OCCASION_OPTIONS = [
+  { value:"birthday", label:"Birthday" },
+  { value:"anniversary", label:"Anniversary" },
+  { value:"other", label:"Other" }
+];
+// Shared by both "+" (add) and tapping an existing entry (edit) -- which
+// mode it's in is purely determined by state._detailSpecialDayId being set
+// or not, same contract as habit-detail vs add-habit.
+function renderSpecialDayFormModal(){
+  var d = state._specialDayDraft;
+  var editing = !!state._detailSpecialDayId;
+  var html = '<div class="modal-backdrop" data-backdrop="special-day-form">';
+  html += '<div class="modal">';
+  html += '<button class="modal-close" data-action="close-modal">✕</button>';
+  html += '<h3>'+(editing?'Edit Special Day':'Add a Special Day')+'</h3>';
+  html += '<div class="field"><label>Name/s</label><input type="text" id="specialDayNames" maxlength="60" placeholder="e.g. Mom, or Jamie & Alex" value="'+escapeAttr(d.names)+'"></div>';
+  html += '<div class="field"><label>Occasion</label><select id="specialDayOccasion">';
+  SPECIAL_DAY_OCCASION_OPTIONS.forEach(function(opt){
+    html += '<option value="'+opt.value+'"'+(d.occasion===opt.value?' selected':'')+'>'+opt.label+'</option>';
+  });
+  html += '</select></div>';
+  if(d.occasion==="other"){
+    html += '<div class="field"><label>Occasion name</label><input type="text" id="specialDayOccasionCustom" maxlength="40" placeholder="e.g. Graduation" value="'+escapeAttr(d.occasionCustom)+'"></div>';
+  }
+  html += '<div class="field"><label>Date</label><div class="freq-every-inputs">';
+  html += '<select id="specialDayMonth">';
+  SPECIAL_DAY_MONTH_NAMES.forEach(function(name, i){
+    html += '<option value="'+(i+1)+'"'+(d.month===i+1?' selected':'')+'>'+name+'</option>';
+  });
+  html += '</select>';
+  html += '<select id="specialDayDay">';
+  for(var day=1; day<=31; day++){
+    html += '<option value="'+day+'"'+(d.day===day?' selected':'')+'>'+day+'</option>';
+  }
+  html += '</select>';
+  html += '</div></div>';
+  var canSubmit = d.names.trim() && (d.occasion!=="other" || d.occasionCustom.trim());
+  html += '<button class="btn btn-block" data-action="confirm-special-day" '+(canSubmit?'':'disabled')+'>'+(editing?'Save':'Add Special Day')+'</button>';
+  if(editing){
+    html += '<button class="btn btn-danger btn-block mt" data-action="delete-special-day" data-id="'+state._detailSpecialDayId+'">Remove this special day</button>';
+  }
+  html += '</div></div>';
+  return html;
+}
+
 function renderModals(){
   var html = '';
   if(state.screen==="add-habit-modal"){ html += renderAddHabitModal(); }
@@ -2152,6 +2349,8 @@ function renderModals(){
   if(state.screen==="reward-detail-modal"){ html += renderRewardDetailModal(state._detailRewardId); }
   if(state.screen==="sightings-gallery-modal"){ html += renderSightingsGalleryModal(); }
   if(state.screen==="due-today-modal"){ html += renderDueTodayModal(); }
+  if(state.screen==="special-days-modal"){ html += renderSpecialDaysModal(); }
+  if(state.screen==="special-day-form-modal"){ html += renderSpecialDayFormModal(); }
   if(state.screen==="next-rewards-detail-modal"){ html += renderNextRewardsDetailModal(); }
   if(state.screen==="treasure-hunt-modal"){ html += renderTreasureHuntModal(); }
   if(state.screen==="story-modal"){ html += renderStoryModal(); }
@@ -2413,6 +2612,38 @@ function wireEvents(){
   if(addEveryUnitSelect){
     addEveryUnitSelect.addEventListener("change", function(e){ state._draft.everyUnit = e.target.value; });
   }
+  // Special Day add/edit form (see renderSpecialDayFormModal()) -- occasion
+  // re-renders (unlike month/day/names) since picking "Other" needs to
+  // reveal the custom-occasion-name text field.
+  var sdNamesInput = root.querySelector("#specialDayNames");
+  if(sdNamesInput){
+    sdNamesInput.addEventListener("input", function(e){
+      state._specialDayDraft.names = e.target.value;
+      var btn = root.querySelector('[data-action="confirm-special-day"]');
+      if(btn) btn.disabled = !e.target.value.trim();
+    });
+    sdNamesInput.focus();
+  }
+  var sdOccasionSelect = root.querySelector("#specialDayOccasion");
+  if(sdOccasionSelect){
+    sdOccasionSelect.addEventListener("change", function(e){ state._specialDayDraft.occasion = e.target.value; render(); });
+  }
+  var sdOccasionCustomInput = root.querySelector("#specialDayOccasionCustom");
+  if(sdOccasionCustomInput){
+    sdOccasionCustomInput.addEventListener("input", function(e){
+      state._specialDayDraft.occasionCustom = e.target.value;
+      var btn = root.querySelector('[data-action="confirm-special-day"]');
+      if(btn) btn.disabled = !e.target.value.trim();
+    });
+  }
+  var sdMonthSelect = root.querySelector("#specialDayMonth");
+  if(sdMonthSelect){
+    sdMonthSelect.addEventListener("change", function(e){ state._specialDayDraft.month = parseInt(e.target.value,10); });
+  }
+  var sdDaySelect = root.querySelector("#specialDayDay");
+  if(sdDaySelect){
+    sdDaySelect.addEventListener("change", function(e){ state._specialDayDraft.day = parseInt(e.target.value,10); });
+  }
   // Habit-detail edit fields write straight to the habit object (not a
   // _draft) and only save(), never render() -- re-rendering on every
   // keystroke would rebuild the input out from under itself and drop focus/
@@ -2509,6 +2740,31 @@ function onAction(e){
       break;
     case "show-due-today":
       navigateTo(function(){ state.screen = "due-today-modal"; });
+      break;
+    case "show-special-days":
+      navigateTo(function(){ state.screen = "special-days-modal"; });
+      break;
+    case "open-add-special-day":
+      navigateTo(function(){
+        state._specialDayDraft = freshSpecialDayDraft();
+        state._detailSpecialDayId = null;
+        state.screen = "special-day-form-modal";
+      });
+      break;
+    case "show-special-day-detail":
+      navigateTo(function(){
+        var sd = findSpecialDay(el.getAttribute("data-id"));
+        if(!sd) return;
+        state._specialDayDraft = { names:sd.names, occasion:sd.occasion, occasionCustom:sd.occasionCustom, month:sd.month, day:sd.day };
+        state._detailSpecialDayId = sd.id;
+        state.screen = "special-day-form-modal";
+      });
+      break;
+    case "confirm-special-day":
+      saveSpecialDay();
+      break;
+    case "delete-special-day":
+      deleteSpecialDay(el.getAttribute("data-id"));
       break;
     case "open-coco-cannon":
       navigateTo(function(){ state.screen = "coco-cannon"; });
@@ -2856,6 +3112,36 @@ function deleteHabit(id){
   // Logbook row has no inline delete) -- pop that history entry the same way
   // addHabit() pops the add-habit-modal's, rather than leaving state.screen
   // pointed at a detail view for a habit that no longer exists.
+  closeModal();
+}
+
+// Add or edit, same function -- state._detailSpecialDayId set means editing
+// an existing entry in place, null means appending a new one (same
+// add-vs-edit contract as addHabit() vs the habit-detail edit fields).
+function saveSpecialDay(){
+  var d = state._specialDayDraft;
+  var names = d.names.trim();
+  if(!names) return;
+  if(d.occasion==="other" && !d.occasionCustom.trim()) return;
+  var entry = { names:names, occasion:d.occasion, occasionCustom:d.occasionCustom.trim(), month:d.month, day:d.day };
+  var existing = state._detailSpecialDayId ? findSpecialDay(state._detailSpecialDayId) : null;
+  if(existing){
+    existing.names = entry.names;
+    existing.occasion = entry.occasion;
+    existing.occasionCustom = entry.occasionCustom;
+    existing.month = entry.month;
+    existing.day = entry.day;
+  } else {
+    entry.id = uid();
+    state.specialDays.push(entry);
+  }
+  save();
+  closeModal();
+}
+function deleteSpecialDay(id){
+  if(!confirm("Remove this special day?")) return;
+  state.specialDays = state.specialDays.filter(function(sd){ return sd.id!==id; });
+  save();
   closeModal();
 }
 
@@ -3242,6 +3528,8 @@ function applyRestoredState(parsed){
   var merged = Object.assign(defaultState(), parsed);
   merged.unlocks = Object.assign({}, parsed.unlocks || {});
   merged._draft = { name:"", emoji:"🌴", type:"daily", description:"", dueDate:todayStr(), everyUnit:"days", everyN:2 };
+  merged._specialDayDraft = freshSpecialDayDraft();
+  merged._detailSpecialDayId = null;
   merged.toast = null;
   merged.pendingCelebration = null;
   merged.pendingTreasureFound = null;
