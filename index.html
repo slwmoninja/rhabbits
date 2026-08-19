@@ -110,6 +110,15 @@ img{max-width:100%; display:block;}
 .btn-danger{background:linear-gradient(180deg,#c0503b,var(--danger)); color:#fff2ec;}
 .btn-block{width:100%;}
 .mt{margin-top:22px;}
+/* Quieter, denser button style for "management" actions (Profile's account/
+   data controls) that shouldn't visually compete with the castaway story/
+   stats above them -- same padding/border-radius as .habit-row/.toggle-row
+   so that whole lower section reads as one consistent, de-emphasized block
+   rather than a row of big CTA-style buttons. */
+.btn-compact{padding:10px 12px; font-size:.9rem; border-radius:9px; box-shadow:0 2px 0 var(--wood-darker);}
+.btn-compact:active{transform:translateY(2px); box-shadow:0 1px 0 var(--wood-darker);}
+.btn-compact.btn-ghost{box-shadow:none;}
+.btn-compact.btn-ghost:active{transform:translateY(1px);}
 
 .avatar-choice{display:flex; gap:18px; margin:8px 0 26px;}
 .avatar-option{
@@ -295,6 +304,11 @@ img{max-width:100%; display:block;}
 
 /* ---------- Habit rows (compact, tap for detail) ---------- */
 .section-label{color:var(--parchment-edge); font-size:.75rem; text-transform:uppercase; letter-spacing:.14em; margin:18px 4px 8px;}
+/* .section-label's light color is tuned for the Logbook screen's dark
+   background (where it's normally used) -- inside a .modal (light parchment
+   background, e.g. Profile's "Manage"/"Holidays shown" labels), that same
+   color would be near-invisible low-contrast, so darken it in that context. */
+.modal .section-label{color:var(--wood);}
 .habit-row{
   width:100%; display:flex; align-items:center; gap:10px; text-align:left;
   background:linear-gradient(180deg, var(--parchment-hi), var(--parchment));
@@ -2691,12 +2705,13 @@ function renderProfileModal(){
   html += '<div class="profile-stat"><b>'+daysAshore(state)+'</b><span>Days Ashore</span></div>';
   html += '<div class="profile-stat"><b>'+state.habits.length+'</b><span>Habits</span></div>';
   html += '</div>';
+  html += '<div class="section-label">Manage</div>';
   html += '<div class="profile-actions">';
-  html += '<button class="btn btn-wood" data-action="switch-avatar">Switch Castaway</button>';
-  html += '<button class="btn btn-wood" data-action="backup-now">Back up data now</button>';
-  html += '<button class="btn btn-ghost" data-action="restore-backup">Restore from backup&hellip;</button>';
+  html += '<button class="btn btn-wood btn-compact" data-action="switch-avatar">Switch Castaway</button>';
+  html += '<button class="btn btn-wood btn-compact" data-action="backup-now">Back up</button>';
+  html += '<button class="btn btn-ghost btn-compact" data-action="restore-backup">Restore</button>';
   html += '<input type="file" id="profileRestoreInput" accept="application/json,.json" class="hidden">';
-  html += '<button class="btn btn-danger" data-action="reset-progress">Reset Progress</button>';
+  html += '<button class="btn btn-danger btn-compact" data-action="reset-progress">Reset Progress</button>';
   html += '</div>';
   html += '<div class="section-label">Holidays shown</div>';
   html += toggleRowHtml("toggle-us-holidays", "🇺🇸 USA holidays", state.showUSHolidays);
