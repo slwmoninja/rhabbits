@@ -4,3 +4,8 @@
 # See scripts/sync_icon_version.py.
 
 python3 "$(git rev-parse --show-toplevel)/scripts/sync_icon_version.py" || exit 1
+
+# Blocks committing an index.html that doesn't match building
+# scripts/index_template.html -- catches both a hand-edited index.html and a
+# template edit that never got rebuilt. See scripts/verify_build.py.
+python3 "$(git rev-parse --show-toplevel)/scripts/verify_build.py" || exit 1

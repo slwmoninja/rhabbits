@@ -2,6 +2,9 @@
 .DS_Store
 Thumbs.db
 
+# Python cache -- scripts/verify_build.py imports scripts/build_index.py
+__pycache__/
+
 # Local source copy + unused design assets (all imagery is embedded as
 # base64/webp inside index.html, except icon-192/512.png which are served
 # as real files for the manifest)
