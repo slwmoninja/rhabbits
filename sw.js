@@ -22,9 +22,27 @@ const PRECACHE_URLS = [
   './index.html', './manifest.json', './icon-192.png', './icon-512.png'
 ];
 
+// Every network trip this worker makes needs to go all the way to the
+// network, not just to the browser's own HTTP cache -- GitHub Pages serves
+// this app with Cache-Control: max-age=600, so a plain fetch() can silently
+// resolve from a same-URL response the browser already cached moments ago
+// (from the very page load this worker is trying to refresh) instead of a
+// genuinely fresh round-trip. That defeats "network-first" for manifest/
+// icons below, and worse, defeats the background revalidation that's
+// supposed to fix a stale shell for next time: checkForUpdate() in
+// index.html purges this worker's *own* Cache Storage entry and reloads on
+// a detected update, but if the reload's navigation fetch then gets served
+// out of the browser's still-fresh (<10min) HTTP cache, the "purged" shell
+// comes right back, and the reload looks like it did nothing -- for up to
+// 10 minutes after every single deploy, on every trigger (open, tab-switch,
+// pull-to-refresh) that funnels through this same fetch handler.
+function freshFetch(req){
+  return fetch(req, {cache:'no-store'});
+}
+
 self.addEventListener('install', (e)=>{
   self.skipWaiting();
-  e.waitUntil(caches.open(CACHE_NAME).then(cache=>cache.addAll(PRECACHE_URLS)).catch(()=>{}));
+  e.waitUntil(caches.open(CACHE_NAME).then(cache=>cache.addAll(PRECACHE_URLS.map(u=>new Request(u, {cache:'no-store'})))).catch(()=>{}));
 });
 self.addEventListener('activate', (e)=>{
   e.waitUntil((async ()=>{
@@ -43,7 +61,7 @@ self.addEventListener('fetch', (e)=>{
   if(/\/(manifest\.json|icon-(192|512)\.png)$/.test(url.pathname)){
     e.respondWith((async ()=>{
       try{
-        const res = await fetch(req);
+        const res = await freshFetch(req);
         if(res && res.ok){ const cache = await caches.open(CACHE_NAME); cache.put(req, res.clone()); }
         return res;
       }catch(err){
@@ -57,7 +75,7 @@ self.addEventListener('fetch', (e)=>{
     const cache = await caches.open(CACHE_NAME);
     const cacheKey = req.mode==='navigate' ? './index.html' : req;
     const cached = await cache.match(cacheKey);
-    const networkFetch = fetch(req).then(res=>{
+    const networkFetch = freshFetch(req).then(res=>{
       if(res && res.ok) cache.put(cacheKey, res.clone());
       return res;
     }).catch(()=>null);

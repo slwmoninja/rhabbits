@@ -707,23 +707,23 @@ var REWARDS = [
     progress: function(){ return "Log a habit to unlock"; }
   },
   {
-    // Folds what used to be two separate rewards (this one, plus a
-    // "Monthly & Once-off Tasks" reward that unlocked at 28 days) into one
-    // -- the 28-day gate became redundant once this 7-carrot one also
-    // grants every other schedule type, and 7 carrots is comfortably
-    // reachable well before day 28 for most players, so keeping both would
-    // have meant the slower one almost never actually gated anything.
+    // Used to gate behind 7 carrots (folding in what was once also a
+    // separate 28-day "Monthly & Once-off Tasks" reward) -- now granted as
+    // a starter reward instead (see unlockStarterRewards()) so a second
+    // habit slot and every schedule type are available from minute one,
+    // rather than something to earn.
     id: "second_garden",
     title: "Second Habit & Flexible Scheduling",
-    desc: "Earn 7 carrots to plant a second habit and unlock new schedules: weekly, monthly, once-off (with a due date), or a custom every-X-days/weeks/months interval.",
+    desc: "Plant a second habit and choose from every schedule: weekly, monthly, once-off (with a due date), or a custom every-X-days/weeks/months interval.",
     medallion: "🥕",
+    starter: true,
     condition: function(state){ return state.carrots >= 7; },
     progress: function(state){ return Math.min(state.carrots,7) + "/7 carrots"; }
   },
   {
     id: "seven_seasons",
     title: "Seven Seasons Strong",
-    desc: "Log a monthly habit 7 times. Unlocks another habit.",
+    desc: "Log a monthly habit 7 times.",
     medallion: "🌙",
     condition: function(state){ return state.habits.some(function(h){ return h.type==="monthly" && h.completions.length>=7; }); },
     progress: function(state){
@@ -735,7 +735,7 @@ var REWARDS = [
   {
     id: "bucket_list",
     title: "Bucket List Buccaneer",
-    desc: "Complete 7 once-off adventures. Unlocks another habit.",
+    desc: "Complete 7 once-off adventures.",
     medallion: "🏴‍☠️",
     condition: function(state){ return onceoffCompletedCount(state) >= 7; },
     progress: function(state){ return Math.min(onceoffCompletedCount(state),7) + "/7 once-offs"; }
@@ -1072,7 +1072,7 @@ var DAY_ONE_ENTRY = {
 
 var GROWTH_INTERVAL = 4; // one growth beat at the 1st discovery, then every 4th after (~monthly, matching the 1/week discovery pace)
 var GROWTH_LINE = [
-  "Also today: I was scared, but I didn't panic. That's new for me.",
+  "Resisted urge to stay on the beach today to watch for passing ships. Time to think about living, not just rescue.",
   "One whole week! I didn't think I'd make it this far — and I did.",
   "This is starting to feel less like a test and more like just... me.",
   "I do the habit before I even think about it now. That's real progress.",
@@ -1189,37 +1189,168 @@ function habitEveryDaysRemaining(h){
    Recurring every year -- month+day only, no year, no completions/carrots
    involved at all. Kept deliberately separate from the habit system. */
 var SPECIAL_DAY_MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+// ---- Global holidays (see GLOBAL_HOLIDAYS below) ----
+// Most special days recur on the same month+day every year (plain
+// sd.month/sd.day, as stored). A handful of holidays instead float to a
+// different day each year -- Easter moves by the lunar calendar, and
+// Mother's/Father's/Thanksgiving are all "Nth weekday of month" rules --
+// so those are computed per-year via sd.rule instead of stored statically.
+// nth=1..5 counts from the start of the month; nth=-1 means "last".
+function nthWeekdayOfMonth(year, month, weekday, nth){
+  if(nth>0){
+    var first = new Date(year, month-1, 1);
+    var offset = (weekday - first.getDay() + 7) % 7;
+    return { month: month, day: 1 + offset + (nth-1)*7 };
+  }
+  var lastOfMonth = new Date(year, month, 0);
+  var offsetBack = (lastOfMonth.getDay() - weekday + 7) % 7;
+  return { month: month, day: lastOfMonth.getDate() - offsetBack };
+}
+// Anonymous Gregorian algorithm (Meeus/Jones/Butcher) for the Sunday of
+// Western (Gregorian) Easter -- accurate for any Gregorian-calendar year.
+function computeEasterSunday(year){
+  var a = year % 19;
+  var b = Math.floor(year/100), c = year % 100;
+  var d = Math.floor(b/4), e = b % 4;
+  var f = Math.floor((b+8)/25);
+  var g = Math.floor((b-f+1)/3);
+  var h = (19*a + b - d - g + 15) % 30;
+  var i = Math.floor(c/4), k = c % 4;
+  var l = (32 + 2*e + 2*i - h - k) % 7;
+  var m = Math.floor((a + 11*h + 22*l)/451);
+  var n = h + l - 7*m + 114;
+  return { month: Math.floor(n/31), day: (n % 31) + 1 };
+}
+// Days offset from Easter Sunday itself (e.g. Good Friday = -2, Easter
+// Monday/Family Day = +1) -- computed via real Date arithmetic so a
+// month-boundary-crossing offset (rare, but possible right at the edge of
+// March/April) still lands on the correct month.
+function easterOffset(year, offsetDays){
+  var d = new Date(year, computeEasterSunday(year).month-1, computeEasterSunday(year).day);
+  d.setDate(d.getDate() + offsetDays);
+  return { month: d.getMonth()+1, day: d.getDate() };
+}
+var HOLIDAY_RULES = {
+  easter: computeEasterSunday,
+  good_friday: function(year){ return easterOffset(year, -2); },
+  family_day: function(year){ return easterOffset(year, 1); },        // Easter Monday, SA public holiday
+  mothers_day: function(year){ return nthWeekdayOfMonth(year, 5, 0, 2); },   // 2nd Sunday of May
+  fathers_day: function(year){ return nthWeekdayOfMonth(year, 6, 0, 3); },   // 3rd Sunday of June
+  mlk_day: function(year){ return nthWeekdayOfMonth(year, 1, 1, 3); },       // 3rd Monday of January
+  presidents_day: function(year){ return nthWeekdayOfMonth(year, 2, 1, 3); }, // 3rd Monday of February
+  memorial_day: function(year){ return nthWeekdayOfMonth(year, 5, 1, -1); }, // last Monday of May
+  labor_day: function(year){ return nthWeekdayOfMonth(year, 9, 1, 1); },     // 1st Monday of September
+  columbus_day: function(year){ return nthWeekdayOfMonth(year, 10, 1, 2); }, // 2nd Monday of October
+  thanksgiving: function(year){ return nthWeekdayOfMonth(year, 11, 4, 4); }  // 4th Thursday of November
+};
+// This year's (or whichever year is passed) month/day for a special day --
+// sd.rule (holidays with a floating date) takes priority over sd.month/day
+// (everything else, including fixed-date holidays like Christmas) when set.
+function resolvedMonthDay(sd, year){
+  if(sd.rule && HOLIDAY_RULES[sd.rule]) return HOLIDAY_RULES[sd.rule](year);
+  return { month: sd.month, day: sd.day };
+}
+// Built-in, non-editable, non-deletable -- merged into specialDaysSorted()
+// below so they ride the same rolling one-year rolodex as user-added
+// birthdays/anniversaries, rather than living in a separate list. Covers
+// the main U.S. and South African national/public holidays (this app's two
+// initial audiences), plus a handful of widely-observed non-national days
+// (New Year's, Valentine's, Easter, Mother's/Father's Day, Halloween,
+// Christmas) shared by both and left without a region tag. sd.region
+// ("US"/"SA") drives the badge text -- see specialDayOccasionLabel(). Icon
+// is per-holiday rather than per-occasion, unlike birthday/anniversary/
+// other (see specialDayIcon()).
+var GLOBAL_HOLIDAYS = [
+  // Shared / widely-observed, not tied to one country
+  { id:"holiday_new_year", builtin:true, names:"New Year's Day", occasion:"holiday", occasionCustom:"", icon:"🎆", month:1, day:1 },
+  { id:"holiday_valentines", builtin:true, names:"Valentine's Day", occasion:"holiday", occasionCustom:"", icon:"💘", month:2, day:14 },
+  { id:"holiday_easter", builtin:true, names:"Easter Sunday", occasion:"holiday", occasionCustom:"", icon:"🥚", rule:"easter" },
+  { id:"holiday_mothers_day", builtin:true, names:"Mother's Day", occasion:"holiday", occasionCustom:"", icon:"👩", rule:"mothers_day" },
+  { id:"holiday_fathers_day", builtin:true, names:"Father's Day", occasion:"holiday", occasionCustom:"", icon:"👨", rule:"fathers_day" },
+  { id:"holiday_halloween", builtin:true, names:"Halloween", occasion:"holiday", occasionCustom:"", icon:"🎃", month:10, day:31 },
+  { id:"holiday_christmas", builtin:true, names:"Christmas", occasion:"holiday", occasionCustom:"", icon:"🎄", month:12, day:25 },
+  // U.S. national holidays -- no icon field: flag is derived from region,
+  // see HOLIDAY_REGION_FLAGS/specialDayIcon().
+  { id:"holiday_mlk_day", builtin:true, names:"Martin Luther King Jr. Day", occasion:"holiday", occasionCustom:"", rule:"mlk_day", region:"US" },
+  { id:"holiday_presidents_day", builtin:true, names:"Presidents' Day", occasion:"holiday", occasionCustom:"", rule:"presidents_day", region:"US" },
+  { id:"holiday_memorial_day", builtin:true, names:"Memorial Day", occasion:"holiday", occasionCustom:"", rule:"memorial_day", region:"US" },
+  { id:"holiday_juneteenth", builtin:true, names:"Juneteenth", occasion:"holiday", occasionCustom:"", month:6, day:19, region:"US" },
+  { id:"holiday_independence_day", builtin:true, names:"Independence Day", occasion:"holiday", occasionCustom:"", month:7, day:4, region:"US" },
+  { id:"holiday_labor_day", builtin:true, names:"Labor Day", occasion:"holiday", occasionCustom:"", rule:"labor_day", region:"US" },
+  { id:"holiday_columbus_day", builtin:true, names:"Columbus Day", occasion:"holiday", occasionCustom:"", rule:"columbus_day", region:"US" },
+  { id:"holiday_veterans_day", builtin:true, names:"Veterans Day", occasion:"holiday", occasionCustom:"", month:11, day:11, region:"US" },
+  { id:"holiday_thanksgiving", builtin:true, names:"Thanksgiving", occasion:"holiday", occasionCustom:"", rule:"thanksgiving", region:"US" },
+  // South African national holidays
+  { id:"holiday_human_rights_day", builtin:true, names:"Human Rights Day", occasion:"holiday", occasionCustom:"", month:3, day:21, region:"SA" },
+  { id:"holiday_good_friday", builtin:true, names:"Good Friday", occasion:"holiday", occasionCustom:"", rule:"good_friday", region:"SA" },
+  { id:"holiday_family_day", builtin:true, names:"Family Day", occasion:"holiday", occasionCustom:"", rule:"family_day", region:"SA" },
+  { id:"holiday_freedom_day", builtin:true, names:"Freedom Day", occasion:"holiday", occasionCustom:"", month:4, day:27, region:"SA" },
+  { id:"holiday_workers_day", builtin:true, names:"Workers' Day", occasion:"holiday", occasionCustom:"", month:5, day:1, region:"SA" },
+  { id:"holiday_youth_day", builtin:true, names:"Youth Day", occasion:"holiday", occasionCustom:"", month:6, day:16, region:"SA" },
+  { id:"holiday_womens_day", builtin:true, names:"National Women's Day", occasion:"holiday", occasionCustom:"", month:8, day:9, region:"SA" },
+  { id:"holiday_heritage_day", builtin:true, names:"Heritage Day", occasion:"holiday", occasionCustom:"", month:9, day:24, region:"SA" },
+  { id:"holiday_reconciliation_day", builtin:true, names:"Day of Reconciliation", occasion:"holiday", occasionCustom:"", month:12, day:16, region:"SA" },
+  { id:"holiday_goodwill_day", builtin:true, names:"Day of Goodwill", occasion:"holiday", occasionCustom:"", month:12, day:26, region:"SA" }
+];
+// Regioned holidays (see GLOBAL_HOLIDAYS) show that country's flag as their
+// icon instead of a thematic glyph -- see specialDayIcon().
+var HOLIDAY_REGION_FLAGS = { US:"🇺🇸", SA:"🇿🇦" };
+
 function findSpecialDay(id){
   return state.specialDays.filter(function(sd){ return sd.id===id; })[0];
 }
+// Only offered for occasion "other" -- birthday/anniversary always use
+// their own fixed icon (see specialDayIcon()), same as the app's other
+// icon-per-category patterns, so there's nothing to pick for those.
+var SPECIAL_DAY_ICON_CHOICES = ["🎓","🏡","👶","🐾","✈️","🏆","💼","🕯️","🌟","🎗️"];
 function freshSpecialDayDraft(){
-  return { names:"", occasion:"birthday", occasionCustom:"", month:1, day:1 };
+  return { names:"", occasion:"birthday", occasionCustom:"", month:1, day:1, icon:SPECIAL_DAY_ICON_CHOICES[0] };
 }
 function specialDayOccasionLabel(sd){
   if(sd.occasion==="birthday") return "Birthday";
   if(sd.occasion==="anniversary") return "Anniversary";
+  // sd.region ("US"/"SA") marks a national holiday specific to that
+  // country (see GLOBAL_HOLIDAYS) -- unregioned ones (New Year's, Easter,
+  // Christmas, etc.) are widely-observed rather than tied to one country.
+  if(sd.occasion==="holiday") return sd.region ? sd.region+" Holiday" : "Holiday";
   return sd.occasionCustom.trim() || "Special Day";
 }
 // Per-occasion icon for list rows -- the topbar cake icon and the generic
 // "Special days" Logbook link stay cake-themed regardless of occasion mix,
 // since those are just a general heads-up, not tied to any one entry.
+// Holidays mostly carry their own explicit icon (Christmas tree, egg,
+// fireworks, etc. -- see GLOBAL_HOLIDAYS), except national ones (sd.region
+// set), which show that country's flag instead -- a Thanksgiving/Christmas/
+// Easter-style thematic glyph doesn't say "this one's specifically a U.S.
+// or South African public holiday" the way a flag does.
 function specialDayIcon(sd){
+  if(sd.occasion==="holiday" && sd.region) return HOLIDAY_REGION_FLAGS[sd.region] || sd.icon || "🎉";
+  if(sd.icon) return sd.icon;
   if(sd.occasion==="anniversary") return "🎉";
   if(sd.occasion==="other") return "🎆";
   return "🎂";
 }
 function specialDayDateLabel(sd){
-  return SPECIAL_DAY_MONTH_NAMES[sd.month-1]+" "+sd.day;
+  var md = resolvedMonthDay(sd, new Date().getFullYear());
+  return SPECIAL_DAY_MONTH_NAMES[md.month-1]+" "+md.day;
 }
 // Days from today (0 = today) until this year's -- or, if already passed,
 // next year's -- occurrence. A leap-day (Feb 29) entry naturally rolls
 // forward to March 1 in a non-leap year, same as plain JS Date math always
-// does -- not worth special-casing for a personal reminder list.
+// does -- not worth special-casing for a personal reminder list. Floating
+// holidays (see resolvedMonthDay()) get their target date recomputed for
+// next year too, rather than just adding 365 days, since e.g. Easter can
+// land in a different month year to year.
 function specialDayNextOccurrenceDays(sd){
   var now = new Date();
   var todayMid = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  var target = new Date(now.getFullYear(), sd.month-1, sd.day);
-  if(target < todayMid) target = new Date(now.getFullYear()+1, sd.month-1, sd.day);
+  var md = resolvedMonthDay(sd, now.getFullYear());
+  var target = new Date(now.getFullYear(), md.month-1, md.day);
+  if(target < todayMid){
+    md = resolvedMonthDay(sd, now.getFullYear()+1);
+    target = new Date(now.getFullYear()+1, md.month-1, md.day);
+  }
   return Math.round((target - todayMid) / 86400000);
 }
 // Signed days relative to *this calendar year's* occurrence specifically
@@ -1230,7 +1361,8 @@ function specialDayNextOccurrenceDays(sd){
 function specialDayDaysDiffThisYear(sd){
   var now = new Date();
   var todayMid = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  var thisYear = new Date(now.getFullYear(), sd.month-1, sd.day);
+  var md = resolvedMonthDay(sd, now.getFullYear());
+  var thisYear = new Date(now.getFullYear(), md.month-1, md.day);
   return Math.round((thisYear - todayMid) / 86400000);
 }
 // Every entry, always -- nothing is ever hidden. Upcoming (including
@@ -1247,8 +1379,11 @@ function specialDaySortKey(sd){
   if(diff >= -7) return diff;
   return 1000 + specialDayNextOccurrenceDays(sd);
 }
+// User-added entries and the built-in GLOBAL_HOLIDAYS ride the same
+// revolving one-year rolodex together, sorted as one list -- holidays are
+// not pinned separately at the top or bottom.
 function specialDaysSorted(){
-  return state.specialDays.slice().sort(function(a,b){
+  return state.specialDays.concat(GLOBAL_HOLIDAYS).sort(function(a,b){
     return specialDaySortKey(a) - specialDaySortKey(b);
   });
 }
@@ -1256,15 +1391,14 @@ function specialDaysSorted(){
 // "tomorrow or today"), so it reads as an advance heads-up to still go get
 // a card/gift, not a same-day notice once that window's already passed.
 function specialDayDueTomorrow(){
-  return state.specialDays.some(function(sd){ return specialDayNextOccurrenceDays(sd)===1; });
+  return state.specialDays.concat(GLOBAL_HOLIDAYS).some(function(sd){ return specialDayNextOccurrenceDays(sd)===1; });
 }
 
+// Flat cap available from the start -- daily habit slots are no longer
+// something to earn (see second_garden's starter unlock); may grow again
+// later, but for now 5 is just a fixed ceiling.
 function maxDailySlots(state){
-  var n = 1;
-  if(state.unlocks.second_garden) n++;
-  if(state.unlocks.seven_seasons) n++;
-  if(state.unlocks.bucket_list) n++;
-  return n;
+  return 5;
 }
 function countActive(state, type){
   return state.habits.filter(function(h){
@@ -1399,7 +1533,7 @@ function defaultState(){
       { id: uid(), names:"Rowen", occasion:"birthday", occasionCustom:"", month:8, day:28 },
       { id: uid(), names:"Jaden", occasion:"birthday", occasionCustom:"", month:7, day:28 }
     ],
-    _specialDayDraft:{ names:"", occasion:"birthday", occasionCustom:"", month:1, day:1 },
+    _specialDayDraft:{ names:"", occasion:"birthday", occasionCustom:"", month:1, day:1, icon:SPECIAL_DAY_ICON_CHOICES[0] },
     _detailSpecialDayId:null,
     // Which date/month key the currently-open habit-note-modal is for --
     // set by "open-habit-note" in onAction(), read by renderHabitNoteModal()
@@ -1432,6 +1566,13 @@ var state = load();
 // when the user last left. Mid-session bottom-nav taps to Rewards/Profile
 // still work as normal; this only resets the *boot* screen.
 state.screen = "logbook";
+// One-time back-fill for players who onboarded before second_garden became
+// a starter unlock (see unlockStarterRewards()) -- without this, anyone
+// who hadn't already banked 7 carrots would be stuck forever, since
+// evaluateRewards() now skips starter entries' condition check entirely.
+if(state.onboarded && !state.unlocks.second_garden){
+  state.unlocks.second_garden = { unlockedAt: todayStr(), reason: STARTER_REASON };
+}
 
 function evaluateRewards(){
   if(!state.onboarded) return;
@@ -1593,7 +1734,7 @@ function unlockFirstDiscoveryFree(){
 }
 
 function unlockStarterRewards(){
-  ["portrait","island_home","first_habit"].forEach(function(id){
+  ["portrait","island_home","first_habit","second_garden"].forEach(function(id){
     state.unlocks[id] = { unlockedAt: todayStr(), reason: STARTER_REASON };
   });
 }
@@ -1615,10 +1756,8 @@ function renderOnboarding(){
       '<div class="onb-screen">' +
         '<div class="onb-logo"><img src="'+ASSET.home_icon+'" alt=""></div>' +
         '<h1 class="onb-title">rHabbits</h1>' +
-        '<p class="onb-copy">Build better habits (<b>rHabbits</b>) by tracking progress. Earn carrots to unlock features. Start with one habit to track.</p>' +
+        '<p class="onb-copy">Build better habits (<b>rHabbits</b>) by tracking progress. Earn carrots to unlock rewards. Start by tracking one or two rHabbits now.</p>' +
         '<button class="btn mt" data-action="onb-next">Get Started</button>' +
-        '<button class="btn-ghost mt" data-action="restore-backup" style="margin-top:14px;">Already used rHabbits? Restore backup</button>' +
-        '<input type="file" id="onbRestoreInput" accept="application/json,.json" class="hidden">' +
       '</div>'
     );
   }
@@ -1648,7 +1787,7 @@ function renderOnboarding(){
   return (
     '<div class="onb-screen">' +
       '<h2 style="color:var(--parchment-hi)">Let\'s get started!</h2>' +
-      '<p class="onb-copy">Choose one habit you\'d like to track daily. (Later you can unlock weekly, monthly, once-off, and custom schedules too.) After you earn 7 carrots, you\'ll unlock your next reward.</p>' +
+      '<p class="onb-copy">Choose one habit you\'d like to track daily. Once you\'re in, you can add up to 5 habits on any schedule -- daily, weekly, monthly, once-off, or custom.</p>' +
       '<div class="field"><label>Habit name</label><input type="text" id="firstHabitName" maxlength="40" placeholder="e.g. Drink 8 glasses of water" value="'+escapeAttr(d.name)+'"></div>' +
       '<div class="field"><label>Habit description (optional)</label><textarea id="firstHabitDescription" maxlength="140" placeholder="e.g. A big glass with breakfast, lunch, and dinner">'+escapeHtml(d.description)+'</textarea></div>' +
       '<div class="emoji-picker">'+EMOJI_CHOICES.map(function(e){return '<button class="emoji-opt '+(d.emoji===e?'selected':'')+'" data-action="pick-emoji" data-emoji="'+e+'">'+e+'</button>';}).join('')+'</div>' +
@@ -1725,9 +1864,12 @@ function renderLogbookScreen(){
   html += '<div class="plaque-label">Carrots earned</div>';
   var sightingsActiveLB = state.sightings.length < SIGHTINGS_TOTAL;
   if(next || sightingsActiveLB){
-    if(next && next.id==="second_garden"){
-      html += '<div class="pip-row">'+carrotPipsHtml(state.carrots,7)+'</div>';
-    }
+    // Generic 7-carrot cycle progress -- used to point specifically at
+    // second_garden (7 carrots for a 2nd habit slot) back when that was
+    // the gate; now that it's a starter unlock, this is just a running
+    // visual of carrot-earning pace rather than progress toward one
+    // specific reward.
+    html += '<div class="pip-row">'+carrotPipsHtml(state.carrots%7,7)+'</div>';
     var nextParts = [];
     if(next){ nextParts.push(next.title); }
     if(sightingsActiveLB){ nextParts.push("New Discovery"); }
@@ -2300,12 +2442,16 @@ function renderSpecialDaysModal(){
     html += '<p class="due-today-empty">No special days added yet. Tap + to add one.</p>';
   } else {
     list.forEach(function(sd){
-      html += '<button class="habit-row" data-action="show-special-day-detail" data-id="'+sd.id+'">' +
-        '<span class="habit-emoji">'+specialDayIcon(sd)+'</span>' +
+      var rowInner = '<span class="habit-emoji">'+specialDayIcon(sd)+'</span>' +
         '<span class="habit-name">'+escapeHtml(sd.names)+'</span>' +
         '<span class="habit-type-badge">'+escapeHtml(specialDayOccasionLabel(sd))+'</span>' +
-        '<span class="special-day-date">'+specialDayDateLabel(sd)+'</span>' +
-      '</button>';
+        '<span class="special-day-date">'+specialDayDateLabel(sd)+'</span>';
+      // Built-in holidays (see GLOBAL_HOLIDAYS) aren't user data -- nothing
+      // to edit or delete, so render as a plain non-interactive row instead
+      // of the tappable button that opens the edit/delete form.
+      html += sd.builtin
+        ? '<div class="habit-row">'+rowInner+'</div>'
+        : '<button class="habit-row" data-action="show-special-day-detail" data-id="'+sd.id+'">'+rowInner+'</button>';
     });
   }
   html += '</div></div>';
@@ -2335,6 +2481,7 @@ function renderSpecialDayFormModal(){
   html += '</select></div>';
   if(d.occasion==="other"){
     html += '<div class="field"><label>Occasion name</label><input type="text" id="specialDayOccasionCustom" maxlength="40" placeholder="e.g. Graduation" value="'+escapeAttr(d.occasionCustom)+'"></div>';
+    html += '<div class="field"><label>Icon</label><div class="emoji-picker">'+SPECIAL_DAY_ICON_CHOICES.map(function(e){return '<button class="emoji-opt '+(d.icon===e?'selected':'')+'" data-action="pick-special-day-icon" data-icon="'+e+'">'+e+'</button>';}).join('')+'</div></div>';
   }
   html += '<div class="field"><label>Date</label><div class="freq-every-inputs">';
   html += '<select id="specialDayMonth">';
@@ -2683,10 +2830,13 @@ function wireEvents(){
       if(h){ h.description = e.target.value; save(); }
     });
   }
-  // Backup restore <input type=file> -- lives inside whichever screen
-  // rendered it (onboarding step 0, or Profile), so it's safe to wire from
-  // here (rebuilt fresh by render() every time, unlike the bottombar).
-  var restoreInput = root.querySelector("#profileRestoreInput") || root.querySelector("#onbRestoreInput");
+  // Backup restore <input type=file> -- lives inside Profile (rebuilt fresh
+  // by render() every time, unlike the bottombar), so it's safe to wire
+  // from here. Onboarding no longer has its own restore entry point --
+  // that's covered by Profile plus the proactive maybeOfferAutoRestore()
+  // prompt (its own #ar-file-input is wired independently, see
+  // offerAutoRestorePathB()).
+  var restoreInput = root.querySelector("#profileRestoreInput");
   if(restoreInput){
     restoreInput.addEventListener("change", function(){
       importLatestBackupFromFiles(restoreInput.files);
@@ -2721,6 +2871,10 @@ function onAction(e){
       break;
     case "pick-emoji":
       state._draft.emoji = el.getAttribute("data-emoji");
+      render();
+      break;
+    case "pick-special-day-icon":
+      state._specialDayDraft.icon = el.getAttribute("data-icon");
       render();
       break;
     case "pick-type":
@@ -2772,7 +2926,7 @@ function onAction(e){
       navigateTo(function(){
         var sd = findSpecialDay(el.getAttribute("data-id"));
         if(!sd) return;
-        state._specialDayDraft = { names:sd.names, occasion:sd.occasion, occasionCustom:sd.occasionCustom, month:sd.month, day:sd.day };
+        state._specialDayDraft = { names:sd.names, occasion:sd.occasion, occasionCustom:sd.occasionCustom, month:sd.month, day:sd.day, icon: sd.icon||SPECIAL_DAY_ICON_CHOICES[0] };
         state._detailSpecialDayId = sd.id;
         state.screen = "special-day-form-modal";
       });
@@ -2902,7 +3056,7 @@ function onAction(e){
       backupNow();
       break;
     case "restore-backup":
-      openBackupRestorePicker(root.querySelector("#profileRestoreInput") || root.querySelector("#onbRestoreInput"));
+      openBackupRestorePicker(root.querySelector("#profileRestoreInput"));
       break;
   }
 }
@@ -3140,7 +3294,11 @@ function saveSpecialDay(){
   var names = d.names.trim();
   if(!names) return;
   if(d.occasion==="other" && !d.occasionCustom.trim()) return;
-  var entry = { names:names, occasion:d.occasion, occasionCustom:d.occasionCustom.trim(), month:d.month, day:d.day };
+  // icon only persists for "other" -- birthday/anniversary always render
+  // their own fixed icon (see specialDayIcon()), so there's nothing to save
+  // for those even if a stale value is still sitting in the draft from an
+  // earlier occasion selection in this same form session.
+  var entry = { names:names, occasion:d.occasion, occasionCustom:d.occasionCustom.trim(), month:d.month, day:d.day, icon: d.occasion==="other" ? d.icon : "" };
   var existing = state._detailSpecialDayId ? findSpecialDay(state._detailSpecialDayId) : null;
   if(existing){
     existing.names = entry.names;
@@ -3148,6 +3306,7 @@ function saveSpecialDay(){
     existing.occasionCustom = entry.occasionCustom;
     existing.month = entry.month;
     existing.day = entry.day;
+    existing.icon = entry.icon;
   } else {
     entry.id = uid();
     state.specialDays.push(entry);
