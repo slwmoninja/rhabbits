@@ -1362,14 +1362,12 @@ function freshSpecialDayDraft(){
 function specialDayOccasionLabel(sd){
   if(sd.occasion==="birthday") return "Birthday";
   if(sd.occasion==="anniversary") return "Anniversary";
-  // sd.region ("US"/"SA") marks a national holiday specific to that
-  // country (see GLOBAL_HOLIDAYS) -- its flag icon (see specialDayIcon())
-  // already says which country, so no redundant "US Holiday"/"SA Holiday"
-  // badge text; that also leaves Birthday/Anniversary less crowded out by
-  // repeated badge text across the many holiday rows. Unregioned holidays
-  // (New Year's, Easter, Christmas, etc.) have no flag to lean on, so they
-  // keep the plain "Holiday" badge.
-  if(sd.occasion==="holiday") return sd.region ? "" : "Holiday";
+  // No badge at all for any holiday, regioned or not -- its icon (a flag
+  // for US/SA, a thematic glyph like 🎄/🥚 otherwise -- see
+  // specialDayIcon()) already distinguishes it from a birthday/anniversary,
+  // and dropping the text leaves Birthday/Anniversary less crowded out by
+  // repeated badge text across the many holiday rows.
+  if(sd.occasion==="holiday") return "";
   return sd.occasionCustom.trim() || "Special Day";
 }
 // Per-occasion icon for list rows -- the topbar cake icon and the generic
