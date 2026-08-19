@@ -663,7 +663,7 @@ var STORAGE_KEY = "rhabbits_state_v1";
 // confirmed against what was actually deployed. Distinct from any
 // data-schema/localStorage version (this app has none yet).
 var APP_VERSION = "1.0.0";
-var EMOJI_CHOICES = ["🌴","🌱","☀️","🌊","🥥","🥕","⛵","🏴‍☠️","🧭","⚓","🦜","🐚","🌙","🗺️","🏝️"];
+var EMOJI_CHOICES = ["🌴","🌱","☀️","🌊","🥥","🥕","⛵","🏴‍☠️","🧭","⚓","🦜","🐚","🌙","🗺️","🏝️","🐶","🐕","🐩","🦮","🐕‍🦺","🐺","🐱","🐈","🐈‍⬛","🦁"];
 
 var REWARDS = [
   {
@@ -1189,11 +1189,20 @@ function habitEveryDaysRemaining(h){
    Recurring every year -- month+day only, no year, no completions/carrots
    involved at all. Kept deliberately separate from the habit system. */
 var SPECIAL_DAY_MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+var SPECIAL_DAY_EMOJI_CHOICES = ["🎂","🎉","🎁","🎈","🥳","🍰","🧁","💐","💍","🕯️","⭐","🎆"];
+// Per-occasion starter icon, used both as the fresh-draft default and as a
+// fallback for special days saved before the emoji picker existed (those
+// have no sd.emoji field yet).
+function specialDayDefaultEmoji(occasion){
+  if(occasion==="anniversary") return "🎉";
+  if(occasion==="other") return "🎆";
+  return "🎂";
+}
 function findSpecialDay(id){
   return state.specialDays.filter(function(sd){ return sd.id===id; })[0];
 }
 function freshSpecialDayDraft(){
-  return { names:"", occasion:"birthday", occasionCustom:"", month:1, day:1 };
+  return { names:"", occasion:"birthday", occasionCustom:"", month:1, day:1, emoji:specialDayDefaultEmoji("birthday") };
 }
 function specialDayOccasionLabel(sd){
   if(sd.occasion==="birthday") return "Birthday";
@@ -1204,9 +1213,7 @@ function specialDayOccasionLabel(sd){
 // "Special days" Logbook link stay cake-themed regardless of occasion mix,
 // since those are just a general heads-up, not tied to any one entry.
 function specialDayIcon(sd){
-  if(sd.occasion==="anniversary") return "🎉";
-  if(sd.occasion==="other") return "🎆";
-  return "🎂";
+  return sd.emoji || specialDayDefaultEmoji(sd.occasion);
 }
 function specialDayDateLabel(sd){
   return SPECIAL_DAY_MONTH_NAMES[sd.month-1]+" "+sd.day;
@@ -2336,6 +2343,7 @@ function renderSpecialDayFormModal(){
   if(d.occasion==="other"){
     html += '<div class="field"><label>Occasion name</label><input type="text" id="specialDayOccasionCustom" maxlength="40" placeholder="e.g. Graduation" value="'+escapeAttr(d.occasionCustom)+'"></div>';
   }
+  html += '<div class="emoji-picker">'+SPECIAL_DAY_EMOJI_CHOICES.map(function(e){return '<button class="emoji-opt '+(d.emoji===e?'selected':'')+'" data-action="pick-special-day-emoji" data-emoji="'+e+'">'+e+'</button>';}).join('')+'</div>';
   html += '<div class="field"><label>Date</label><div class="freq-every-inputs">';
   html += '<select id="specialDayMonth">';
   SPECIAL_DAY_MONTH_NAMES.forEach(function(name, i){
@@ -2643,7 +2651,16 @@ function wireEvents(){
   }
   var sdOccasionSelect = root.querySelector("#specialDayOccasion");
   if(sdOccasionSelect){
-    sdOccasionSelect.addEventListener("change", function(e){ state._specialDayDraft.occasion = e.target.value; render(); });
+    sdOccasionSelect.addEventListener("change", function(e){
+      var d = state._specialDayDraft;
+      // Only follow the occasion's default icon if the user hasn't picked
+      // a custom one -- once they've overridden it, switching occasion
+      // shouldn't clobber their choice.
+      var stillDefault = d.emoji === specialDayDefaultEmoji(d.occasion);
+      d.occasion = e.target.value;
+      if(stillDefault) d.emoji = specialDayDefaultEmoji(d.occasion);
+      render();
+    });
   }
   var sdOccasionCustomInput = root.querySelector("#specialDayOccasionCustom");
   if(sdOccasionCustomInput){
@@ -2723,6 +2740,10 @@ function onAction(e){
       state._draft.emoji = el.getAttribute("data-emoji");
       render();
       break;
+    case "pick-special-day-emoji":
+      state._specialDayDraft.emoji = el.getAttribute("data-emoji");
+      render();
+      break;
     case "pick-type":
       if(el.hasAttribute("disabled")) return;
       state._draft.type = el.getAttribute("data-type");
@@ -2772,7 +2793,7 @@ function onAction(e){
       navigateTo(function(){
         var sd = findSpecialDay(el.getAttribute("data-id"));
         if(!sd) return;
-        state._specialDayDraft = { names:sd.names, occasion:sd.occasion, occasionCustom:sd.occasionCustom, month:sd.month, day:sd.day };
+        state._specialDayDraft = { names:sd.names, occasion:sd.occasion, occasionCustom:sd.occasionCustom, month:sd.month, day:sd.day, emoji:specialDayIcon(sd) };
         state._detailSpecialDayId = sd.id;
         state.screen = "special-day-form-modal";
       });
@@ -3140,7 +3161,7 @@ function saveSpecialDay(){
   var names = d.names.trim();
   if(!names) return;
   if(d.occasion==="other" && !d.occasionCustom.trim()) return;
-  var entry = { names:names, occasion:d.occasion, occasionCustom:d.occasionCustom.trim(), month:d.month, day:d.day };
+  var entry = { names:names, occasion:d.occasion, occasionCustom:d.occasionCustom.trim(), month:d.month, day:d.day, emoji:d.emoji||specialDayDefaultEmoji(d.occasion) };
   var existing = state._detailSpecialDayId ? findSpecialDay(state._detailSpecialDayId) : null;
   if(existing){
     existing.names = entry.names;
@@ -3148,6 +3169,7 @@ function saveSpecialDay(){
     existing.occasionCustom = entry.occasionCustom;
     existing.month = entry.month;
     existing.day = entry.day;
+    existing.emoji = entry.emoji;
   } else {
     entry.id = uid();
     state.specialDays.push(entry);
