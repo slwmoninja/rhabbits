@@ -324,6 +324,11 @@ img{max-width:100%; display:block;}
 /* ---------- Habit detail modal (reuses habit-head/emoji/name/badge above) ---------- */
 .habit-head{display:flex; align-items:center; gap:10px; margin-bottom:14px;}
 .habit-emoji{font-size:1.4rem;}
+/* Special Days rows only (birthdays/anniversaries/other + built-in
+   holidays) -- 30% smaller than the base 1.4rem habit-icon size, since a
+   flag/emoji icon shouldn't dominate a compact list row the way it can for
+   the small number of habit cards on the Logbook. */
+.habit-emoji.special-day-icon{font-size:.98rem;}
 .habit-name{flex:1; font-family:inherit; font-size:1rem; font-weight:700; color:var(--wood-dark); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
 /* Built-in holidays (see GLOBAL_HOLIDAYS) render as a plain <div>, not a
    <button> like every other habit-row/special-day entry -- <button> has no
@@ -2518,7 +2523,7 @@ function renderSpecialDaysModal(){
     html += '<p class="due-today-empty">No special days added yet. Tap + to add one.</p>';
   } else {
     list.forEach(function(sd){
-      var rowInner = '<span class="habit-emoji">'+specialDayIcon(sd)+'</span>' +
+      var rowInner = '<span class="habit-emoji special-day-icon">'+specialDayIcon(sd)+'</span>' +
         '<span class="habit-name'+(sd.builtin?' builtin-holiday':'')+'">'+escapeHtml(sd.names)+'</span>' +
         '<span class="habit-type-badge">'+escapeHtml(specialDayOccasionLabel(sd))+'</span>' +
         '<span class="special-day-date">'+specialDayDateLabel(sd)+'</span>';
