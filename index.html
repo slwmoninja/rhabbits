@@ -1364,9 +1364,13 @@ function specialDayOccasionLabel(sd){
   if(sd.occasion==="birthday") return "Birthday";
   if(sd.occasion==="anniversary") return "Anniversary";
   // sd.region ("US"/"SA") marks a national holiday specific to that
-  // country (see GLOBAL_HOLIDAYS) -- unregioned ones (New Year's, Easter,
-  // Christmas, etc.) are widely-observed rather than tied to one country.
-  if(sd.occasion==="holiday") return sd.region ? sd.region+" Holiday" : "Holiday";
+  // country (see GLOBAL_HOLIDAYS) -- its flag icon (see specialDayIcon())
+  // already says which country, so no redundant "US Holiday"/"SA Holiday"
+  // badge text; that also leaves Birthday/Anniversary less crowded out by
+  // repeated badge text across the many holiday rows. Unregioned holidays
+  // (New Year's, Easter, Christmas, etc.) have no flag to lean on, so they
+  // keep the plain "Holiday" badge.
+  if(sd.occasion==="holiday") return sd.region ? "" : "Holiday";
   return sd.occasionCustom.trim() || "Special Day";
 }
 // Per-occasion icon for list rows -- the topbar cake icon and the generic
@@ -2527,9 +2531,13 @@ function renderSpecialDaysModal(){
     html += '<p class="due-today-empty">No special days added yet. Tap + to add one.</p>';
   } else {
     list.forEach(function(sd){
+      // No badge at all for a regioned holiday (specialDayOccasionLabel()
+      // returns "" -- its flag icon already says which country) rather
+      // than rendering an empty, still-padded/backgrounded pill.
+      var occasionLabel = specialDayOccasionLabel(sd);
       var rowInner = '<span class="habit-emoji special-day-icon">'+specialDayIcon(sd)+'</span>' +
         '<span class="habit-name'+(sd.builtin?' builtin-holiday':'')+'">'+escapeHtml(sd.names)+'</span>' +
-        '<span class="habit-type-badge">'+escapeHtml(specialDayOccasionLabel(sd))+'</span>' +
+        (occasionLabel ? '<span class="habit-type-badge">'+escapeHtml(occasionLabel)+'</span>' : '') +
         '<span class="special-day-date">'+specialDayDateLabel(sd)+'</span>';
       // Built-in holidays (see GLOBAL_HOLIDAYS) aren't user data -- nothing
       // to edit or delete, so render as a plain non-interactive row instead
