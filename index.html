@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>rHabbits</title>
-<meta name="description" content="Build better habits (rHabbits) by tracking daily progress and earning carrots.">
+<meta name="description" content="Build better rHabbits by tracking daily progress and earning carrots.">
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" href="./icon-192.png">
 <!-- iOS Safari reads this tag (not manifest.json) for the Home Screen icon.
@@ -729,7 +729,7 @@ var REWARDS = [
   },
   {
     id: "first_habit",
-    title: "1 Tracked Habit",
+    title: "1 Tracked rHabbit",
     desc: "Alternative portrait option.",
     starter: true,
     // The road not taken -- a glimpse of the *other* castaway look, as a
@@ -751,7 +751,7 @@ var REWARDS = [
     desc: "Defend your carrot seeds from Captain Crow and his evil garden invaders.",
     medallion: "🥥",
     condition: function(state){ return state.habits.some(function(h){ return h.completions.length>0; }); },
-    progress: function(){ return "Log a habit to unlock"; }
+    progress: function(){ return "Log a rHabbit to unlock"; }
   },
   {
     // Used to gate behind 7 carrots (folding in what was once also a
@@ -760,7 +760,7 @@ var REWARDS = [
     // habit slot and every schedule type are available from minute one,
     // rather than something to earn.
     id: "second_garden",
-    title: "Second Habit & Flexible Scheduling",
+    title: "Second rHabbit & Flexible Scheduling",
     desc: "Unlocked multiple rHabbits. Track once off, daily/weekly/monthly/annual and more.",
     medallion: "🥕",
     starter: true,
@@ -769,8 +769,8 @@ var REWARDS = [
   },
   {
     id: "seven_seasons",
-    title: "Seven Seasons Strong",
-    desc: "Log a monthly habit 7 times.",
+    title: "7-Month Streak Badge",
+    desc: "Log a monthly rHabbit 7 times.",
     medallion: "🌙",
     condition: function(state){ return state.habits.some(function(h){ return h.type==="monthly" && h.completions.length>=7; }); },
     progress: function(state){
@@ -781,7 +781,7 @@ var REWARDS = [
   },
   {
     id: "bucket_list",
-    title: "Bucket List Buccaneer",
+    title: "7 Once-Offs Completed Badge",
     desc: "Complete 7 once-off adventures.",
     medallion: "🏴‍☠️",
     condition: function(state){ return onceoffCompletedCount(state) >= 7; },
@@ -1019,7 +1019,7 @@ var SIGHTING_FLAVOR = [
   { title:"Feathers, No Answers", line1:"A parrot. Finally. After all those feathers." },
   { title:"Local Landlord", line1:"An iguana's claimed my rock. Every morning this week." },
   { title:"Thief #2", line1:"A monkey stole my hat. Watched me from a branch." },
-  { title:"The Committee", line1:"Three seabirds watch me do my habits now." },
+  { title:"The Committee", line1:"Three seabirds watch me do my rHabbits now." },
   { title:"Almost Lost A Toe", line1:"Nearly lost a toe to a dinner-plate-sized clam." },
   { title:"Silver Everywhere", line1:"Surrounded by a whole cloud of small fish today." },
   { title:"Not Blinking First", line1:"A moray eel eyeballed me from the reef. Eyeballed it right back." },
@@ -1073,7 +1073,7 @@ var SIGHTING_FLAVOR = [
   { title:"Points Somewhere", line1:"An old compass. Needle spins. Nowhere to go anyway." },
   { title:"Still Can't Use It", line1:"A second sextant. Still can't use one. At least they match." },
   { title:"Definitely Not Using This", line1:"A full anchor. No ship. Very heavy paperweight now." },
-  { title:"Nice Day For It", line1:"Calm skies. Logged the habit. No disasters today." },
+  { title:"Nice Day For It", line1:"Calm skies. Logged the rHabbit. No disasters today." },
   { title:"Just A Drizzle", line1:"A light storm rolled through. Barely noticed." },
   { title:"Something's Coming", line1:"Storm clouds building on the horizon. Don't like the look of it." },
   { title:"More Gardens Than I Can Count", line1:"This treehouse. Still don't know who built it." },
@@ -1103,7 +1103,7 @@ var SIGHTING_FLAVOR = [
   { title:"The Second Chest", line1:"A second sea chest. Buried even deeper than mine." },
   { title:"Roommate #2", line1:"A second hermit crab, moved in. My crab is thrilled. Lying, probably." },
   { title:"My Best Friend Is a Crab", line1:"My best friend. Caught red-clawed, mid-heist. Again." },
-  { title:"Watching Me Work", line1:"A monkey, same branch, every day. Watching me log habits." },
+  { title:"Watching Me Work", line1:"A monkey, same branch, every day. Watching me log rHabbits." },
   { title:"Overhead Again", line1:"The same seagull, three days straight. Named it Steve." },
   { title:"Puffed Up", line1:"Startled a pufferfish. It startled right back. Twice the size." }
 ];
@@ -1122,9 +1122,9 @@ var GROWTH_LINE = [
   "Resisted urge to stay on the beach today to watch for passing ships. Time to think about living, not just rescue.",
   "One whole week! I didn't think I'd make it this far — and I did.",
   "This is starting to feel less like a test and more like just... me.",
-  "I do the habit before I even think about it now. That's real progress.",
+  "I do the rHabbit before I even think about it now. That's real progress.",
   "I actually look forward to this now. That's what growth feels like.",
-  "Ben Franklin once wrote, 'Well done is better than well said.' Finally get it. I just do the habit now — no talking myself into it.",
+  "Ben Franklin once wrote, 'Well done is better than well said.' Finally get it. I just do the rHabbit now — no talking myself into it.",
   "I don't need a reason anymore. Doing it is the reason.",
   "I'm not the same castaway who started this. I like who I'm becoming.",
   "I feel proud when I finish now. That feeling wasn't always there.",
@@ -1139,7 +1139,7 @@ var GROWTH_LINE = [
   "I've outlasted every fear I started with. Every single one.",
   "This island didn't shrink me. It grew me. I'm bigger than this place now.",
   "I don't need to prove anything anymore. This just feels like home.",
-  "The habit isn't something I do anymore. It's part of who I am. That's the win.",
+  "The rHabbit isn't something I do anymore. It's part of who I am. That's the win.",
   "Whatever this island tried to break, it made me stronger instead.",
   "I'm helping the next version of me, the way I once needed help. Full circle.",
   "That same old book again — Crusoe wrote, 'It is not the part of wise men to give themselves up to their misery.' Neither is it mine, apparently.",
@@ -1831,7 +1831,7 @@ function renderOnboarding(){
       '<div class="onb-screen">' +
         '<div class="onb-logo"><img src="'+ASSET.home_icon+'" alt=""></div>' +
         '<h1 class="onb-title">rHabbits</h1>' +
-        '<p class="onb-copy">Build better habits (<b>rHabbits</b>) by tracking progress. Earn carrots to unlock rewards. Start by tracking one or two rHabbits now.</p>' +
+        '<p class="onb-copy">Build better <b>rHabbits</b> by tracking progress. Earn carrots to unlock rewards. Start by tracking one or two rHabbits now.</p>' +
         '<button class="btn mt" data-action="onb-next">Get Started</button>' +
       '</div>'
     );
@@ -1862,9 +1862,9 @@ function renderOnboarding(){
   return (
     '<div class="onb-screen">' +
       '<h2 style="color:var(--parchment-hi)">Let\'s get started!</h2>' +
-      '<p class="onb-copy">Choose one habit you\'d like to track daily. Once you\'re in, you can add up to 5 habits on any schedule -- daily, weekly, monthly, once-off, or custom.</p>' +
-      '<div class="field"><label>Habit name</label><input type="text" id="firstHabitName" maxlength="40" placeholder="e.g. Drink 8 glasses of water" value="'+escapeAttr(d.name)+'"></div>' +
-      '<div class="field"><label>Habit description (optional)</label><textarea id="firstHabitDescription" maxlength="140" placeholder="e.g. A big glass with breakfast, lunch, and dinner">'+escapeHtml(d.description)+'</textarea></div>' +
+      '<p class="onb-copy">Choose one rHabbit you\'d like to track daily. Once you\'re in, you can add up to 5 rHabbits on any schedule -- daily, weekly, monthly, once-off, or custom.</p>' +
+      '<div class="field"><label>rHabbit name</label><input type="text" id="firstHabitName" maxlength="40" placeholder="e.g. Drink 8 glasses of water" value="'+escapeAttr(d.name)+'"></div>' +
+      '<div class="field"><label>rHabbit description (optional)</label><textarea id="firstHabitDescription" maxlength="140" placeholder="e.g. A big glass with breakfast, lunch, and dinner">'+escapeHtml(d.description)+'</textarea></div>' +
       '<div class="emoji-picker">'+EMOJI_CHOICES.map(function(e){return '<button class="emoji-opt '+(d.emoji===e?'selected':'')+'" data-action="pick-emoji" data-emoji="'+e+'">'+e+'</button>';}).join('')+'</div>' +
       '<button class="btn mt" data-action="finish-onboarding" '+(d.name.trim()?'':'disabled')+'>Start Tracking 🌴</button>' +
     '</div>'
@@ -1890,10 +1890,10 @@ function renderTopbar(){
     html += '  <button class="icon-btn special-day-btn" data-action="show-special-days" aria-label="A special day is tomorrow"><span>🎂</span></button>';
   }
   if(dueCount>0){
-    html += '  <button class="icon-btn due-today-btn" data-action="show-due-today" aria-label="'+dueCount+' habit'+(dueCount===1?'':'s')+' due today"><span>📅</span><span class="due-today-badge">'+dueCount+'</span></button>';
+    html += '  <button class="icon-btn due-today-btn" data-action="show-due-today" aria-label="'+dueCount+' rHabbit'+(dueCount===1?'':'s')+' due today"><span>📅</span><span class="due-today-badge">'+dueCount+'</span></button>';
   }
   if(canAddAnyHabit(state)){
-    html += '  <button class="icon-btn add-habit-fab" data-action="open-add-habit" aria-label="Add a habit" title="You have unlocked a new habit">+</button>';
+    html += '  <button class="icon-btn add-habit-fab" data-action="open-add-habit" aria-label="Add a rHabbit" title="You have unlocked a new rHabbit">+</button>';
   } else if(dueCount===0 && !cakeDue){
     html += '  <span class="topbar-spacer"></span>';
   }
@@ -1956,12 +1956,12 @@ function renderLogbookScreen(){
 
   html += renderSpecialDaysLink();
 
-  html += renderHabitGroup("daily","Habits: Activity Tracking");
+  html += renderHabitGroup("daily","rHabbits: Activity Tracking");
   if(state.unlocks.second_garden || countActive(state,"weekly")>0){
-    html += renderHabitGroup("weekly","Weekly Habits");
+    html += renderHabitGroup("weekly","Weekly rHabbits");
   }
   if(state.unlocks.second_garden || countActive(state,"monthly")>0){
-    html += renderHabitGroup("monthly","Monthly Habits");
+    html += renderHabitGroup("monthly","Monthly rHabbits");
   }
   if(state.unlocks.second_garden || countActive(state,"every")>0){
     html += renderHabitGroup("every","Custom Schedule");
@@ -2127,7 +2127,7 @@ function renderHabitDetailModal(id){
       if(h.dueDate){ html += '<div class="habit-meta">Due '+h.dueDate+'</div>'; }
     }
   }
-  html += '<button class="btn btn-danger btn-block mt" data-action="delete-habit" data-id="'+h.id+'">Remove this habit</button>';
+  html += '<button class="btn btn-danger btn-block mt" data-action="delete-habit" data-id="'+h.id+'">Remove this rHabbit</button>';
   html += '</div></div>';
   return html;
 }
@@ -2238,7 +2238,7 @@ function renderTreasureHuntModal(){
     html += '</div>';
     if(!canMove){
       var allowedToday = treasureMovesAllowedToday();
-      html += '<p class="tmap-hint">Log a habit today to earn your next move.<br>Up to '+allowedToday+' move'+(allowedToday===1?'':'s')+' earned per day.</p>';
+      html += '<p class="tmap-hint">Log a rHabbit today to earn your next move.<br>Up to '+allowedToday+' move'+(allowedToday===1?'':'s')+' earned per day.</p>';
     }
   }
   html += '</div></div>';
@@ -2387,8 +2387,8 @@ function renderRewardsScreen(){
   // enough unlocked rewards to actually scroll past, a player can choose
   // which ones they want to keep front-and-center. Everything still locked
   // beyond the "Next Rewards" teaser above is intentionally not spelled out
-  // individually -- seeing "Seven Seasons Strong" or "Bucket List
-  // Buccaneer" as their own locked cards on day one is just clutter/overwhelm
+  // individually -- seeing "7-Month Streak Badge" or "7 Once-Offs Completed
+  // Badge" as their own locked cards on day one is just clutter/overwhelm
   // before they're even relevant.
   var newDiscoveryFavorited = state.favoriteRewards.indexOf("new_discovery")!==-1;
   var otherCards = [{ favorited: newDiscoveryFavorited, html: renderNewDiscoveryCard(newDiscoveryFavorited) }];
@@ -2422,7 +2422,7 @@ function renderSightingsGalleryModal(){
   html += '<button class="modal-close" data-action="close-modal">✕</button>';
   html += '<h3>New Discovery</h3>';
   if(state.sightings.length===0){
-    html += '<p class="sightings-teaser">No discoveries yet. Keep logging habits — your first island sighting unlocks at 7 carrots.</p>';
+    html += '<p class="sightings-teaser">No discoveries yet. Keep logging rHabbits — your first island sighting unlocks at 7 carrots.</p>';
     html += '</div></div>';
     return html;
   }
@@ -2629,16 +2629,16 @@ function renderAddHabitModal(){
   var html = '<div class="modal-backdrop" data-backdrop="add-habit">';
   html += '<div class="modal">';
   html += '<button class="modal-close" data-action="close-modal">✕</button>';
-  html += '<h3>Add a Habit</h3>';
+  html += '<h3>Add a rHabbit</h3>';
   html += '<div class="field"><label>Name</label><input type="text" id="addHabitName" maxlength="40" placeholder="e.g. Stretch for 5 minutes" value="'+escapeAttr(d.name)+'"></div>';
-  html += '<div class="field"><label>Habit description (optional)</label><textarea id="addHabitDescription" maxlength="140" placeholder="e.g. Right after brushing my teeth">'+escapeHtml(d.description)+'</textarea></div>';
+  html += '<div class="field"><label>rHabbit description (optional)</label><textarea id="addHabitDescription" maxlength="140" placeholder="e.g. Right after brushing my teeth">'+escapeHtml(d.description)+'</textarea></div>';
   html += '<div class="emoji-picker">'+EMOJI_CHOICES.map(function(e){return '<button class="emoji-opt '+(d.emoji===e?'selected':'')+'" data-action="pick-emoji" data-emoji="'+e+'">'+e+'</button>';}).join('')+'</div>';
   html += '<div class="type-picker">';
   if(!typesUnlocked){
     // Pre-unlock: the original 3-way picker, unchanged in spirit -- just
     // re-pointed at the reward that now actually gates it (see the
     // second_garden REWARDS entry, which folded in the old 28-day gate).
-    html += typeOptRow("daily","Daily", dailyCount+"/"+dailyMax+" habits used", d.type==="daily", dailyDisabled);
+    html += typeOptRow("daily","Daily", dailyCount+"/"+dailyMax+" rHabbits used", d.type==="daily", dailyDisabled);
     html += typeOptRow("monthly","Monthly", "🔒 Unlocks at 7 carrots", d.type==="monthly", monthlyDisabled);
     html += typeOptRow("onceoff","Once-off", "🔒 Unlocks at 7 carrots", d.type==="onceoff", onceoffDisabled);
   } else {
@@ -2646,7 +2646,7 @@ function renderAddHabitModal(){
     if(d.type==="onceoff"){
       html += '<div class="field freq-subfield"><label>Due date</label><input type="date" id="addHabitDueDate" value="'+escapeAttr(d.dueDate||todayStr())+'"></div>';
     }
-    html += typeOptRow("daily","Daily", dailyCount+"/"+dailyMax+" habits used", d.type==="daily", dailyDisabled);
+    html += typeOptRow("daily","Daily", dailyCount+"/"+dailyMax+" rHabbits used", d.type==="daily", dailyDisabled);
     html += typeOptRow("weekly","Weekly", weeklyCount+"/"+weeklyMax+" used", d.type==="weekly", weeklyDisabled);
     html += typeOptRow("monthly","Monthly", monthlyCount+"/"+monthlyMax+" used", d.type==="monthly", monthlyDisabled);
     html += typeOptRow("every","Every X", everyCount+"/"+everyMax+" used", d.type==="every", everyDisabled);
@@ -2708,7 +2708,7 @@ function renderProfileModal(){
   html += '<div class="profile-stats">';
   html += '<div class="profile-stat"><b>'+state.carrots+'</b><span>Carrots</span></div>';
   html += '<div class="profile-stat"><b>'+daysAshore(state)+'</b><span>Days Ashore</span></div>';
-  html += '<div class="profile-stat"><b>'+state.habits.length+'</b><span>Habits</span></div>';
+  html += '<div class="profile-stat"><b>'+state.habits.length+'</b><span>rHabbits</span></div>';
   html += '</div>';
   html += '<div class="section-label">Manage</div>';
   html += '<div class="profile-actions">';
@@ -2928,7 +2928,7 @@ function wireEvents(){
     });
     detailNameInput.addEventListener("blur", function(e){
       var h = findHabit(state._detailHabitId);
-      if(h && !h.name.trim()){ h.name = "Untitled habit"; e.target.value = h.name; save(); }
+      if(h && !h.name.trim()){ h.name = "Untitled rHabbit"; e.target.value = h.name; save(); }
     });
   }
   var detailDescInput = root.querySelector("#habitDetailDescription");
@@ -3377,7 +3377,7 @@ function renderHabitNoteModal(id){
   return html;
 }
 function deleteHabit(id){
-  if(!confirm("Remove this habit?")) return;
+  if(!confirm("Remove this rHabbit?")) return;
   var h = findHabit(id);
   // Closes a carrot-farming loophole: create a habit, log it, delete it to
   // free its slot, create another, log it, delete it again... would
@@ -3897,7 +3897,7 @@ function offerAutoRestore(parsed){
   var n = (parsed.habits||[]).length;
   var when = parsed.startDate || "a previous session";
   var wrap = openInfoModal("Restore your data?",
-    '<div style="margin-bottom:14px;">This device\'s rHabbits data looks empty, but a backup was found — '+n+' habit(s) since '+escapeHtml(when)+'. Restore it?</div>' +
+    '<div style="margin-bottom:14px;">This device\'s rHabbits data looks empty, but a backup was found — '+n+' rHabbit(s) since '+escapeHtml(when)+'. Restore it?</div>' +
     '<button class="btn btn-block" id="ar-yes" style="margin-bottom:8px;">Restore</button>' +
     '<button class="btn-ghost btn-block" id="ar-no">No, start fresh</button>'
   );
@@ -4295,7 +4295,7 @@ function initCocoCannon(){
         (state.cocoHighScore ? '<div class="coco-sub">Best score: '+state.cocoHighScore+'</div>' : '') +
         (state.cocoLives>0
           ? '<button class="btn" id="cocoStartBtn">Start</button>'
-          : '<p>You\'re out of carrots -- log a habit today to earn one.</p>');
+          : '<p>You\'re out of carrots -- log a rHabbit today to earn one.</p>');
     } else if(phase==="gameover"){
       var beat = score>0 && score===state.cocoHighScore;
       overlay.innerHTML =
@@ -4303,7 +4303,7 @@ function initCocoCannon(){
         '<p>Final score: '+score+(beat?' -- new best!':'')+'</p>' +
         (state.cocoLives>0
           ? '<button class="btn" id="cocoStartBtn">Play Again</button>'
-          : '<p>Log a habit today to earn another life.</p>');
+          : '<p>Log a rHabbit today to earn another life.</p>');
     }
     var startBtn = document.getElementById("cocoStartBtn");
     if(startBtn) startBtn.addEventListener("click", startPlaying);
