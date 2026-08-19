@@ -125,7 +125,6 @@ img{max-width:100%; display:block;}
 }
 .settings-chip:active{transform:translateY(1px);}
 .settings-chip.on{background:var(--leaf); border-color:var(--leaf-deep); color:#fff;}
-.settings-chip.danger{border-color:var(--danger); color:var(--danger);}
 
 .avatar-choice{display:flex; gap:18px; margin:8px 0 26px;}
 .avatar-option{
@@ -2698,10 +2697,8 @@ function typeOptRow(value,title,sub,selected,disabled){
 // Shared by every Profile "Settings" chip below -- one-shot actions and
 // toggles alike, so they're visually indistinguishable except for an
 // active toggle's solid "on" fill (see .settings-chip.on).
-function settingsChipHtml(action, label, opts){
-  opts = opts || {};
-  var cls = "settings-chip" + (opts.on ? " on" : "") + (opts.danger ? " danger" : "");
-  return '<button class="'+cls+'" data-action="'+action+'">'+label+'</button>';
+function settingsChipHtml(action, label, on){
+  return '<button class="settings-chip'+(on?' on':'')+'" data-action="'+action+'">'+label+'</button>';
 }
 
 function renderProfileModal(){
@@ -2733,9 +2730,8 @@ function renderProfileModal(){
   html += settingsChipHtml("switch-avatar", "Switch Castaway");
   html += settingsChipHtml("backup-now", "Back up");
   html += settingsChipHtml("restore-backup", "Restore");
-  html += settingsChipHtml("reset-progress", "Reset Progress", {danger:true});
-  html += settingsChipHtml("toggle-us-holidays", "🇺🇸 USA holidays", {on:state.showUSHolidays});
-  html += settingsChipHtml("toggle-sa-holidays", "🇿🇦 RSA holidays", {on:state.showSAHolidays});
+  html += settingsChipHtml("toggle-us-holidays", "🇺🇸 USA holidays", state.showUSHolidays);
+  html += settingsChipHtml("toggle-sa-holidays", "🇿🇦 RSA holidays", state.showSAHolidays);
   html += '</div>';
   html += '<input type="file" id="profileRestoreInput" accept="application/json,.json" class="hidden">';
   html += '<div style="margin-top:18px; padding-top:14px; border-top:1px solid var(--parchment-edge); display:flex; justify-content:space-between; font-size:.78rem; color:var(--wood);">';
@@ -3153,17 +3149,6 @@ function onAction(e){
     case "toggle-sa-holidays":
       state.showSAHolidays = !state.showSAHolidays;
       save(); render();
-      break;
-    case "reset-progress":
-      if(confirm("Reset all progress? This cannot be undone.")){
-        state = defaultState();
-        save(); render();
-        // Full reset hands back off to a fresh onboarding flow -- establish
-        // it as a new baseline (like the very first load) rather than
-        // pushing, so back from onboarding step 0 exits the app instead of
-        // returning to whatever screen was open right before the reset.
-        try{ history.replaceState(currentNavState(), ""); }catch(err){}
-      }
       break;
     case "ack-celebration":
       state.pendingCelebration = null;
