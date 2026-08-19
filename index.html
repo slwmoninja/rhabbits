@@ -2724,8 +2724,6 @@ function renderProfileModal(){
   html += '<div style="margin-top:18px; padding-top:14px; border-top:1px solid var(--parchment-edge); display:flex; justify-content:space-between; font-size:.78rem; color:var(--wood);">';
   html += '<span>Version</span><span>'+APP_VERSION+'</span>';
   html += '</div>';
-  var diag = latestDiagEntry();
-  if(diag){ html += '<div style="margin-top:8px; font-size:.66rem; color:var(--wood); opacity:.75; line-height:1.4;">'+escapeHtml(diag.message)+'</div>'; }
   html += '</div></div>';
   return html;
 }
@@ -3643,48 +3641,14 @@ function maybeShowInstallPrompt(){
   }, 1500);
 }
 
-/* =========================================================
-   DIAGNOSTIC LOG -- there's no dedicated log viewer in rHabbits, so this is
-   deliberately minimal: a handful of the most recent entries, persisted so
-   they survive a reload, surfaced as a small muted line in Profile (see
-   renderProfileModal/latestDiagEntry) -- just enough to be checkable later
-   if a user reports data loss, without a whole Settings > Error Log screen.
-   ========================================================= */
-var DIAG_LOG_KEY = "rhabbits_diag_log";
-function logDiag(message){
-  try{
-    var log = JSON.parse(localStorage.getItem(DIAG_LOG_KEY) || "[]");
-    log.unshift({ts: Date.now(), message: message});
-    localStorage.setItem(DIAG_LOG_KEY, JSON.stringify(log.slice(0,3)));
-  }catch(e){}
-}
-function latestDiagEntry(){
-  try{
-    var log = JSON.parse(localStorage.getItem(DIAG_LOG_KEY) || "[]");
-    return log[0] || null;
-  }catch(e){ return null; }
-}
 // Best-effort ask not to auto-evict this site's storage under low-disk
-// pressure. There's no way to test real eviction behavior on someone else's
-// actual phone from here, so a denial (with a rough usage/quota estimate)
-// is logged rather than silently swallowed.
+// pressure -- fire-and-forget; nothing surfaces this on a denial, so
+// there's nothing to await or branch on beyond attempting it.
 function checkStoragePersistence(){
   if(!(navigator.storage && navigator.storage.persist)) return;
-  (function(){
-    var persistedPromise = navigator.storage.persisted ? navigator.storage.persisted() : Promise.resolve(false);
-    persistedPromise.then(function(persisted){
-      var work = persisted ? Promise.resolve(true) : navigator.storage.persist();
-      work.then(function(granted){
-        if(granted) return;
-        var detail = "";
-        (navigator.storage.estimate ? navigator.storage.estimate() : Promise.resolve(null)).then(function(est){
-          if(est && est.quota){ detail = " (using ~"+Math.round((est.usage||0)/1048576)+"MB of ~"+Math.round(est.quota/1048576)+"MB available)"; }
-        }).catch(function(){}).then(function(){
-          logDiag("Storage is NOT persisted"+detail+" — this browser may silently evict rHabbits' data under storage pressure. Installing to your Home Screen gives the strongest protection.");
-        });
-      }).catch(function(){});
-    }).catch(function(){});
-  })();
+  (navigator.storage.persisted ? navigator.storage.persisted() : Promise.resolve(false)).then(function(persisted){
+    if(!persisted) navigator.storage.persist().catch(function(){});
+  }).catch(function(){});
 }
 
 /* =========================================================
