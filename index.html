@@ -2153,7 +2153,11 @@ function dailyStreak(h){
 function renderNextRewardsList(chainNext, sightingsActive){
   var html = '<ul class="next-rewards-list">';
   if(chainNext){ html += '<li>'+chestIconSvg("0.8rem")+' '+chainNext.title+'</li>'; }
-  if(sightingsActive){ html += '<li>👁️ Discovery</li>'; }
+  // "New" in red -- calls out that each Discovery unlock adds fresh
+  // content (a picture + a paired Castaway's Log story entry, see
+  // evaluateSightings()/unlockedJournalEntries()), not just a repeat of
+  // something already seen.
+  if(sightingsActive){ html += '<li>👁️ <span style="color:var(--danger);">New</span> Discovery</li>'; }
   html += '</ul>';
   return html;
 }
