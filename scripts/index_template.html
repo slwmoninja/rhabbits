@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>rHabbits</title>
-<meta name="description" content="Build better habits (rHabbits) by tracking daily progress and earning carrots.">
+<meta name="description" content="Build better rHabbits by tracking daily progress and earning carrots.">
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" href="./icon-192.png">
 <!-- iOS Safari reads this tag (not manifest.json) for the Home Screen icon.
@@ -110,6 +110,21 @@ img{max-width:100%; display:block;}
 .btn-danger{background:linear-gradient(180deg,#c0503b,var(--danger)); color:#fff2ec;}
 .btn-block{width:100%;}
 .mt{margin-top:22px;}
+/* Profile's single "Settings" section -- every account/data action (Switch
+   Castaway, Back up, Restore, Reset) and every toggle (holidays shown)
+   share this one small chip style, wrapped multiple-per-row, instead of
+   full-width stacked buttons -- de-emphasized vs. the castaway story/stats
+   above, and visually uniform regardless of whether a given chip is a
+   one-shot action or a toggle (an "on" toggle just fills solid; nothing
+   else about its size/shape differs from a plain action chip). */
+.settings-row{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px;}
+.settings-chip{
+  appearance:none; border:1px solid var(--parchment-edge); border-radius:20px;
+  padding:8px 14px; font-size:.85rem; font-weight:700; font-family:inherit;
+  background:var(--parchment-hi); color:var(--wood-dark);
+}
+.settings-chip:active{transform:translateY(1px);}
+.settings-chip.on{background:var(--leaf); border-color:var(--leaf-deep); color:#fff;}
 
 .avatar-choice{display:flex; gap:18px; margin:8px 0 26px;}
 .avatar-option{
@@ -295,6 +310,11 @@ img{max-width:100%; display:block;}
 
 /* ---------- Habit rows (compact, tap for detail) ---------- */
 .section-label{color:var(--parchment-edge); font-size:.75rem; text-transform:uppercase; letter-spacing:.14em; margin:18px 4px 8px;}
+/* .section-label's light color is tuned for the Logbook screen's dark
+   background (where it's normally used) -- inside a .modal (light parchment
+   background, e.g. Profile's "Manage"/"Holidays shown" labels), that same
+   color would be near-invisible low-contrast, so darken it in that context. */
+.modal .section-label{color:var(--wood);}
 .habit-row{
   width:100%; display:flex; align-items:center; gap:10px; text-align:left;
   background:linear-gradient(180deg, var(--parchment-hi), var(--parchment));
@@ -310,7 +330,23 @@ img{max-width:100%; display:block;}
 /* ---------- Habit detail modal (reuses habit-head/emoji/name/badge above) ---------- */
 .habit-head{display:flex; align-items:center; gap:10px; margin-bottom:14px;}
 .habit-emoji{font-size:1.4rem;}
-.habit-name{flex:1; font-weight:700; color:var(--wood-dark); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+/* Special Days rows only (birthdays/anniversaries/other + built-in
+   holidays) -- 30% smaller than the base 1.4rem habit-icon size, since a
+   flag/emoji icon shouldn't dominate a compact list row the way it can for
+   the small number of habit cards on the Logbook. */
+.habit-emoji.special-day-icon{font-size:.98rem;}
+.habit-name{flex:1; font-family:inherit; font-size:1rem; font-weight:700; color:var(--wood-dark); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+/* Built-in holidays (see GLOBAL_HOLIDAYS) render as a plain <div>, not a
+   <button> like every other habit-row/special-day entry -- <button> has no
+   inherited font-size/family of its own in this app's reset (see the bare
+   `button{font-family:inherit; cursor:pointer;}` rule above), so without
+   this, a holiday's name text picks up the browser's own default control
+   font instead of matching the rest of the list. font-size/family are
+   pinned explicitly above so every row (button or div) renders identically
+   regardless of element type; this just also drops the bold weight so
+   holidays read as visually lighter than a user's own birthdays/
+   anniversaries/etc. -- same size and font, less emphasis. */
+.habit-name.builtin-holiday{font-weight:400;}
 .habit-name-input{
   flex:1; min-width:0; border:none; border-bottom:1px dashed transparent; background:transparent;
   font-weight:700; color:var(--wood-dark); font-size:1rem; font-family:inherit; padding:2px 0;
@@ -556,8 +592,6 @@ img.reward-hero{max-height:240px; max-width:100%; margin:0 auto 10px; border-rad
 .profile-stats{display:flex; justify-content:space-around; margin:14px 0 20px; text-align:center;}
 .profile-stat b{display:block; font-size:1.3rem; color:var(--wood-dark);}
 .profile-stat span{font-size:.68rem; color:var(--wood); text-transform:uppercase; letter-spacing:.06em;}
-.profile-actions{display:flex; flex-direction:column; gap:10px;}
-
 .toast{
   position:fixed; left:50%; bottom:24px; transform:translateX(-50%);
   background:var(--wood-dark); color:var(--parchment-hi); padding:10px 18px; border-radius:20px;
@@ -682,7 +716,7 @@ var REWARDS = [
   },
   {
     id: "first_habit",
-    title: "1 Tracked Habit",
+    title: "1 Tracked rHabbit",
     desc: "Alternative portrait option.",
     starter: true,
     // The road not taken -- a glimpse of the *other* castaway look, as a
@@ -704,43 +738,54 @@ var REWARDS = [
     desc: "Defend your carrot seeds from Captain Crow and his evil garden invaders.",
     medallion: "🥥",
     condition: function(state){ return state.habits.some(function(h){ return h.completions.length>0; }); },
-    progress: function(){ return "Log a habit to unlock"; }
+    progress: function(){ return "Log a rHabbit to unlock"; }
   },
   {
-    // Folds what used to be two separate rewards (this one, plus a
-    // "Monthly & Once-off Tasks" reward that unlocked at 28 days) into one
-    // -- the 28-day gate became redundant once this 7-carrot one also
-    // grants every other schedule type, and 7 carrots is comfortably
-    // reachable well before day 28 for most players, so keeping both would
-    // have meant the slower one almost never actually gated anything.
+    // Used to gate behind 7 carrots (folding in what was once also a
+    // separate 28-day "Monthly & Once-off Tasks" reward) -- now granted as
+    // a starter reward instead (see unlockStarterRewards()) so a second
+    // habit slot and every schedule type are available from minute one,
+    // rather than something to earn.
     id: "second_garden",
-    title: "Second Habit & Flexible Scheduling",
-    desc: "Earn 7 carrots to plant a second habit and unlock new schedules: weekly, monthly, once-off (with a due date), or a custom every-X-days/weeks/months interval.",
+    title: "More rHabbits to track",
+    desc: "Unlocked multiple rHabbits. Track once off, daily/weekly/monthly/annual and more.",
     medallion: "🥕",
+    starter: true,
     condition: function(state){ return state.carrots >= 7; },
     progress: function(state){ return Math.min(state.carrots,7) + "/7 carrots"; }
   },
   {
+    // Long-term (a ~7-month goal) -- see imminent() below and
+    // nextLockedReward()'s use of it: this only surfaces in the Logbook's
+    // "Next reward" teaser once it's genuinely close, rather than sitting
+    // there as a many-months-away line item from day one. New Discovery
+    // (the 7-carrot picture+story pair, see evaluateSightings()) isn't
+    // gated this way -- that one's on a short, ever-recurring cycle, not a
+    // single long-term goal, so it stays visible in the teaser as usual.
     id: "seven_seasons",
-    title: "Seven Seasons Strong",
-    desc: "Log a monthly habit 7 times. Unlocks another habit.",
+    title: "7-Month Streak Badge",
+    desc: "Log a monthly rHabbit 7 times.",
     medallion: "🌙",
-    condition: function(state){ return state.habits.some(function(h){ return h.type==="monthly" && h.completions.length>=7; }); },
-    progress: function(state){
-      var best = state.habits.filter(function(h){return h.type==="monthly";})
-        .reduce(function(m,h){ return Math.max(m,h.completions.length); },0);
-      return Math.min(best,7) + "/7 months";
-    }
+    condition: function(state){ return monthlyStreakBest(state)>=7; },
+    progress: function(state){ return Math.min(monthlyStreakBest(state),7) + "/7 months"; },
+    imminent: function(state){ return monthlyStreakBest(state) >= 5; } // last 2 months
   },
   {
+    // Same "long-term, only tease once imminent" treatment as seven_seasons
+    // above.
     id: "bucket_list",
-    title: "Bucket List Buccaneer",
-    desc: "Complete 7 once-off adventures. Unlocks another habit.",
+    title: "7 Once-Offs Completed Badge",
+    desc: "Complete 7 once-off adventures.",
     medallion: "🏴‍☠️",
     condition: function(state){ return onceoffCompletedCount(state) >= 7; },
-    progress: function(state){ return Math.min(onceoffCompletedCount(state),7) + "/7 once-offs"; }
+    progress: function(state){ return Math.min(onceoffCompletedCount(state),7) + "/7 once-offs"; },
+    imminent: function(state){ return onceoffCompletedCount(state) >= 5; } // last 2 once-offs
   }
 ];
+function monthlyStreakBest(state){
+  return state.habits.filter(function(h){return h.type==="monthly";})
+    .reduce(function(m,h){ return Math.max(m,h.completions.length); },0);
+}
 var STARTER_REASON = "Reward issued: Starting to use the app!";
 
 // ---------------- Treasure Hunt ----------------
@@ -972,7 +1017,7 @@ var SIGHTING_FLAVOR = [
   { title:"Feathers, No Answers", line1:"A parrot. Finally. After all those feathers." },
   { title:"Local Landlord", line1:"An iguana's claimed my rock. Every morning this week." },
   { title:"Thief #2", line1:"A monkey stole my hat. Watched me from a branch." },
-  { title:"The Committee", line1:"Three seabirds watch me do my habits now." },
+  { title:"The Committee", line1:"Three seabirds watch me do my rHabbits now." },
   { title:"Almost Lost A Toe", line1:"Nearly lost a toe to a dinner-plate-sized clam." },
   { title:"Silver Everywhere", line1:"Surrounded by a whole cloud of small fish today." },
   { title:"Not Blinking First", line1:"A moray eel eyeballed me from the reef. Eyeballed it right back." },
@@ -1026,7 +1071,7 @@ var SIGHTING_FLAVOR = [
   { title:"Points Somewhere", line1:"An old compass. Needle spins. Nowhere to go anyway." },
   { title:"Still Can't Use It", line1:"A second sextant. Still can't use one. At least they match." },
   { title:"Definitely Not Using This", line1:"A full anchor. No ship. Very heavy paperweight now." },
-  { title:"Nice Day For It", line1:"Calm skies. Logged the habit. No disasters today." },
+  { title:"Nice Day For It", line1:"Calm skies. Logged the rHabbit. No disasters today." },
   { title:"Just A Drizzle", line1:"A light storm rolled through. Barely noticed." },
   { title:"Something's Coming", line1:"Storm clouds building on the horizon. Don't like the look of it." },
   { title:"More Gardens Than I Can Count", line1:"This treehouse. Still don't know who built it." },
@@ -1056,7 +1101,7 @@ var SIGHTING_FLAVOR = [
   { title:"The Second Chest", line1:"A second sea chest. Buried even deeper than mine." },
   { title:"Roommate #2", line1:"A second hermit crab, moved in. My crab is thrilled. Lying, probably." },
   { title:"My Best Friend Is a Crab", line1:"My best friend. Caught red-clawed, mid-heist. Again." },
-  { title:"Watching Me Work", line1:"A monkey, same branch, every day. Watching me log habits." },
+  { title:"Watching Me Work", line1:"A monkey, same branch, every day. Watching me log rHabbits." },
   { title:"Overhead Again", line1:"The same seagull, three days straight. Named it Steve." },
   { title:"Puffed Up", line1:"Startled a pufferfish. It startled right back. Twice the size." }
 ];
@@ -1072,12 +1117,12 @@ var DAY_ONE_ENTRY = {
 
 var GROWTH_INTERVAL = 4; // one growth beat at the 1st discovery, then every 4th after (~monthly, matching the 1/week discovery pace)
 var GROWTH_LINE = [
-  "Also today: I was scared, but I didn't panic. That's new for me.",
+  "Resisted urge to stay on the beach today to watch for passing ships. Time to think about living, not just rescue.",
   "One whole week! I didn't think I'd make it this far — and I did.",
   "This is starting to feel less like a test and more like just... me.",
-  "I do the habit before I even think about it now. That's real progress.",
+  "I do the rHabbit before I even think about it now. That's real progress.",
   "I actually look forward to this now. That's what growth feels like.",
-  "Ben Franklin once wrote, 'Well done is better than well said.' Finally get it. I just do the habit now — no talking myself into it.",
+  "Ben Franklin once wrote, 'Well done is better than well said.' Finally get it. I just do the rHabbit now — no talking myself into it.",
   "I don't need a reason anymore. Doing it is the reason.",
   "I'm not the same castaway who started this. I like who I'm becoming.",
   "I feel proud when I finish now. That feeling wasn't always there.",
@@ -1092,7 +1137,7 @@ var GROWTH_LINE = [
   "I've outlasted every fear I started with. Every single one.",
   "This island didn't shrink me. It grew me. I'm bigger than this place now.",
   "I don't need to prove anything anymore. This just feels like home.",
-  "The habit isn't something I do anymore. It's part of who I am. That's the win.",
+  "The rHabbit isn't something I do anymore. It's part of who I am. That's the win.",
   "Whatever this island tried to break, it made me stronger instead.",
   "I'm helping the next version of me, the way I once needed help. Full circle.",
   "That same old book again — Crusoe wrote, 'It is not the part of wise men to give themselves up to their misery.' Neither is it mine, apparently.",
@@ -1166,15 +1211,25 @@ function daysSince(iso){
 }
 function uid(){ return Math.random().toString(36).slice(2,10) + Date.now().toString(36); }
 
-// "Every N days/weeks/months" habits (see the frequency picker unlocked by
-// the second_garden reward) track completions as plain dates, same as
-// daily, and become due again once enough days have rolled by since the
-// last one -- a rolling interval, unlike the named Weekly/Monthly presets
-// above which reset on a fixed calendar boundary instead. Months are
-// approximated as 30 days each (good enough for a personal habit tracker;
-// exact calendar-month arithmetic isn't worth the complexity here).
+// "Every N days/weeks/months/years" habits (see the frequency picker
+// unlocked by the second_garden reward) track completions as plain dates,
+// same as daily, and become due again once enough days have rolled by
+// since the last one -- a rolling interval, unlike the named Weekly/Monthly
+// presets above which reset on a fixed calendar boundary instead. Months
+// and years are approximated as 30/365 days each (good enough for a
+// personal habit tracker; exact calendar-month/leap-year arithmetic isn't
+// worth the complexity here).
 function habitEveryUnitDays(h){
-  return h.everyUnit==="months" ? h.everyN*30 : h.everyUnit==="weeks" ? h.everyN*7 : h.everyN;
+  if(h.everyUnit==="years") return h.everyN*365;
+  if(h.everyUnit==="months") return h.everyN*30;
+  if(h.everyUnit==="weeks") return h.everyN*7;
+  return h.everyN;
+}
+// 1 is a meaningful, common value for "years" (an annual habit -- a
+// checkup, a renewal) rather than a duplicate of one of the fixed
+// daily/weekly/monthly types, so its floor is 1 instead of the usual 2.
+function everyMinN(unit){
+  return unit==="years" ? 1 : 2;
 }
 function habitEveryDue(h){
   if(!h.completions.length) return true;
@@ -1189,44 +1244,171 @@ function habitEveryDaysRemaining(h){
    Recurring every year -- month+day only, no year, no completions/carrots
    involved at all. Kept deliberately separate from the habit system. */
 var SPECIAL_DAY_MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-var SPECIAL_DAY_EMOJI_CHOICES = ["🎂","🎉","🎁","🎈","🥳","🍰","🧁","💐","💍","🕯️","⭐","🎆"];
-// Per-occasion starter icon, used both as the fresh-draft default and as a
-// fallback for special days saved before the emoji picker existed (those
-// have no sd.emoji field yet).
-function specialDayDefaultEmoji(occasion){
-  if(occasion==="anniversary") return "🎉";
-  if(occasion==="other") return "🎆";
-  return "🎂";
+
+// ---- Global holidays (see GLOBAL_HOLIDAYS below) ----
+// Most special days recur on the same month+day every year (plain
+// sd.month/sd.day, as stored). A handful of holidays instead float to a
+// different day each year -- Easter moves by the lunar calendar, and
+// Mother's/Father's/Thanksgiving are all "Nth weekday of month" rules --
+// so those are computed per-year via sd.rule instead of stored statically.
+// nth=1..5 counts from the start of the month; nth=-1 means "last".
+function nthWeekdayOfMonth(year, month, weekday, nth){
+  if(nth>0){
+    var first = new Date(year, month-1, 1);
+    var offset = (weekday - first.getDay() + 7) % 7;
+    return { month: month, day: 1 + offset + (nth-1)*7 };
+  }
+  var lastOfMonth = new Date(year, month, 0);
+  var offsetBack = (lastOfMonth.getDay() - weekday + 7) % 7;
+  return { month: month, day: lastOfMonth.getDate() - offsetBack };
 }
+// Anonymous Gregorian algorithm (Meeus/Jones/Butcher) for the Sunday of
+// Western (Gregorian) Easter -- accurate for any Gregorian-calendar year.
+function computeEasterSunday(year){
+  var a = year % 19;
+  var b = Math.floor(year/100), c = year % 100;
+  var d = Math.floor(b/4), e = b % 4;
+  var f = Math.floor((b+8)/25);
+  var g = Math.floor((b-f+1)/3);
+  var h = (19*a + b - d - g + 15) % 30;
+  var i = Math.floor(c/4), k = c % 4;
+  var l = (32 + 2*e + 2*i - h - k) % 7;
+  var m = Math.floor((a + 11*h + 22*l)/451);
+  var n = h + l - 7*m + 114;
+  return { month: Math.floor(n/31), day: (n % 31) + 1 };
+}
+// Days offset from Easter Sunday itself (e.g. Good Friday = -2, Easter
+// Monday/Family Day = +1) -- computed via real Date arithmetic so a
+// month-boundary-crossing offset (rare, but possible right at the edge of
+// March/April) still lands on the correct month.
+function easterOffset(year, offsetDays){
+  var d = new Date(year, computeEasterSunday(year).month-1, computeEasterSunday(year).day);
+  d.setDate(d.getDate() + offsetDays);
+  return { month: d.getMonth()+1, day: d.getDate() };
+}
+var HOLIDAY_RULES = {
+  easter: computeEasterSunday,
+  good_friday: function(year){ return easterOffset(year, -2); },
+  family_day: function(year){ return easterOffset(year, 1); },        // Easter Monday, SA public holiday
+  mothers_day: function(year){ return nthWeekdayOfMonth(year, 5, 0, 2); },   // 2nd Sunday of May
+  fathers_day: function(year){ return nthWeekdayOfMonth(year, 6, 0, 3); },   // 3rd Sunday of June
+  memorial_day: function(year){ return nthWeekdayOfMonth(year, 5, 1, -1); }, // last Monday of May
+  labor_day: function(year){ return nthWeekdayOfMonth(year, 9, 1, 1); },     // 1st Monday of September
+  thanksgiving: function(year){ return nthWeekdayOfMonth(year, 11, 4, 4); }  // 4th Thursday of November
+};
+// This year's (or whichever year is passed) month/day for a special day --
+// sd.rule (holidays with a floating date) takes priority over sd.month/day
+// (everything else, including fixed-date holidays like Christmas) when set.
+function resolvedMonthDay(sd, year){
+  if(sd.rule && HOLIDAY_RULES[sd.rule]) return HOLIDAY_RULES[sd.rule](year);
+  return { month: sd.month, day: sd.day };
+}
+// Built-in, non-editable, non-deletable -- merged into specialDaysSorted()
+// below so they ride the same rolling one-year rolodex as user-added
+// birthdays/anniversaries, rather than living in a separate list. Covers
+// the main U.S. and South African national/public holidays (this app's two
+// initial audiences), plus a handful of widely-observed non-national days
+// (New Year's, Valentine's, Easter, Mother's/Father's Day, Halloween,
+// Christmas) shared by both and left without a region tag. sd.region
+// ("US"/"SA") drives the badge text -- see specialDayOccasionLabel(). Icon
+// is per-holiday rather than per-occasion, unlike birthday/anniversary/
+// other (see specialDayIcon()).
+var GLOBAL_HOLIDAYS = [
+  // Shared / widely-observed, not tied to one country
+  { id:"holiday_new_year", builtin:true, names:"New Year's Day", occasion:"holiday", occasionCustom:"", icon:"🎆", month:1, day:1 },
+  { id:"holiday_valentines", builtin:true, names:"Valentine's Day", occasion:"holiday", occasionCustom:"", icon:"💘", month:2, day:14 },
+  { id:"holiday_easter", builtin:true, names:"Easter Sunday", occasion:"holiday", occasionCustom:"", icon:"🥚", rule:"easter" },
+  { id:"holiday_mothers_day", builtin:true, names:"Mother's Day", occasion:"holiday", occasionCustom:"", icon:"👩", rule:"mothers_day" },
+  { id:"holiday_fathers_day", builtin:true, names:"Father's Day", occasion:"holiday", occasionCustom:"", icon:"👨", rule:"fathers_day" },
+  { id:"holiday_halloween", builtin:true, names:"Halloween", occasion:"holiday", occasionCustom:"", icon:"🎃", month:10, day:31 },
+  { id:"holiday_christmas", builtin:true, names:"Christmas", occasion:"holiday", occasionCustom:"", icon:"🎄", month:12, day:25 },
+  // U.S. national holidays -- kept to ones companies typically actually
+  // give as a day off (bank-holiday character), not just federally
+  // recognized remembrance/commemoration days (MLK Day, Presidents' Day,
+  // Juneteenth, Columbus Day, and Veterans Day were all considered and
+  // deliberately left out on that basis -- a judgment call, not a strict
+  // "is it a federal holiday" rule). No icon field: flag is derived from
+  // region, see HOLIDAY_REGION_FLAGS/specialDayIcon().
+  { id:"holiday_memorial_day", builtin:true, names:"Memorial Day", occasion:"holiday", occasionCustom:"", rule:"memorial_day", region:"US" },
+  { id:"holiday_independence_day", builtin:true, names:"Independence Day", occasion:"holiday", occasionCustom:"", month:7, day:4, region:"US" },
+  { id:"holiday_labor_day", builtin:true, names:"Labor Day", occasion:"holiday", occasionCustom:"", rule:"labor_day", region:"US" },
+  { id:"holiday_thanksgiving", builtin:true, names:"Thanksgiving", occasion:"holiday", occasionCustom:"", rule:"thanksgiving", region:"US" },
+  // South African national holidays
+  { id:"holiday_human_rights_day", builtin:true, names:"Human Rights Day", occasion:"holiday", occasionCustom:"", month:3, day:21, region:"SA" },
+  { id:"holiday_good_friday", builtin:true, names:"Good Friday", occasion:"holiday", occasionCustom:"", rule:"good_friday", region:"SA" },
+  { id:"holiday_family_day", builtin:true, names:"Family Day", occasion:"holiday", occasionCustom:"", rule:"family_day", region:"SA" },
+  { id:"holiday_freedom_day", builtin:true, names:"Freedom Day", occasion:"holiday", occasionCustom:"", month:4, day:27, region:"SA" },
+  { id:"holiday_workers_day", builtin:true, names:"Workers' Day", occasion:"holiday", occasionCustom:"", month:5, day:1, region:"SA" },
+  { id:"holiday_youth_day", builtin:true, names:"Youth Day", occasion:"holiday", occasionCustom:"", month:6, day:16, region:"SA" },
+  { id:"holiday_womens_day", builtin:true, names:"National Women's Day", occasion:"holiday", occasionCustom:"", month:8, day:9, region:"SA" },
+  { id:"holiday_heritage_day", builtin:true, names:"Heritage Day", occasion:"holiday", occasionCustom:"", month:9, day:24, region:"SA" },
+  { id:"holiday_reconciliation_day", builtin:true, names:"Day of Reconciliation", occasion:"holiday", occasionCustom:"", month:12, day:16, region:"SA" },
+  { id:"holiday_goodwill_day", builtin:true, names:"Day of Goodwill", occasion:"holiday", occasionCustom:"", month:12, day:26, region:"SA" }
+];
+// Regioned holidays (see GLOBAL_HOLIDAYS) show that country's flag as their
+// icon instead of a thematic glyph -- see specialDayIcon().
+var HOLIDAY_REGION_FLAGS = { US:"🇺🇸", SA:"🇿🇦" };
+
 function findSpecialDay(id){
   return state.specialDays.filter(function(sd){ return sd.id===id; })[0];
 }
+// Only offered for occasion "other" -- birthday/anniversary always use
+// their own fixed icon (see specialDayIcon()), same as the app's other
+// icon-per-category patterns, so there's nothing to pick for those.
+var SPECIAL_DAY_ICON_CHOICES = ["🎓","🏡","👶","🐾","✈️","🏆","💼","🕯️","🌟","🎗️"];
 function freshSpecialDayDraft(){
-  return { names:"", occasion:"birthday", occasionCustom:"", month:1, day:1, emoji:specialDayDefaultEmoji("birthday") };
+  return { names:"", occasion:"birthday", occasionCustom:"", month:1, day:1, icon:SPECIAL_DAY_ICON_CHOICES[0] };
 }
 function specialDayOccasionLabel(sd){
   if(sd.occasion==="birthday") return "Birthday";
   if(sd.occasion==="anniversary") return "Anniversary";
+  // No badge at all for any holiday, regioned or not -- its icon (a flag
+  // for US/SA, a thematic glyph like 🎄/🥚 otherwise -- see
+  // specialDayIcon()) already distinguishes it from a birthday/anniversary,
+  // and dropping the text leaves Birthday/Anniversary less crowded out by
+  // repeated badge text across the many holiday rows.
+  if(sd.occasion==="holiday") return "";
   return sd.occasionCustom.trim() || "Special Day";
 }
 // Per-occasion icon for list rows -- the topbar cake icon and the generic
 // "Special days" Logbook link stay cake-themed regardless of occasion mix,
 // since those are just a general heads-up, not tied to any one entry.
+// Holidays mostly carry their own explicit icon (Christmas tree, egg,
+// fireworks, etc. -- see GLOBAL_HOLIDAYS), except national ones (sd.region
+// set), which show that country's flag instead -- a Thanksgiving/Christmas/
+// Easter-style thematic glyph doesn't say "this one's specifically a U.S.
+// or South African public holiday" the way a flag does.
 function specialDayIcon(sd){
-  return sd.emoji || specialDayDefaultEmoji(sd.occasion);
+  if(sd.occasion==="holiday" && sd.region) return HOLIDAY_REGION_FLAGS[sd.region] || sd.icon || "🎉";
+  if(sd.icon) return sd.icon;
+  if(sd.occasion==="anniversary") return "🎉";
+  if(sd.occasion==="other") return "🎆";
+  return "🎂";
 }
+var SPECIAL_DAY_WEEKDAY_ABBR = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+var SPECIAL_DAY_MONTH_ABBR = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 function specialDayDateLabel(sd){
-  return SPECIAL_DAY_MONTH_NAMES[sd.month-1]+" "+sd.day;
+  var year = new Date().getFullYear();
+  var md = resolvedMonthDay(sd, year);
+  var weekday = SPECIAL_DAY_WEEKDAY_ABBR[new Date(year, md.month-1, md.day).getDay()];
+  return weekday+", "+SPECIAL_DAY_MONTH_ABBR[md.month-1]+" "+md.day;
 }
 // Days from today (0 = today) until this year's -- or, if already passed,
 // next year's -- occurrence. A leap-day (Feb 29) entry naturally rolls
 // forward to March 1 in a non-leap year, same as plain JS Date math always
-// does -- not worth special-casing for a personal reminder list.
+// does -- not worth special-casing for a personal reminder list. Floating
+// holidays (see resolvedMonthDay()) get their target date recomputed for
+// next year too, rather than just adding 365 days, since e.g. Easter can
+// land in a different month year to year.
 function specialDayNextOccurrenceDays(sd){
   var now = new Date();
   var todayMid = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  var target = new Date(now.getFullYear(), sd.month-1, sd.day);
-  if(target < todayMid) target = new Date(now.getFullYear()+1, sd.month-1, sd.day);
+  var md = resolvedMonthDay(sd, now.getFullYear());
+  var target = new Date(now.getFullYear(), md.month-1, md.day);
+  if(target < todayMid){
+    md = resolvedMonthDay(sd, now.getFullYear()+1);
+    target = new Date(now.getFullYear()+1, md.month-1, md.day);
+  }
   return Math.round((target - todayMid) / 86400000);
 }
 // Signed days relative to *this calendar year's* occurrence specifically
@@ -1237,7 +1419,8 @@ function specialDayNextOccurrenceDays(sd){
 function specialDayDaysDiffThisYear(sd){
   var now = new Date();
   var todayMid = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  var thisYear = new Date(now.getFullYear(), sd.month-1, sd.day);
+  var md = resolvedMonthDay(sd, now.getFullYear());
+  var thisYear = new Date(now.getFullYear(), md.month-1, md.day);
   return Math.round((thisYear - todayMid) / 86400000);
 }
 // Every entry, always -- nothing is ever hidden. Upcoming (including
@@ -1254,8 +1437,21 @@ function specialDaySortKey(sd){
   if(diff >= -7) return diff;
   return 1000 + specialDayNextOccurrenceDays(sd);
 }
+// Respects Profile's USA/RSA holiday toggles -- a regioned holiday only
+// shows when its region's toggle is on; unregioned/shared holidays (New
+// Year's, Easter, Christmas, etc.) aren't gated by either toggle at all.
+function visibleGlobalHolidays(){
+  return GLOBAL_HOLIDAYS.filter(function(h){
+    if(h.region==="US") return state.showUSHolidays;
+    if(h.region==="SA") return state.showSAHolidays;
+    return true;
+  });
+}
+// User-added entries and the built-in holidays (see visibleGlobalHolidays())
+// ride the same revolving one-year rolodex together, sorted as one list --
+// holidays are not pinned separately at the top or bottom.
 function specialDaysSorted(){
-  return state.specialDays.slice().sort(function(a,b){
+  return state.specialDays.concat(visibleGlobalHolidays()).sort(function(a,b){
     return specialDaySortKey(a) - specialDaySortKey(b);
   });
 }
@@ -1263,15 +1459,14 @@ function specialDaysSorted(){
 // "tomorrow or today"), so it reads as an advance heads-up to still go get
 // a card/gift, not a same-day notice once that window's already passed.
 function specialDayDueTomorrow(){
-  return state.specialDays.some(function(sd){ return specialDayNextOccurrenceDays(sd)===1; });
+  return state.specialDays.concat(visibleGlobalHolidays()).some(function(sd){ return specialDayNextOccurrenceDays(sd)===1; });
 }
 
+// Flat cap available from the start -- daily habit slots are no longer
+// something to earn (see second_garden's starter unlock); may grow again
+// later, but for now 5 is just a fixed ceiling.
 function maxDailySlots(state){
-  var n = 1;
-  if(state.unlocks.second_garden) n++;
-  if(state.unlocks.seven_seasons) n++;
-  if(state.unlocks.bucket_list) n++;
-  return n;
+  return 5;
 }
 function countActive(state, type){
   return state.habits.filter(function(h){
@@ -1406,8 +1601,15 @@ function defaultState(){
       { id: uid(), names:"Rowen", occasion:"birthday", occasionCustom:"", month:8, day:28 },
       { id: uid(), names:"Jaden", occasion:"birthday", occasionCustom:"", month:7, day:28 }
     ],
-    _specialDayDraft:{ names:"", occasion:"birthday", occasionCustom:"", month:1, day:1 },
+    _specialDayDraft:{ names:"", occasion:"birthday", occasionCustom:"", month:1, day:1, icon:SPECIAL_DAY_ICON_CHOICES[0] },
     _detailSpecialDayId:null,
+    // Per-region show/hide for the built-in GLOBAL_HOLIDAYS list (see
+    // Profile's Holidays toggles) -- both default on so nothing disappears
+    // for existing players until they actively opt out. Only ever filters
+    // the two regioned groups (US/SA); the shared/widely-observed holidays
+    // (New Year's, Easter, Christmas, etc.) have no region and always show.
+    showUSHolidays:true,
+    showSAHolidays:true,
     // Which date/month key the currently-open habit-note-modal is for --
     // set by "open-habit-note" in onAction(), read by renderHabitNoteModal()
     // and the save/delete-habit-note cases.
@@ -1439,6 +1641,13 @@ var state = load();
 // when the user last left. Mid-session bottom-nav taps to Rewards/Profile
 // still work as normal; this only resets the *boot* screen.
 state.screen = "logbook";
+// One-time back-fill for players who onboarded before second_garden became
+// a starter unlock (see unlockStarterRewards()) -- without this, anyone
+// who hadn't already banked 7 carrots would be stuck forever, since
+// evaluateRewards() now skips starter entries' condition check entirely.
+if(state.onboarded && !state.unlocks.second_garden){
+  state.unlocks.second_garden = { unlockedAt: todayStr(), reason: STARTER_REASON };
+}
 
 function evaluateRewards(){
   if(!state.onboarded) return;
@@ -1600,7 +1809,7 @@ function unlockFirstDiscoveryFree(){
 }
 
 function unlockStarterRewards(){
-  ["portrait","island_home","first_habit"].forEach(function(id){
+  ["portrait","island_home","first_habit","second_garden"].forEach(function(id){
     state.unlocks[id] = { unlockedAt: todayStr(), reason: STARTER_REASON };
   });
 }
@@ -1622,10 +1831,8 @@ function renderOnboarding(){
       '<div class="onb-screen">' +
         '<div class="onb-logo"><img src="'+ASSET.home_icon+'" alt=""></div>' +
         '<h1 class="onb-title">rHabbits</h1>' +
-        '<p class="onb-copy">Build better habits (<b>rHabbits</b>) by tracking progress. Earn carrots to unlock features. Start with one habit to track.</p>' +
+        '<p class="onb-copy">Build better <b>rHabbits</b> by tracking progress. Earn carrots to unlock rewards. Start by tracking one or two rHabbits now.</p>' +
         '<button class="btn mt" data-action="onb-next">Get Started</button>' +
-        '<button class="btn-ghost mt" data-action="restore-backup" style="margin-top:14px;">Already used rHabbits? Restore backup</button>' +
-        '<input type="file" id="onbRestoreInput" accept="application/json,.json" class="hidden">' +
       '</div>'
     );
   }
@@ -1655,9 +1862,9 @@ function renderOnboarding(){
   return (
     '<div class="onb-screen">' +
       '<h2 style="color:var(--parchment-hi)">Let\'s get started!</h2>' +
-      '<p class="onb-copy">Choose one habit you\'d like to track daily. (Later you can unlock weekly, monthly, once-off, and custom schedules too.) After you earn 7 carrots, you\'ll unlock your next reward.</p>' +
-      '<div class="field"><label>Habit name</label><input type="text" id="firstHabitName" maxlength="40" placeholder="e.g. Drink 8 glasses of water" value="'+escapeAttr(d.name)+'"></div>' +
-      '<div class="field"><label>Habit description (optional)</label><textarea id="firstHabitDescription" maxlength="140" placeholder="e.g. A big glass with breakfast, lunch, and dinner">'+escapeHtml(d.description)+'</textarea></div>' +
+      '<p class="onb-copy">Choose one rHabbit you\'d like to track daily. Once you\'re in, you can add up to 5 rHabbits on any schedule -- daily, weekly, monthly, once-off, or custom.</p>' +
+      '<div class="field"><label>rHabbit name</label><input type="text" id="firstHabitName" maxlength="40" placeholder="e.g. Drink 8 glasses of water" value="'+escapeAttr(d.name)+'"></div>' +
+      '<div class="field"><label>rHabbit description (optional)</label><textarea id="firstHabitDescription" maxlength="140" placeholder="e.g. A big glass with breakfast, lunch, and dinner">'+escapeHtml(d.description)+'</textarea></div>' +
       '<div class="emoji-picker">'+EMOJI_CHOICES.map(function(e){return '<button class="emoji-opt '+(d.emoji===e?'selected':'')+'" data-action="pick-emoji" data-emoji="'+e+'">'+e+'</button>';}).join('')+'</div>' +
       '<button class="btn mt" data-action="finish-onboarding" '+(d.name.trim()?'':'disabled')+'>Start Tracking 🌴</button>' +
     '</div>'
@@ -1683,10 +1890,10 @@ function renderTopbar(){
     html += '  <button class="icon-btn special-day-btn" data-action="show-special-days" aria-label="A special day is tomorrow"><span>🎂</span></button>';
   }
   if(dueCount>0){
-    html += '  <button class="icon-btn due-today-btn" data-action="show-due-today" aria-label="'+dueCount+' habit'+(dueCount===1?'':'s')+' due today"><span>📅</span><span class="due-today-badge">'+dueCount+'</span></button>';
+    html += '  <button class="icon-btn due-today-btn" data-action="show-due-today" aria-label="'+dueCount+' rHabbit'+(dueCount===1?'':'s')+' due today"><span>📅</span><span class="due-today-badge">'+dueCount+'</span></button>';
   }
   if(canAddAnyHabit(state)){
-    html += '  <button class="icon-btn add-habit-fab" data-action="open-add-habit" aria-label="Add a habit" title="You have unlocked a new habit">+</button>';
+    html += '  <button class="icon-btn add-habit-fab" data-action="open-add-habit" aria-label="Add a rHabbit" title="You have unlocked a new rHabbit">+</button>';
   } else if(dueCount===0 && !cakeDue){
     html += '  <span class="topbar-spacer"></span>';
   }
@@ -1710,10 +1917,13 @@ function renderApp(){
   return html;
 }
 
+// Skips a locked long-term reward (r.imminent set -- see seven_seasons/
+// bucket_list) until it's actually close, rather than surfacing a
+// many-months-away goal as "Next" from day one.
 function nextLockedReward(){
   for(var i=0;i<REWARDS.length;i++){
     var r = REWARDS[i];
-    if(!r.starter && !state.unlocks[r.id]) return r;
+    if(!r.starter && !state.unlocks[r.id] && (!r.imminent || r.imminent(state))) return r;
   }
   return null;
 }
@@ -1731,27 +1941,32 @@ function renderLogbookScreen(){
   html += '<span class="plaque-rivet tl"></span><span class="plaque-rivet tr"></span><span class="plaque-rivet bl"></span><span class="plaque-rivet br"></span>';
   html += '<div class="plaque-label">Carrots earned</div>';
   var sightingsActiveLB = state.sightings.length < SIGHTINGS_TOTAL;
-  if(next || sightingsActiveLB){
-    if(next && next.id==="second_garden"){
-      html += '<div class="pip-row">'+carrotPipsHtml(state.carrots,7)+'</div>';
-    }
-    var nextParts = [];
-    if(next){ nextParts.push(next.title); }
-    if(sightingsActiveLB){ nextParts.push("New Discovery"); }
-    html += '<div class="plaque-progress-text">Next: '+nextParts.join(' + ')+'</div>';
-  } else {
-    html += '<div class="plaque-progress-text">All rewards unlocked — more coming soon!</div>';
-  }
+  // Generic 7-carrot cycle progress -- used to point specifically at
+  // second_garden (7 carrots for a 2nd habit slot) back when that was
+  // the gate; now that it's a starter unlock, this is just a running
+  // visual of carrot-earning pace rather than progress toward one
+  // specific reward.
+  html += '<div class="pip-row">'+carrotPipsHtml(state.carrots%7,7)+'</div>';
+  var nextParts = [];
+  if(next){ nextParts.push(next.title); }
+  if(sightingsActiveLB){ nextParts.push("Discovery"); }
+  // Streak Bonus (see evaluateStreakBonus()) recurs every 7-day active
+  // streak, refilling Coco Cannon lives and granting a bonus Treasure Hunt
+  // move together -- same short, ever-recurring cadence as New Discovery
+  // above (not a one-time long-term goal), so it's always listed here too,
+  // not gated behind an imminent() check like seven_seasons/bucket_list.
+  nextParts.push("Streak Bonus");
+  html += '<div class="plaque-progress-text">Next: '+nextParts.join(' + ')+'</div>';
   html += '</div></div>';
 
   html += renderSpecialDaysLink();
 
-  html += renderHabitGroup("daily","Habits: Activity Tracking");
+  html += renderHabitGroup("daily","rHabbits: Activity Tracking");
   if(state.unlocks.second_garden || countActive(state,"weekly")>0){
-    html += renderHabitGroup("weekly","Weekly Habits");
+    html += renderHabitGroup("weekly","Weekly rHabbits");
   }
   if(state.unlocks.second_garden || countActive(state,"monthly")>0){
-    html += renderHabitGroup("monthly","Monthly Habits");
+    html += renderHabitGroup("monthly","Monthly rHabbits");
   }
   if(state.unlocks.second_garden || countActive(state,"every")>0){
     html += renderHabitGroup("every","Custom Schedule");
@@ -1787,11 +2002,17 @@ function habitLogged(h){
   if(h.type==="every") return !habitEveryDue(h);
   return h.completions.length>0; // onceoff
 }
+// "years" is the one everyUnit that can actually be 1 (see everyMinN()) --
+// singular-strip it ("Every 1 year", not "Every 1 years") rather than
+// leaving the raw plural unit string on that one legitimate case.
+function everyUnitLabel(h){
+  return h.everyN===1 ? h.everyUnit.slice(0,-1) : h.everyUnit;
+}
 function habitTypeBadge(h){
   if(h.type==="daily") return "Daily";
   if(h.type==="weekly") return "Weekly";
   if(h.type==="monthly") return "Monthly";
-  if(h.type==="every") return "Every "+h.everyN+" "+h.everyUnit;
+  if(h.type==="every") return "Every "+h.everyN+" "+everyUnitLabel(h);
   return "Once-off";
 }
 // A habit is "due" right now if it's not currently satisfied for its
@@ -1899,7 +2120,7 @@ function renderHabitDetailModal(id){
       html += '<div class="habit-meta">Due again in '+remaining+' day'+(remaining===1?'':'s')+'</div>';
     } else {
       html += '<button class="log-btn" data-action="toggle-every" data-id="'+h.id+'">Log Now  +1 🥕</button>';
-      html += '<div class="habit-meta">Repeats every '+h.everyN+' '+h.everyUnit+'</div>';
+      html += '<div class="habit-meta">Repeats every '+h.everyN+' '+everyUnitLabel(h)+'</div>';
     }
   } else {
     var done = h.completions.length>0;
@@ -1911,7 +2132,7 @@ function renderHabitDetailModal(id){
       if(h.dueDate){ html += '<div class="habit-meta">Due '+h.dueDate+'</div>'; }
     }
   }
-  html += '<button class="btn btn-danger btn-block mt" data-action="delete-habit" data-id="'+h.id+'">Remove this habit</button>';
+  html += '<button class="btn btn-danger btn-block mt" data-action="delete-habit" data-id="'+h.id+'">Remove this rHabbit</button>';
   html += '</div></div>';
   return html;
 }
@@ -1932,7 +2153,11 @@ function dailyStreak(h){
 function renderNextRewardsList(chainNext, sightingsActive){
   var html = '<ul class="next-rewards-list">';
   if(chainNext){ html += '<li>'+chestIconSvg("0.8rem")+' '+chainNext.title+'</li>'; }
-  if(sightingsActive){ html += '<li>👁️ New Discovery</li>'; }
+  // "New" in red -- calls out that each Discovery unlock adds fresh
+  // content (a picture + a paired Castaway's Log story entry, see
+  // evaluateSightings()/unlockedJournalEntries()), not just a repeat of
+  // something already seen.
+  if(sightingsActive){ html += '<li>👁️ <span style="color:var(--danger);">New</span> Discovery</li>'; }
   html += '</ul>';
   return html;
 }
@@ -2022,7 +2247,7 @@ function renderTreasureHuntModal(){
     html += '</div>';
     if(!canMove){
       var allowedToday = treasureMovesAllowedToday();
-      html += '<p class="tmap-hint">Log a habit today to earn your next move.<br>Up to '+allowedToday+' move'+(allowedToday===1?'':'s')+' earned per day.</p>';
+      html += '<p class="tmap-hint">Log a rHabbit today to earn your next move.<br>Up to '+allowedToday+' move'+(allowedToday===1?'':'s')+' earned per day.</p>';
     }
   }
   html += '</div></div>';
@@ -2084,7 +2309,7 @@ function renderNewDiscoveryCard(favorited){
   }
   html += '<button class="reward-heart '+(favorited?'favorited':'')+'" data-action="toggle-favorite-reward" data-id="new_discovery" aria-label="Favorite">'+(favorited?'❤️':'🤍')+'</button>';
   html += '<div class="reward-body">';
-  html += '<div class="reward-title">New Discovery</div>';
+  html += '<div class="reward-title">Discovery</div>';
   html += '<div class="pip-row compact">'+carrotPipsHtml(state.discoveryCarrots%7,7)+'</div>';
   html += '</div></div>';
   return html;
@@ -2125,7 +2350,7 @@ function renderUnlockedRewardCard(r, favorited){
 function renderRewardsScreen(){
   var html = '<section class="screen">';
   html += '<h2 style="color:var(--parchment-hi); margin-bottom:4px;">Your Rewards</h2>';
-  html += '<p style="color:var(--parchment-edge); font-size:.85rem; margin-bottom:16px;">7 days in a row = +1 life (Coco Cannons) and +1 move (Treasure Hunt)</p>';
+  html += '<p style="color:var(--parchment-edge); font-size:.85rem; margin-bottom:16px;">Bonus rewards: 7 days in a row = +1 life (Coco Cannons) and +1 move (Treasure Hunt)</p>';
   html += '<div class="reward-grid">';
 
   // "Next Rewards" always leads the grid -- it's the one card that answers
@@ -2171,8 +2396,8 @@ function renderRewardsScreen(){
   // enough unlocked rewards to actually scroll past, a player can choose
   // which ones they want to keep front-and-center. Everything still locked
   // beyond the "Next Rewards" teaser above is intentionally not spelled out
-  // individually -- seeing "Seven Seasons Strong" or "Bucket List
-  // Buccaneer" as their own locked cards on day one is just clutter/overwhelm
+  // individually -- seeing "7-Month Streak Badge" or "7 Once-Offs Completed
+  // Badge" as their own locked cards on day one is just clutter/overwhelm
   // before they're even relevant.
   var newDiscoveryFavorited = state.favoriteRewards.indexOf("new_discovery")!==-1;
   var otherCards = [{ favorited: newDiscoveryFavorited, html: renderNewDiscoveryCard(newDiscoveryFavorited) }];
@@ -2204,9 +2429,9 @@ function renderSightingsGalleryModal(){
   var html = '<div class="modal-backdrop" data-backdrop="sightings-gallery">';
   html += '<div class="modal">';
   html += '<button class="modal-close" data-action="close-modal">✕</button>';
-  html += '<h3>New Discovery</h3>';
+  html += '<h3>Discovery</h3>';
   if(state.sightings.length===0){
-    html += '<p class="sightings-teaser">No discoveries yet. Keep logging habits — your first island sighting unlocks at 7 carrots.</p>';
+    html += '<p class="sightings-teaser">No discoveries yet. Keep logging rHabbits — your first island sighting unlocks at 7 carrots.</p>';
     html += '</div></div>';
     return html;
   }
@@ -2307,12 +2532,20 @@ function renderSpecialDaysModal(){
     html += '<p class="due-today-empty">No special days added yet. Tap + to add one.</p>';
   } else {
     list.forEach(function(sd){
-      html += '<button class="habit-row" data-action="show-special-day-detail" data-id="'+sd.id+'">' +
-        '<span class="habit-emoji">'+specialDayIcon(sd)+'</span>' +
-        '<span class="habit-name">'+escapeHtml(sd.names)+'</span>' +
-        '<span class="habit-type-badge">'+escapeHtml(specialDayOccasionLabel(sd))+'</span>' +
-        '<span class="special-day-date">'+specialDayDateLabel(sd)+'</span>' +
-      '</button>';
+      // No badge at all for a regioned holiday (specialDayOccasionLabel()
+      // returns "" -- its flag icon already says which country) rather
+      // than rendering an empty, still-padded/backgrounded pill.
+      var occasionLabel = specialDayOccasionLabel(sd);
+      var rowInner = '<span class="habit-emoji special-day-icon">'+specialDayIcon(sd)+'</span>' +
+        '<span class="habit-name'+(sd.builtin?' builtin-holiday':'')+'">'+escapeHtml(sd.names)+'</span>' +
+        (occasionLabel ? '<span class="habit-type-badge">'+escapeHtml(occasionLabel)+'</span>' : '') +
+        '<span class="special-day-date">'+specialDayDateLabel(sd)+'</span>';
+      // Built-in holidays (see GLOBAL_HOLIDAYS) aren't user data -- nothing
+      // to edit or delete, so render as a plain non-interactive row instead
+      // of the tappable button that opens the edit/delete form.
+      html += sd.builtin
+        ? '<div class="habit-row">'+rowInner+'</div>'
+        : '<button class="habit-row" data-action="show-special-day-detail" data-id="'+sd.id+'">'+rowInner+'</button>';
     });
   }
   html += '</div></div>';
@@ -2342,8 +2575,8 @@ function renderSpecialDayFormModal(){
   html += '</select></div>';
   if(d.occasion==="other"){
     html += '<div class="field"><label>Occasion name</label><input type="text" id="specialDayOccasionCustom" maxlength="40" placeholder="e.g. Graduation" value="'+escapeAttr(d.occasionCustom)+'"></div>';
+    html += '<div class="field"><label>Icon</label><div class="emoji-picker">'+SPECIAL_DAY_ICON_CHOICES.map(function(e){return '<button class="emoji-opt '+(d.icon===e?'selected':'')+'" data-action="pick-special-day-icon" data-icon="'+e+'">'+e+'</button>';}).join('')+'</div></div>';
   }
-  html += '<div class="emoji-picker">'+SPECIAL_DAY_EMOJI_CHOICES.map(function(e){return '<button class="emoji-opt '+(d.emoji===e?'selected':'')+'" data-action="pick-special-day-emoji" data-emoji="'+e+'">'+e+'</button>';}).join('')+'</div>';
   html += '<div class="field"><label>Date</label><div class="freq-every-inputs">';
   html += '<select id="specialDayMonth">';
   SPECIAL_DAY_MONTH_NAMES.forEach(function(name, i){
@@ -2409,16 +2642,16 @@ function renderAddHabitModal(){
   var html = '<div class="modal-backdrop" data-backdrop="add-habit">';
   html += '<div class="modal">';
   html += '<button class="modal-close" data-action="close-modal">✕</button>';
-  html += '<h3>Add a Habit</h3>';
+  html += '<h3>Add a rHabbit</h3>';
   html += '<div class="field"><label>Name</label><input type="text" id="addHabitName" maxlength="40" placeholder="e.g. Stretch for 5 minutes" value="'+escapeAttr(d.name)+'"></div>';
-  html += '<div class="field"><label>Habit description (optional)</label><textarea id="addHabitDescription" maxlength="140" placeholder="e.g. Right after brushing my teeth">'+escapeHtml(d.description)+'</textarea></div>';
+  html += '<div class="field"><label>rHabbit description (optional)</label><textarea id="addHabitDescription" maxlength="140" placeholder="e.g. Right after brushing my teeth">'+escapeHtml(d.description)+'</textarea></div>';
   html += '<div class="emoji-picker">'+EMOJI_CHOICES.map(function(e){return '<button class="emoji-opt '+(d.emoji===e?'selected':'')+'" data-action="pick-emoji" data-emoji="'+e+'">'+e+'</button>';}).join('')+'</div>';
   html += '<div class="type-picker">';
   if(!typesUnlocked){
     // Pre-unlock: the original 3-way picker, unchanged in spirit -- just
     // re-pointed at the reward that now actually gates it (see the
     // second_garden REWARDS entry, which folded in the old 28-day gate).
-    html += typeOptRow("daily","Daily", dailyCount+"/"+dailyMax+" habits used", d.type==="daily", dailyDisabled);
+    html += typeOptRow("daily","Daily", dailyCount+"/"+dailyMax+" rHabbits used", d.type==="daily", dailyDisabled);
     html += typeOptRow("monthly","Monthly", "🔒 Unlocks at 7 carrots", d.type==="monthly", monthlyDisabled);
     html += typeOptRow("onceoff","Once-off", "🔒 Unlocks at 7 carrots", d.type==="onceoff", onceoffDisabled);
   } else {
@@ -2426,17 +2659,22 @@ function renderAddHabitModal(){
     if(d.type==="onceoff"){
       html += '<div class="field freq-subfield"><label>Due date</label><input type="date" id="addHabitDueDate" value="'+escapeAttr(d.dueDate||todayStr())+'"></div>';
     }
-    html += typeOptRow("daily","Daily", dailyCount+"/"+dailyMax+" habits used", d.type==="daily", dailyDisabled);
+    html += typeOptRow("daily","Daily", dailyCount+"/"+dailyMax+" rHabbits used", d.type==="daily", dailyDisabled);
     html += typeOptRow("weekly","Weekly", weeklyCount+"/"+weeklyMax+" used", d.type==="weekly", weeklyDisabled);
     html += typeOptRow("monthly","Monthly", monthlyCount+"/"+monthlyMax+" used", d.type==="monthly", monthlyDisabled);
     html += typeOptRow("every","Every X", everyCount+"/"+everyMax+" used", d.type==="every", everyDisabled);
     if(d.type==="every"){
+      // "years" is the one unit where 1 is a meaningful, common value (an
+      // annual habit -- a checkup, a renewal) rather than a duplicate of
+      // one of the fixed daily/weekly/monthly types above, so its floor is
+      // 1 instead of the usual 2 (see everyMinN()).
       html += '<div class="field freq-subfield"><label>Repeat every</label><div class="freq-every-inputs">' +
-        '<input type="number" id="addHabitEveryN" min="2" max="365" value="'+(d.everyN||2)+'">' +
+        '<input type="number" id="addHabitEveryN" min="'+everyMinN(d.everyUnit)+'" max="365" value="'+(d.everyN||2)+'">' +
         '<select id="addHabitEveryUnit">' +
           '<option value="days"'+(d.everyUnit==="days"?' selected':'')+'>days</option>' +
           '<option value="weeks"'+(d.everyUnit==="weeks"?' selected':'')+'>weeks</option>' +
           '<option value="months"'+(d.everyUnit==="months"?' selected':'')+'>months</option>' +
+          '<option value="years"'+(d.everyUnit==="years"?' selected':'')+'>years</option>' +
         '</select>' +
       '</div></div>';
     }
@@ -2453,6 +2691,16 @@ function typeOptRow(value,title,sub,selected,disabled){
   return '<button class="type-opt '+(selected?'selected':'')+' '+(disabled?'disabled':'')+'" data-action="pick-type" data-type="'+value+'" '+(disabled?'disabled':'')+'>' +
     '<div><div class="t-title">'+title+'</div><div class="t-sub">'+sub+'</div></div>' +
   '</button>';
+}
+
+// Shared by the two Profile holiday toggles below -- a labeled row with a
+// tappable switch on the right, matching the .habit-row visual language
+// used everywhere else rather than a native <input type=checkbox>.
+// Shared by every Profile "Settings" chip below -- one-shot actions and
+// toggles alike, so they're visually indistinguishable except for an
+// active toggle's solid "on" fill (see .settings-chip.on).
+function settingsChipHtml(action, label, on){
+  return '<button class="settings-chip'+(on?' on':'')+'" data-action="'+action+'">'+label+'</button>';
 }
 
 function renderProfileModal(){
@@ -2473,20 +2721,24 @@ function renderProfileModal(){
   html += '<div class="profile-stats">';
   html += '<div class="profile-stat"><b>'+state.carrots+'</b><span>Carrots</span></div>';
   html += '<div class="profile-stat"><b>'+daysAshore(state)+'</b><span>Days Ashore</span></div>';
-  html += '<div class="profile-stat"><b>'+state.habits.length+'</b><span>Habits</span></div>';
+  html += '<div class="profile-stat"><b>'+state.habits.length+'</b><span>rHabbits</span></div>';
   html += '</div>';
-  html += '<div class="profile-actions">';
-  html += '<button class="btn btn-wood" data-action="switch-avatar">Switch Castaway</button>';
-  html += '<button class="btn btn-wood" data-action="backup-now">Back up data now</button>';
-  html += '<button class="btn btn-ghost" data-action="restore-backup">Restore from backup&hellip;</button>';
+  // One combined "Settings" section -- every account/data action and every
+  // toggle together, as small same-look chips wrapped multiple-per-row
+  // (see .settings-chip) rather than split across separate "Manage"/
+  // "Holidays shown" blocks of full-width buttons.
+  html += '<div class="section-label">Settings</div>';
+  html += '<div class="settings-row">';
+  html += settingsChipHtml("switch-avatar", "Switch Castaway");
+  html += settingsChipHtml("backup-now", "Back up");
+  html += settingsChipHtml("restore-backup", "Restore");
+  html += settingsChipHtml("toggle-us-holidays", "🇺🇸 USA holidays", state.showUSHolidays);
+  html += settingsChipHtml("toggle-sa-holidays", "🇿🇦 RSA holidays", state.showSAHolidays);
+  html += '</div>';
   html += '<input type="file" id="profileRestoreInput" accept="application/json,.json" class="hidden">';
-  html += '<button class="btn btn-danger" data-action="reset-progress">Reset Progress</button>';
-  html += '</div>';
   html += '<div style="margin-top:18px; padding-top:14px; border-top:1px solid var(--parchment-edge); display:flex; justify-content:space-between; font-size:.78rem; color:var(--wood);">';
   html += '<span>Version</span><span>'+APP_VERSION+'</span>';
   html += '</div>';
-  var diag = latestDiagEntry();
-  if(diag){ html += '<div style="margin-top:8px; font-size:.66rem; color:var(--wood); opacity:.75; line-height:1.4;">'+escapeHtml(diag.message)+'</div>'; }
   html += '</div></div>';
   return html;
 }
@@ -2630,12 +2882,22 @@ function wireEvents(){
   if(addEveryNInput){
     addEveryNInput.addEventListener("input", function(e){
       var n = parseInt(e.target.value,10);
-      state._draft.everyN = (!n || n<2) ? 2 : n;
+      var min = everyMinN(state._draft.everyUnit);
+      state._draft.everyN = (!n || n<min) ? min : n;
     });
   }
   var addEveryUnitSelect = root.querySelector("#addHabitEveryUnit");
   if(addEveryUnitSelect){
-    addEveryUnitSelect.addEventListener("change", function(e){ state._draft.everyUnit = e.target.value; });
+    addEveryUnitSelect.addEventListener("change", function(e){
+      state._draft.everyUnit = e.target.value;
+      // Re-clamp on unit change too -- e.g. "1 year" switched to "days"
+      // shouldn't silently leave everyN at 1 (a duplicate of the plain
+      // Daily type), and re-rendering the field's own min= alone wouldn't
+      // fix a value already below the new floor.
+      var min = everyMinN(state._draft.everyUnit);
+      if(state._draft.everyN < min) state._draft.everyN = min;
+      render();
+    });
   }
   // Special Day add/edit form (see renderSpecialDayFormModal()) -- occasion
   // re-renders (unlike month/day/names) since picking "Other" needs to
@@ -2651,16 +2913,7 @@ function wireEvents(){
   }
   var sdOccasionSelect = root.querySelector("#specialDayOccasion");
   if(sdOccasionSelect){
-    sdOccasionSelect.addEventListener("change", function(e){
-      var d = state._specialDayDraft;
-      // Only follow the occasion's default icon if the user hasn't picked
-      // a custom one -- once they've overridden it, switching occasion
-      // shouldn't clobber their choice.
-      var stillDefault = d.emoji === specialDayDefaultEmoji(d.occasion);
-      d.occasion = e.target.value;
-      if(stillDefault) d.emoji = specialDayDefaultEmoji(d.occasion);
-      render();
-    });
+    sdOccasionSelect.addEventListener("change", function(e){ state._specialDayDraft.occasion = e.target.value; render(); });
   }
   var sdOccasionCustomInput = root.querySelector("#specialDayOccasionCustom");
   if(sdOccasionCustomInput){
@@ -2690,7 +2943,7 @@ function wireEvents(){
     });
     detailNameInput.addEventListener("blur", function(e){
       var h = findHabit(state._detailHabitId);
-      if(h && !h.name.trim()){ h.name = "Untitled habit"; e.target.value = h.name; save(); }
+      if(h && !h.name.trim()){ h.name = "Untitled rHabbit"; e.target.value = h.name; save(); }
     });
   }
   var detailDescInput = root.querySelector("#habitDetailDescription");
@@ -2700,10 +2953,13 @@ function wireEvents(){
       if(h){ h.description = e.target.value; save(); }
     });
   }
-  // Backup restore <input type=file> -- lives inside whichever screen
-  // rendered it (onboarding step 0, or Profile), so it's safe to wire from
-  // here (rebuilt fresh by render() every time, unlike the bottombar).
-  var restoreInput = root.querySelector("#profileRestoreInput") || root.querySelector("#onbRestoreInput");
+  // Backup restore <input type=file> -- lives inside Profile (rebuilt fresh
+  // by render() every time, unlike the bottombar), so it's safe to wire
+  // from here. Onboarding no longer has its own restore entry point --
+  // that's covered by Profile plus the proactive maybeOfferAutoRestore()
+  // prompt (its own #ar-file-input is wired independently, see
+  // offerAutoRestorePathB()).
+  var restoreInput = root.querySelector("#profileRestoreInput");
   if(restoreInput){
     restoreInput.addEventListener("change", function(){
       importLatestBackupFromFiles(restoreInput.files);
@@ -2740,8 +2996,8 @@ function onAction(e){
       state._draft.emoji = el.getAttribute("data-emoji");
       render();
       break;
-    case "pick-special-day-emoji":
-      state._specialDayDraft.emoji = el.getAttribute("data-emoji");
+    case "pick-special-day-icon":
+      state._specialDayDraft.icon = el.getAttribute("data-icon");
       render();
       break;
     case "pick-type":
@@ -2793,7 +3049,7 @@ function onAction(e){
       navigateTo(function(){
         var sd = findSpecialDay(el.getAttribute("data-id"));
         if(!sd) return;
-        state._specialDayDraft = { names:sd.names, occasion:sd.occasion, occasionCustom:sd.occasionCustom, month:sd.month, day:sd.day, emoji:specialDayIcon(sd) };
+        state._specialDayDraft = { names:sd.names, occasion:sd.occasion, occasionCustom:sd.occasionCustom, month:sd.month, day:sd.day, icon: sd.icon||SPECIAL_DAY_ICON_CHOICES[0] };
         state._detailSpecialDayId = sd.id;
         state.screen = "special-day-form-modal";
       });
@@ -2888,16 +3144,13 @@ function onAction(e){
       state.avatar = state.avatar==="female" ? "male" : "female";
       save(); render();
       break;
-    case "reset-progress":
-      if(confirm("Reset all progress? This cannot be undone.")){
-        state = defaultState();
-        save(); render();
-        // Full reset hands back off to a fresh onboarding flow -- establish
-        // it as a new baseline (like the very first load) rather than
-        // pushing, so back from onboarding step 0 exits the app instead of
-        // returning to whatever screen was open right before the reset.
-        try{ history.replaceState(currentNavState(), ""); }catch(err){}
-      }
+    case "toggle-us-holidays":
+      state.showUSHolidays = !state.showUSHolidays;
+      save(); render();
+      break;
+    case "toggle-sa-holidays":
+      state.showSAHolidays = !state.showSAHolidays;
+      save(); render();
       break;
     case "ack-celebration":
       state.pendingCelebration = null;
@@ -2923,7 +3176,7 @@ function onAction(e){
       backupNow();
       break;
     case "restore-backup":
-      openBackupRestorePicker(root.querySelector("#profileRestoreInput") || root.querySelector("#onbRestoreInput"));
+      openBackupRestorePicker(root.querySelector("#profileRestoreInput"));
       break;
   }
 }
@@ -2962,7 +3215,7 @@ function addHabit(){
   if(!name) return;
   var habit = { id:uid(), name:name, emoji:d.emoji, type:d.type, description:d.description.trim(), createdAt:todayStr(), completions:[] };
   if(d.type==="onceoff") habit.dueDate = d.dueDate || todayStr();
-  if(d.type==="every"){ habit.everyUnit = d.everyUnit; habit.everyN = Math.max(2, parseInt(d.everyN,10)||2); }
+  if(d.type==="every"){ habit.everyUnit = d.everyUnit; habit.everyN = Math.max(everyMinN(d.everyUnit), parseInt(d.everyN,10)||everyMinN(d.everyUnit)); }
   state.habits.push(habit);
   save();
   // Pops the add-habit-modal's history entry (pushed by navigateTo() when it
@@ -3128,7 +3381,7 @@ function renderHabitNoteModal(id){
   return html;
 }
 function deleteHabit(id){
-  if(!confirm("Remove this habit?")) return;
+  if(!confirm("Remove this rHabbit?")) return;
   var h = findHabit(id);
   // Closes a carrot-farming loophole: create a habit, log it, delete it to
   // free its slot, create another, log it, delete it again... would
@@ -3161,7 +3414,11 @@ function saveSpecialDay(){
   var names = d.names.trim();
   if(!names) return;
   if(d.occasion==="other" && !d.occasionCustom.trim()) return;
-  var entry = { names:names, occasion:d.occasion, occasionCustom:d.occasionCustom.trim(), month:d.month, day:d.day, emoji:d.emoji||specialDayDefaultEmoji(d.occasion) };
+  // icon only persists for "other" -- birthday/anniversary always render
+  // their own fixed icon (see specialDayIcon()), so there's nothing to save
+  // for those even if a stale value is still sitting in the draft from an
+  // earlier occasion selection in this same form session.
+  var entry = { names:names, occasion:d.occasion, occasionCustom:d.occasionCustom.trim(), month:d.month, day:d.day, icon: d.occasion==="other" ? d.icon : "" };
   var existing = state._detailSpecialDayId ? findSpecialDay(state._detailSpecialDayId) : null;
   if(existing){
     existing.names = entry.names;
@@ -3169,7 +3426,7 @@ function saveSpecialDay(){
     existing.occasionCustom = entry.occasionCustom;
     existing.month = entry.month;
     existing.day = entry.day;
-    existing.emoji = entry.emoji;
+    existing.icon = entry.icon;
   } else {
     entry.id = uid();
     state.specialDays.push(entry);
@@ -3388,48 +3645,14 @@ function maybeShowInstallPrompt(){
   }, 1500);
 }
 
-/* =========================================================
-   DIAGNOSTIC LOG -- there's no dedicated log viewer in rHabbits, so this is
-   deliberately minimal: a handful of the most recent entries, persisted so
-   they survive a reload, surfaced as a small muted line in Profile (see
-   renderProfileModal/latestDiagEntry) -- just enough to be checkable later
-   if a user reports data loss, without a whole Settings > Error Log screen.
-   ========================================================= */
-var DIAG_LOG_KEY = "rhabbits_diag_log";
-function logDiag(message){
-  try{
-    var log = JSON.parse(localStorage.getItem(DIAG_LOG_KEY) || "[]");
-    log.unshift({ts: Date.now(), message: message});
-    localStorage.setItem(DIAG_LOG_KEY, JSON.stringify(log.slice(0,3)));
-  }catch(e){}
-}
-function latestDiagEntry(){
-  try{
-    var log = JSON.parse(localStorage.getItem(DIAG_LOG_KEY) || "[]");
-    return log[0] || null;
-  }catch(e){ return null; }
-}
 // Best-effort ask not to auto-evict this site's storage under low-disk
-// pressure. There's no way to test real eviction behavior on someone else's
-// actual phone from here, so a denial (with a rough usage/quota estimate)
-// is logged rather than silently swallowed.
+// pressure -- fire-and-forget; nothing surfaces this on a denial, so
+// there's nothing to await or branch on beyond attempting it.
 function checkStoragePersistence(){
   if(!(navigator.storage && navigator.storage.persist)) return;
-  (function(){
-    var persistedPromise = navigator.storage.persisted ? navigator.storage.persisted() : Promise.resolve(false);
-    persistedPromise.then(function(persisted){
-      var work = persisted ? Promise.resolve(true) : navigator.storage.persist();
-      work.then(function(granted){
-        if(granted) return;
-        var detail = "";
-        (navigator.storage.estimate ? navigator.storage.estimate() : Promise.resolve(null)).then(function(est){
-          if(est && est.quota){ detail = " (using ~"+Math.round((est.usage||0)/1048576)+"MB of ~"+Math.round(est.quota/1048576)+"MB available)"; }
-        }).catch(function(){}).then(function(){
-          logDiag("Storage is NOT persisted"+detail+" — this browser may silently evict rHabbits' data under storage pressure. Installing to your Home Screen gives the strongest protection.");
-        });
-      }).catch(function(){});
-    }).catch(function(){});
-  })();
+  (navigator.storage.persisted ? navigator.storage.persisted() : Promise.resolve(false)).then(function(persisted){
+    if(!persisted) navigator.storage.persist().catch(function(){});
+  }).catch(function(){});
 }
 
 /* =========================================================
@@ -3678,7 +3901,7 @@ function offerAutoRestore(parsed){
   var n = (parsed.habits||[]).length;
   var when = parsed.startDate || "a previous session";
   var wrap = openInfoModal("Restore your data?",
-    '<div style="margin-bottom:14px;">This device\'s rHabbits data looks empty, but a backup was found — '+n+' habit(s) since '+escapeHtml(when)+'. Restore it?</div>' +
+    '<div style="margin-bottom:14px;">This device\'s rHabbits data looks empty, but a backup was found — '+n+' rHabbit(s) since '+escapeHtml(when)+'. Restore it?</div>' +
     '<button class="btn btn-block" id="ar-yes" style="margin-bottom:8px;">Restore</button>' +
     '<button class="btn-ghost btn-block" id="ar-no">No, start fresh</button>'
   );
@@ -4076,7 +4299,7 @@ function initCocoCannon(){
         (state.cocoHighScore ? '<div class="coco-sub">Best score: '+state.cocoHighScore+'</div>' : '') +
         (state.cocoLives>0
           ? '<button class="btn" id="cocoStartBtn">Start</button>'
-          : '<p>You\'re out of carrots -- log a habit today to earn one.</p>');
+          : '<p>You\'re out of carrots -- log a rHabbit today to earn one.</p>');
     } else if(phase==="gameover"){
       var beat = score>0 && score===state.cocoHighScore;
       overlay.innerHTML =
@@ -4084,7 +4307,7 @@ function initCocoCannon(){
         '<p>Final score: '+score+(beat?' -- new best!':'')+'</p>' +
         (state.cocoLives>0
           ? '<button class="btn" id="cocoStartBtn">Play Again</button>'
-          : '<p>Log a habit today to earn another life.</p>');
+          : '<p>Log a rHabbit today to earn another life.</p>');
     }
     var startBtn = document.getElementById("cocoStartBtn");
     if(startBtn) startBtn.addEventListener("click", startPlaying);
