@@ -1949,7 +1949,7 @@ function renderLogbookScreen(){
   html += '<div class="pip-row">'+carrotPipsHtml(state.carrots%7,7)+'</div>';
   var nextParts = [];
   if(next){ nextParts.push(next.title); }
-  if(sightingsActiveLB){ nextParts.push("New Discovery"); }
+  if(sightingsActiveLB){ nextParts.push("Discovery"); }
   // Streak Bonus (see evaluateStreakBonus()) recurs every 7-day active
   // streak, refilling Coco Cannon lives and granting a bonus Treasure Hunt
   // move together -- same short, ever-recurring cadence as New Discovery
@@ -2153,7 +2153,7 @@ function dailyStreak(h){
 function renderNextRewardsList(chainNext, sightingsActive){
   var html = '<ul class="next-rewards-list">';
   if(chainNext){ html += '<li>'+chestIconSvg("0.8rem")+' '+chainNext.title+'</li>'; }
-  if(sightingsActive){ html += '<li>👁️ New Discovery</li>'; }
+  if(sightingsActive){ html += '<li>👁️ Discovery</li>'; }
   html += '</ul>';
   return html;
 }
@@ -2305,7 +2305,7 @@ function renderNewDiscoveryCard(favorited){
   }
   html += '<button class="reward-heart '+(favorited?'favorited':'')+'" data-action="toggle-favorite-reward" data-id="new_discovery" aria-label="Favorite">'+(favorited?'❤️':'🤍')+'</button>';
   html += '<div class="reward-body">';
-  html += '<div class="reward-title">New Discovery</div>';
+  html += '<div class="reward-title">Discovery</div>';
   html += '<div class="pip-row compact">'+carrotPipsHtml(state.discoveryCarrots%7,7)+'</div>';
   html += '</div></div>';
   return html;
@@ -2425,7 +2425,7 @@ function renderSightingsGalleryModal(){
   var html = '<div class="modal-backdrop" data-backdrop="sightings-gallery">';
   html += '<div class="modal">';
   html += '<button class="modal-close" data-action="close-modal">✕</button>';
-  html += '<h3>New Discovery</h3>';
+  html += '<h3>Discovery</h3>';
   if(state.sightings.length===0){
     html += '<p class="sightings-teaser">No discoveries yet. Keep logging rHabbits — your first island sighting unlocks at 7 carrots.</p>';
     html += '</div></div>';
