@@ -310,7 +310,18 @@ img{max-width:100%; display:block;}
 /* ---------- Habit detail modal (reuses habit-head/emoji/name/badge above) ---------- */
 .habit-head{display:flex; align-items:center; gap:10px; margin-bottom:14px;}
 .habit-emoji{font-size:1.4rem;}
-.habit-name{flex:1; font-weight:700; color:var(--wood-dark); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.habit-name{flex:1; font-family:inherit; font-size:1rem; font-weight:700; color:var(--wood-dark); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+/* Built-in holidays (see GLOBAL_HOLIDAYS) render as a plain <div>, not a
+   <button> like every other habit-row/special-day entry -- <button> has no
+   inherited font-size/family of its own in this app's reset (see the bare
+   `button{font-family:inherit; cursor:pointer;}` rule above), so without
+   this, a holiday's name text picks up the browser's own default control
+   font instead of matching the rest of the list. font-size/family are
+   pinned explicitly above so every row (button or div) renders identically
+   regardless of element type; this just also drops the bold weight so
+   holidays read as visually lighter than a user's own birthdays/
+   anniversaries/etc. -- same size and font, less emphasis. */
+.habit-name.builtin-holiday{font-weight:400;}
 .habit-name-input{
   flex:1; min-width:0; border:none; border-bottom:1px dashed transparent; background:transparent;
   font-weight:700; color:var(--wood-dark); font-size:1rem; font-family:inherit; padding:2px 0;
@@ -557,6 +568,23 @@ img.reward-hero{max-height:240px; max-width:100%; margin:0 auto 10px; border-rad
 .profile-stat b{display:block; font-size:1.3rem; color:var(--wood-dark);}
 .profile-stat span{font-size:.68rem; color:var(--wood); text-transform:uppercase; letter-spacing:.06em;}
 .profile-actions{display:flex; flex-direction:column; gap:10px;}
+
+.toggle-row{
+  width:100%; display:flex; align-items:center; justify-content:space-between; gap:10px;
+  background:linear-gradient(180deg, var(--parchment-hi), var(--parchment));
+  border:1px solid var(--parchment-edge); border-radius:9px; padding:10px 12px; margin-bottom:8px;
+}
+.toggle-row-label{display:flex; align-items:center; gap:8px; font-weight:700; color:var(--wood-dark); font-size:.92rem;}
+.toggle-switch{
+  position:relative; width:42px; height:24px; flex-shrink:0; border:none; border-radius:12px;
+  background:rgba(107,69,38,.28); padding:0; cursor:pointer;
+}
+.toggle-switch::after{
+  content:""; position:absolute; top:2px; left:2px; width:20px; height:20px; border-radius:50%;
+  background:var(--parchment-hi); box-shadow:0 1px 3px rgba(0,0,0,.3); transition:left .15s ease;
+}
+.toggle-switch.on{background:var(--leaf);}
+.toggle-switch.on::after{left:20px;}
 
 .toast{
   position:fixed; left:50%; bottom:24px; transform:translateX(-50%);
@@ -1376,11 +1404,21 @@ function specialDaySortKey(sd){
   if(diff >= -7) return diff;
   return 1000 + specialDayNextOccurrenceDays(sd);
 }
-// User-added entries and the built-in GLOBAL_HOLIDAYS ride the same
-// revolving one-year rolodex together, sorted as one list -- holidays are
-// not pinned separately at the top or bottom.
+// Respects Profile's USA/RSA holiday toggles -- a regioned holiday only
+// shows when its region's toggle is on; unregioned/shared holidays (New
+// Year's, Easter, Christmas, etc.) aren't gated by either toggle at all.
+function visibleGlobalHolidays(){
+  return GLOBAL_HOLIDAYS.filter(function(h){
+    if(h.region==="US") return state.showUSHolidays;
+    if(h.region==="SA") return state.showSAHolidays;
+    return true;
+  });
+}
+// User-added entries and the built-in holidays (see visibleGlobalHolidays())
+// ride the same revolving one-year rolodex together, sorted as one list --
+// holidays are not pinned separately at the top or bottom.
 function specialDaysSorted(){
-  return state.specialDays.concat(GLOBAL_HOLIDAYS).sort(function(a,b){
+  return state.specialDays.concat(visibleGlobalHolidays()).sort(function(a,b){
     return specialDaySortKey(a) - specialDaySortKey(b);
   });
 }
@@ -1388,7 +1426,7 @@ function specialDaysSorted(){
 // "tomorrow or today"), so it reads as an advance heads-up to still go get
 // a card/gift, not a same-day notice once that window's already passed.
 function specialDayDueTomorrow(){
-  return state.specialDays.concat(GLOBAL_HOLIDAYS).some(function(sd){ return specialDayNextOccurrenceDays(sd)===1; });
+  return state.specialDays.concat(visibleGlobalHolidays()).some(function(sd){ return specialDayNextOccurrenceDays(sd)===1; });
 }
 
 // Flat cap available from the start -- daily habit slots are no longer
@@ -1532,6 +1570,13 @@ function defaultState(){
     ],
     _specialDayDraft:{ names:"", occasion:"birthday", occasionCustom:"", month:1, day:1, icon:SPECIAL_DAY_ICON_CHOICES[0] },
     _detailSpecialDayId:null,
+    // Per-region show/hide for the built-in GLOBAL_HOLIDAYS list (see
+    // Profile's Holidays toggles) -- both default on so nothing disappears
+    // for existing players until they actively opt out. Only ever filters
+    // the two regioned groups (US/SA); the shared/widely-observed holidays
+    // (New Year's, Easter, Christmas, etc.) have no region and always show.
+    showUSHolidays:true,
+    showSAHolidays:true,
     // Which date/month key the currently-open habit-note-modal is for --
     // set by "open-habit-note" in onAction(), read by renderHabitNoteModal()
     // and the save/delete-habit-note cases.
@@ -2440,7 +2485,7 @@ function renderSpecialDaysModal(){
   } else {
     list.forEach(function(sd){
       var rowInner = '<span class="habit-emoji">'+specialDayIcon(sd)+'</span>' +
-        '<span class="habit-name">'+escapeHtml(sd.names)+'</span>' +
+        '<span class="habit-name'+(sd.builtin?' builtin-holiday':'')+'">'+escapeHtml(sd.names)+'</span>' +
         '<span class="habit-type-badge">'+escapeHtml(specialDayOccasionLabel(sd))+'</span>' +
         '<span class="special-day-date">'+specialDayDateLabel(sd)+'</span>';
       // Built-in holidays (see GLOBAL_HOLIDAYS) aren't user data -- nothing
@@ -2591,6 +2636,16 @@ function typeOptRow(value,title,sub,selected,disabled){
   '</button>';
 }
 
+// Shared by the two Profile holiday toggles below -- a labeled row with a
+// tappable switch on the right, matching the .habit-row visual language
+// used everywhere else rather than a native <input type=checkbox>.
+function toggleRowHtml(action, label, on){
+  return '<button class="toggle-row" data-action="'+action+'">' +
+    '<span class="toggle-row-label">'+label+'</span>' +
+    '<span class="toggle-switch'+(on?' on':'')+'" aria-hidden="true"></span>' +
+  '</button>';
+}
+
 function renderProfileModal(){
   var cutoutImg = state.avatar==="female" ? ASSET.cutout_female : ASSET.cutout_male;
   var html = '<div class="modal-backdrop" data-backdrop="profile">';
@@ -2618,6 +2673,9 @@ function renderProfileModal(){
   html += '<input type="file" id="profileRestoreInput" accept="application/json,.json" class="hidden">';
   html += '<button class="btn btn-danger" data-action="reset-progress">Reset Progress</button>';
   html += '</div>';
+  html += '<div class="section-label">Holidays shown</div>';
+  html += toggleRowHtml("toggle-us-holidays", "🇺🇸 USA holidays", state.showUSHolidays);
+  html += toggleRowHtml("toggle-sa-holidays", "🇿🇦 RSA holidays", state.showSAHolidays);
   html += '<div style="margin-top:18px; padding-top:14px; border-top:1px solid var(--parchment-edge); display:flex; justify-content:space-between; font-size:.78rem; color:var(--wood);">';
   html += '<span>Version</span><span>'+APP_VERSION+'</span>';
   html += '</div>';
@@ -3016,6 +3074,14 @@ function onAction(e){
       break;
     case "switch-avatar":
       state.avatar = state.avatar==="female" ? "male" : "female";
+      save(); render();
+      break;
+    case "toggle-us-holidays":
+      state.showUSHolidays = !state.showUSHolidays;
+      save(); render();
+      break;
+    case "toggle-sa-holidays":
+      state.showSAHolidays = !state.showSAHolidays;
       save(); render();
       break;
     case "reset-progress":
