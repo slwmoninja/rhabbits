@@ -34,6 +34,7 @@
   --carrot-deep:#b85a1b;
   --leaf:#5c7a3f;
   --leaf-deep:#3f5a2a;
+  --leaf-bright:#2f9e44;
   --gold:#c6992f;
   --danger:#a33a2c;
   --shadow: 0 6px 18px rgba(0,0,0,.35);
@@ -326,7 +327,7 @@ img{max-width:100%; display:block;}
 .habit-row:active{transform:translateY(1px);}
 .due-today-empty{color:var(--wood); font-size:.9rem; text-align:center; padding:12px 0 4px;}
 .habit-status{width:30px; flex-shrink:0; text-align:center; font-size:1rem;}
-.habit-status.done{color:var(--leaf-deep); font-weight:800;}
+.habit-status.done{color:var(--leaf-bright); font-weight:800; font-size:1.15rem;}
 .habit-status.streak{font-size:.8rem; font-weight:700; color:var(--carrot-deep);}
 .habit-status.idle::after{content:""; display:inline-block; width:8px; height:8px; border-radius:50%; border:1.5px solid var(--parchment-edge);}
 /* ---------- Habit detail modal (reuses habit-head/emoji/name/badge above) ---------- */
@@ -725,7 +726,7 @@ var STORAGE_KEY = "rhabbits_state_v1";
 // every future code change to this file so a reload can be visually
 // confirmed against what was actually deployed. Distinct from any
 // data-schema/localStorage version (this app has none yet).
-var APP_VERSION = "1.0+4721cb28";
+var APP_VERSION = "1.0+d0489b5b";
 // Sorted into one logical sequence -- nature, fitness/routine, pirate/
 // nautical, then animals -- rather than grouped under separate UI headers.
 var EMOJI_CHOICES = ["🌴","🌱","☀️","🌊","🥥","🥕","🌙","💪","🏋️","🧘","🤸","📖","💊","🛏️","⛵","🏴‍☠️","🧭","⚓","🦜","🐚","🗺️","🏝️","🐶","🐕","🐩","🦮","🐕‍🦺","🐺","🐱","🐈","🐈‍⬛","🦁"];
