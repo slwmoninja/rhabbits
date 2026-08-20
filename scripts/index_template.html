@@ -720,7 +720,7 @@ var STORAGE_KEY = "rhabbits_state_v1";
 // every future code change to this file so a reload can be visually
 // confirmed against what was actually deployed. Distinct from any
 // data-schema/localStorage version (this app has none yet).
-var APP_VERSION = "1.0+799cbe83";
+var APP_VERSION = "1.0+07fca761";
 // Sorted into one logical sequence -- nature, fitness/routine, pirate/
 // nautical, then animals -- rather than grouped under separate UI headers.
 var EMOJI_CHOICES = ["🌴","🌱","☀️","🌊","🥥","🥕","🌙","💪","🏋️","🧘","🤸","📖","💊","🛏️","⛵","🏴‍☠️","🧭","⚓","🦜","🐚","🗺️","🏝️","🐶","🐕","🐩","🦮","🐕‍🦺","🐺","🐱","🐈","🐈‍⬛","🦁"];
@@ -3877,6 +3877,68 @@ function downloadBackupFallback(json, fp){
     return false;
   }
 }
+/* =========================================================
+   EXIT APP BACKUP -- a silent, app-owned safety net, entirely separate from
+   the manual "Back up now" above. Overwrites ONE fixed IndexedDB record on
+   every backgrounding (visibilitychange -> hidden, plus pagehide as a
+   redundant second trigger) -- never a new record per exit, and no UI at
+   all. Exists to survive an app-level bug or storage corruption between
+   real manual backups; the user never sees it directly except as a
+   candidate source for the restore-on-empty-state flow (Path A0, see
+   tryAutoRestorePathA0() below) -- no settings row, no button, no filename.
+   ========================================================= */
+var EXIT_BACKUP_DB = "rhabbits-exit-backup", EXIT_BACKUP_STORE = "snapshot", EXIT_BACKUP_KEY = "latest";
+var EXIT_BACKUP_LAST_FINGERPRINT_KEY = "rhabbits_last_exit_backup_fingerprint";
+function openExitBackupDb(){
+  return new Promise(function(resolve, reject){
+    var req = indexedDB.open(EXIT_BACKUP_DB, 1);
+    req.onupgradeneeded = function(){ req.result.createObjectStore(EXIT_BACKUP_STORE); };
+    req.onsuccess = function(){ resolve(req.result); };
+    req.onerror = function(){ reject(req.error); };
+  });
+}
+// Skips the write when nothing's changed since the last exit backup (same
+// fingerprint technique as backupNow() above) -- not required for
+// correctness (the fixed key already prevents pile-up regardless), just
+// avoids a pointless IndexedDB write on every tab-switch/background cycle.
+function writeExitBackup(){
+  var fp = backupFingerprint();
+  if(fp === localStorage.getItem(EXIT_BACKUP_LAST_FINGERPRINT_KEY)) return Promise.resolve(false);
+  var json = JSON.stringify(state);
+  return openExitBackupDb().then(function(db){
+    return new Promise(function(resolve, reject){
+      var tx = db.transaction(EXIT_BACKUP_STORE, "readwrite");
+      tx.objectStore(EXIT_BACKUP_STORE).put(json, EXIT_BACKUP_KEY);
+      tx.oncomplete = function(){ localStorage.setItem(EXIT_BACKUP_LAST_FINGERPRINT_KEY, fp); resolve(true); };
+      tx.onerror = function(){ reject(tx.error); };
+    });
+  }).catch(function(){ return false; }); // best-effort/silent -- nothing to surface a failure to at exit time
+}
+function readExitBackup(){
+  return openExitBackupDb().then(function(db){
+    return new Promise(function(resolve, reject){
+      var req = db.transaction(EXIT_BACKUP_STORE, "readonly").objectStore(EXIT_BACKUP_STORE).get(EXIT_BACKUP_KEY);
+      req.onsuccess = function(){ resolve(req.result || null); };
+      req.onerror = function(){ reject(req.error); };
+    });
+  }).catch(function(){ return null; });
+}
+// Wired exactly once at bootstrap (see initExitBackup(), called below near
+// initBottombar()) -- these listeners live on document/window, never rebuilt
+// by render(), so rewiring them from anywhere that re-runs would accumulate
+// duplicate listeners the same way Step 6's backup-button bug once did.
+// visibilitychange->hidden is the primary trigger (the page is still fully
+// alive when it fires, giving the async IndexedDB write a real chance to
+// finish); pagehide is a redundant second trigger since coverage of what
+// actually fires differs across mobile OSes. Deliberately no beforeunload:
+// unreliable on mobile Safari and disqualifies the page from the
+// back-forward cache in Chromium/Firefox for every normal tab-switch.
+function initExitBackup(){
+  document.addEventListener("visibilitychange", function(){
+    if(document.visibilityState==="hidden") writeExitBackup();
+  });
+  window.addEventListener("pagehide", function(){ writeExitBackup(); });
+}
 function validBackupShape(parsed){
   return !!parsed && typeof parsed==="object" && Array.isArray(parsed.habits) && typeof parsed.unlocks==="object";
 }
@@ -3976,6 +4038,23 @@ function openBackupRestorePicker(fallbackInputEl){
    which also means it naturally never fights with maybeShowInstallPrompt()
    (that one is gated on state.onboarded being true).
    ========================================================= */
+// Path A0 -- Step 6b's Exit App Backup, checked first, every platform. A
+// plain IndexedDB read needs no permission and no user gesture on any
+// platform (unlike Path A below), so this is what actually makes silent
+// restore possible on mobile, where the File System Access API doesn't
+// exist at all. Also the freshest silent source, since it's kept current
+// on every backgrounding rather than only whenever the user last tapped
+// "Back up now".
+function tryAutoRestorePathA0(){
+  return readExitBackup().then(function(json){
+    if(!json) return false;
+    var parsed;
+    try{ parsed = JSON.parse(json); }catch(e){ return false; }
+    if(!validBackupShape(parsed)) return false;
+    offerAutoRestore(parsed);
+    return true;
+  }).catch(function(){ return false; });
+}
 // Path A -- silent handle re-read, File System Access browsers only. Query
 // only, never requestPermission() here: escalating permission needs a user
 // gesture, and there isn't one this early in the page lifecycle.
@@ -4051,8 +4130,11 @@ function maybeOfferAutoRestore(){
   // got-wiped case specifically -- only offer it once there's a real signal
   // this device previously ran the app as an installed PWA.
   if(!isInstalled()) return;
-  tryAutoRestorePathA().then(function(handled){
-    if(!handled) offerAutoRestorePathB();
+  tryAutoRestorePathA0().then(function(handled){
+    if(handled) return;
+    tryAutoRestorePathA().then(function(handled2){
+      if(!handled2) offerAutoRestorePathB();
+    });
   });
 }
 
@@ -4729,6 +4811,7 @@ render();
 try{ history.replaceState(currentNavState(), ""); }catch(e){} // the first screen shown on load establishes the baseline
 initBottombar();
 initCocoCannon();
+initExitBackup();
 
 if(!state.onboarded){
   maybeOfferAutoRestore();
