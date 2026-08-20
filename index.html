@@ -593,7 +593,7 @@ img{max-width:100%; display:block;}
 .medallion-lg.locked{filter:grayscale(1); opacity:.55;}
 img.reward-hero{max-height:240px; max-width:100%; margin:0 auto 10px; border-radius:12px; display:block;}
 
-.profile-cutout{max-height:260px; max-width:70%; margin:0 auto 14px; display:block; filter:drop-shadow(0 10px 14px rgba(0,0,0,.35));}
+.profile-cutout{max-height:130px; max-width:35%; margin:0 auto 14px; display:block; filter:drop-shadow(0 10px 14px rgba(0,0,0,.35));}
 .profile-stats{display:flex; justify-content:space-around; margin:14px 0 20px; text-align:center;}
 .profile-stat b{display:block; font-size:1.3rem; color:var(--wood-dark);}
 .profile-stat span{font-size:.68rem; color:var(--wood); text-transform:uppercase; letter-spacing:.06em;}
@@ -701,7 +701,7 @@ var STORAGE_KEY = "rhabbits_state_v1";
 // every future code change to this file so a reload can be visually
 // confirmed against what was actually deployed. Distinct from any
 // data-schema/localStorage version (this app has none yet).
-var APP_VERSION = "1.0+94646a64";
+var APP_VERSION = "1.0+31a43933";
 // Sorted into one logical sequence -- nature, fitness/routine, pirate/
 // nautical, then animals -- rather than grouped under separate UI headers.
 var EMOJI_CHOICES = ["🌴","🌱","☀️","🌊","🥥","🥕","🌙","💪","🏋️","🧘","🤸","📖","💊","🛏️","⛵","🏴‍☠️","🧭","⚓","🦜","🐚","🗺️","🏝️","🐶","🐕","🐩","🦮","🐕‍🦺","🐺","🐱","🐈","🐈‍⬛","🦁"];
@@ -2767,6 +2767,7 @@ function renderProfileModal(){
   html += settingsChipHtml("switch-avatar", "Switch Castaway");
   html += settingsChipHtml("backup-now", "Back up");
   html += settingsChipHtml("restore-backup", "Restore");
+  html += settingsChipHtml("your-data", "Your Data");
   html += settingsChipHtml("toggle-us-holidays", "🇺🇸 USA holidays", state.showUSHolidays);
   html += settingsChipHtml("toggle-sa-holidays", "🇿🇦 RSA holidays", state.showSAHolidays);
   html += '</div>';
@@ -3227,6 +3228,9 @@ function onAction(e){
       break;
     case "restore-backup":
       openBackupRestorePicker(root.querySelector("#profileRestoreInput"));
+      break;
+    case "your-data":
+      openInfoModal("Your Data", "Your data is private, only accessible to you on this device.");
       break;
   }
 }
