@@ -344,31 +344,26 @@ img{max-width:100%; display:block;}
 /* Alarm is set from inside the habit detail modal now (see
    renderHabitDetailModal()) -- the card row only ever *displays* whether
    one is set, via .habit-alarm-indicator below, so it costs no extra width
-   on rows without an alarm. */
-/* A colored badge rather than just coloring the ⏰ glyph -- emoji render in
-   their own fixed colors regardless of CSS `color`, so the only way to make
-   this actually read as green is a background behind it. */
-.habit-alarm-indicator{
-  flex-shrink:0; width:18px; height:18px; border-radius:50%;
-  background:var(--leaf-bright); display:flex; align-items:center; justify-content:center;
-  font-size:.62rem; line-height:1;
-}
+   on rows without an alarm. Uses alarmIconSvg() (stroke:currentColor)
+   rather than the ⏰ emoji -- emoji render in their own fixed colors
+   regardless of CSS `color`, so a plain grey/green glyph with no circle or
+   fill behind it isn't achievable with the emoji glyph. */
+.habit-alarm-indicator{flex-shrink:0; color:var(--leaf-bright); display:flex; align-items:center; background:transparent;}
 .due-today-empty{color:var(--wood); font-size:.9rem; text-align:center; padding:12px 0 4px;}
 .habit-status{width:30px; flex-shrink:0; text-align:center; font-size:1rem;}
 .habit-status.done{color:var(--leaf-bright); font-weight:800; font-size:1.15rem;}
 .habit-status.streak{font-size:.8rem; font-weight:700; color:var(--carrot-deep);}
 .habit-status.idle::after{content:""; display:inline-block; width:8px; height:8px; border-radius:50%; border:1.5px solid var(--parchment-edge);}
-/* Alarm control inside the habit detail modal -- greyed clock icon until an
-   alarm is set (matches .habit-alarm-indicator's green once it is), tapping
-   either the icon or its label opens renderHabitAlarmModal(). */
+/* Alarm control inside the habit detail modal -- grey icon, no circle or
+   fill behind it, until an alarm is set (matches .habit-alarm-indicator's
+   green once it is), tapping opens renderHabitAlarmModal(). */
 .habit-alarm-row{display:flex; align-items:center; gap:10px; margin:2px 0 18px;}
 .habit-alarm-btn{
-  flex-shrink:0; width:38px; height:38px; border-radius:50%;
-  border:1px solid var(--parchment-edge); background:var(--parchment-hi);
-  color:#9a9186; font-size:1.05rem; display:flex; align-items:center; justify-content:center;
+  flex-shrink:0; width:38px; height:38px; border:none; background:transparent;
+  color:#9a9186; display:flex; align-items:center; justify-content:center;
 }
 .habit-alarm-btn:active{transform:translateY(1px);}
-.habit-alarm-btn.set{color:var(--leaf-bright); border-color:var(--leaf-bright);}
+.habit-alarm-btn.set{color:var(--leaf-bright);}
 .habit-alarm-label{font-size:.85rem; color:var(--wood); text-align:left;}
 /* ---------- Habit detail modal (reuses habit-head/emoji/name/badge above) ---------- */
 .habit-head{display:flex; align-items:center; gap:10px; margin-bottom:14px;}
@@ -766,7 +761,7 @@ var STORAGE_KEY = "rhabbits_state_v1";
 // every future code change to this file so a reload can be visually
 // confirmed against what was actually deployed. Distinct from any
 // data-schema/localStorage version (this app has none yet).
-var APP_VERSION = "1.0+7f2e7001";
+var APP_VERSION = "1.0+cb213b91";
 // Sorted into one logical sequence -- nature, fitness/routine, pirate/
 // nautical, then animals -- rather than grouped under separate UI headers.
 var EMOJI_CHOICES = ["🌴","🌱","☀️","🌊","🥥","🥕","🌙","💪","🏋️","🧘","🤸","📖","💊","🛏️","⛵","🏴‍☠️","🧭","⚓","🦜","🐚","🗺️","🏝️","🐶","🐕","🐩","🦮","🐕‍🦺","🐺","🐱","🐈","🐈‍⬛","🦁"];
@@ -2327,6 +2322,18 @@ function parseAlarmTimeText(str){
   }
   return (hour<10?"0":"")+hour+":"+(minute<10?"0":"")+minute;
 }
+// Stroke-only alarm clock, colored via currentColor (see .habit-alarm-btn /
+// .habit-alarm-indicator) so it can go grey/green with no circle or fill
+// behind it -- not possible with the ⏰ emoji, which ignores CSS color.
+function alarmIconSvg(size){
+  size = size || "18";
+  return '<svg viewBox="0 0 24 24" width="'+size+'" height="'+size+'" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<circle cx="12" cy="13" r="7.5"/>' +
+    '<path d="M12 9v4l2.5 2.5"/>' +
+    '<path d="M5 5l2.2 2.2"/>' +
+    '<path d="M19 5l-2.2 2.2"/>' +
+  '</svg>';
+}
 function renderHabitCard(h){
   var badge = habitTypeBadge(h);
   var logged = habitLogged(h);
@@ -2337,7 +2344,7 @@ function renderHabitCard(h){
   // -- this row only shows a small green indicator when one is set, and
   // takes up no space at all when it isn't, so rows without an alarm stay
   // exactly as compact as before.
-  var alarmIndicator = h.alarmTime ? '<span class="habit-alarm-indicator" aria-label="Alarm set for '+escapeAttr(formatAlarmTime(h.alarmTime))+'">⏰</span>' : '';
+  var alarmIndicator = h.alarmTime ? '<span class="habit-alarm-indicator" aria-label="Alarm set for '+escapeAttr(formatAlarmTime(h.alarmTime))+'">'+alarmIconSvg("16")+'</span>' : '';
   return (
     '<button class="habit-row" data-action="show-habit-detail" data-id="'+h.id+'">' +
       '<span class="habit-emoji">'+h.emoji+'</span>' +
@@ -2366,7 +2373,7 @@ function renderHabitDetailModal(id){
   var alarmSet = !!h.alarmTime;
   var alarmLabel = alarmSet ? "Alarm set for "+formatAlarmTime(h.alarmTime)+" -- tap to change" : "Set an alarm";
   html += '<div class="habit-alarm-row">' +
-    '<button class="habit-alarm-btn'+(alarmSet?' set':'')+'" data-action="open-habit-alarm" data-id="'+h.id+'" aria-label="'+escapeAttr(alarmLabel)+'">⏰</button>' +
+    '<button class="habit-alarm-btn'+(alarmSet?' set':'')+'" data-action="open-habit-alarm" data-id="'+h.id+'" aria-label="'+escapeAttr(alarmLabel)+'">'+alarmIconSvg("22")+'</button>' +
     '<span class="habit-alarm-label">'+(alarmSet?"Alarm: "+formatAlarmTime(h.alarmTime):"No alarm set")+'</span>' +
   '</div>';
   // The day-pip notes hint used to sit as a permanent line under the title
