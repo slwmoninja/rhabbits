@@ -719,7 +719,7 @@ var STORAGE_KEY = "rhabbits_state_v1";
 // every future code change to this file so a reload can be visually
 // confirmed against what was actually deployed. Distinct from any
 // data-schema/localStorage version (this app has none yet).
-var APP_VERSION = "1.0+7eb893e5";
+var APP_VERSION = "1.0+1244708f";
 // Sorted into one logical sequence -- nature, fitness/routine, pirate/
 // nautical, then animals -- rather than grouped under separate UI headers.
 var EMOJI_CHOICES = ["🌴","🌱","☀️","🌊","🥥","🥕","🌙","💪","🏋️","🧘","🤸","📖","💊","🛏️","⛵","🏴‍☠️","🧭","⚓","🦜","🐚","🗺️","🏝️","🐶","🐕","🐩","🦮","🐕‍🦺","🐺","🐱","🐈","🐈‍⬛","🦁"];
@@ -1867,6 +1867,28 @@ function render(){
   wireEvents();
   syncBottombarUI(); // bottombar lives outside #app -- keep it in sync separately, see initBottombar()
   syncCocoScreenUI(); // same reasoning -- see initCocoCannon()
+}
+
+// render() rebuilds the whole tree via innerHTML, so an open .modal loses
+// its scroll position on every re-render -- fine for most taps, but jarring
+// when picking a habit type reveals a subfield (due date / day-of-week /
+// repeat-every, see .freq-subfield) and the modal visibly snaps back to its
+// top. Use this instead of a bare render() for dialog choices that can
+// reveal a new subfield below them: land on the freshly revealed subfield,
+// centered, instead of the top; if nothing new was revealed, just hold the
+// scroll position steady rather than resetting it.
+function renderPreservingModalScroll(){
+  var modalEl = document.querySelector(".modal");
+  var scrollTop = modalEl ? modalEl.scrollTop : 0;
+  render();
+  modalEl = document.querySelector(".modal");
+  if(!modalEl) return;
+  var subfield = modalEl.querySelector(".freq-subfield");
+  if(subfield){
+    subfield.scrollIntoView({block:"center", behavior:"smooth"});
+  } else {
+    modalEl.scrollTop = scrollTop;
+  }
 }
 
 function renderOnboarding(){
@@ -3079,7 +3101,7 @@ function onAction(e){
     case "pick-type":
       if(el.hasAttribute("disabled")) return;
       state._draft.type = el.getAttribute("data-type");
-      render();
+      renderPreservingModalScroll();
       break;
     case "finish-onboarding":
       finishOnboarding();
