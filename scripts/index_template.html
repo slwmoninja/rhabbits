@@ -611,7 +611,8 @@ img{max-width:100%; display:block;}
 .medallion-lg.locked{filter:grayscale(1); opacity:.55;}
 img.reward-hero{max-height:240px; max-width:100%; margin:0 auto 10px; border-radius:12px; display:block;}
 
-.profile-cutout{max-height:130px; max-width:35%; margin:0 auto 14px; display:block; filter:drop-shadow(0 10px 14px rgba(0,0,0,.35));}
+.profile-cutout{max-height:130px; max-width:35%; margin:0; display:block; filter:drop-shadow(0 10px 14px rgba(0,0,0,.35));}
+.profile-cutout-row{display:flex; align-items:center; justify-content:center; gap:14px; margin-bottom:14px;}
 .profile-stats{display:flex; justify-content:space-around; margin:14px 0 20px; text-align:center;}
 .profile-stat b{display:block; font-size:1.3rem; color:var(--wood-dark);}
 .profile-stat span{font-size:.68rem; color:var(--wood); text-transform:uppercase; letter-spacing:.06em;}
@@ -719,7 +720,7 @@ var STORAGE_KEY = "rhabbits_state_v1";
 // every future code change to this file so a reload can be visually
 // confirmed against what was actually deployed. Distinct from any
 // data-schema/localStorage version (this app has none yet).
-var APP_VERSION = "1.0+5b742083";
+var APP_VERSION = "1.0+958608ca";
 // Sorted into one logical sequence -- nature, fitness/routine, pirate/
 // nautical, then animals -- rather than grouped under separate UI headers.
 var EMOJI_CHOICES = ["🌴","🌱","☀️","🌊","🥥","🥕","🌙","💪","🏋️","🧘","🤸","📖","💊","🛏️","⛵","🏴‍☠️","🧭","⚓","🦜","🐚","🗺️","🏝️","🐶","🐕","🐩","🦮","🐕‍🦺","🐺","🐱","🐈","🐈‍⬛","🦁"];
@@ -2778,7 +2779,10 @@ function renderProfileModal(){
   html += '  <h3 style="margin:0;">Your Castaway</h3>';
   html += '  <div style="display:flex; align-items:center; gap:10px; flex-shrink:0;">'+installTopbarBtnHtml(true)+'<button class="modal-close" data-action="close-modal" style="float:none; margin:0;">✕</button></div>';
   html += '</div>';
-  html += '<img class="profile-cutout" src="'+cutoutImg+'" alt="">';
+  html += '<div class="profile-cutout-row">';
+  html += '  <img class="profile-cutout" src="'+cutoutImg+'" alt="">';
+  html += '  '+settingsChipHtml("switch-avatar", "Switch Castaway");
+  html += '</div>';
   html += '<button class="story-link" data-action="show-story"><span class="story-icon"><img src="'+ASSET.bottle+'" alt=""></span><span>The Story So Far</span></button>';
   html += '<div class="profile-stats">';
   html += '<div class="profile-stat"><b>'+state.carrots+'</b><span>Carrots</span></div>';
@@ -2791,10 +2795,9 @@ function renderProfileModal(){
   // "Holidays shown" blocks of full-width buttons.
   html += '<div class="section-label">Settings</div>';
   html += '<div class="settings-row">';
-  html += settingsChipHtml("switch-avatar", "Switch Castaway");
+  html += settingsChipHtml("your-data", "Your Data");
   html += settingsChipHtml("backup-now", "Back up");
   html += settingsChipHtml("restore-backup", "Restore");
-  html += settingsChipHtml("your-data", "Your Data");
   html += settingsChipHtml("toggle-us-holidays", "🇺🇸 USA holidays", state.showUSHolidays);
   html += settingsChipHtml("toggle-sa-holidays", "🇿🇦 RSA holidays", state.showSAHolidays);
   html += '</div>';
