@@ -330,6 +330,11 @@ img{max-width:100%; display:block;}
 /* ---------- Habit detail modal (reuses habit-head/emoji/name/badge above) ---------- */
 .habit-head{display:flex; align-items:center; gap:10px; margin-bottom:14px;}
 .habit-emoji{font-size:1.4rem;}
+/* Detail modal's emoji is a real <button> (tap to change icon, see
+   toggle-detail-emoji-picker) -- strip native button chrome so it still
+   reads as a plain icon, matching the <span> it doubles for elsewhere. */
+.habit-emoji-btn{background:none; border:none; padding:0; line-height:1; cursor:pointer; border-radius:6px;}
+.habit-emoji-btn:active{opacity:.7;}
 /* Special Days rows only (birthdays/anniversaries/other + built-in
    holidays) -- 30% smaller than the base 1.4rem habit-icon size, since a
    flag/emoji icon shouldn't dominate a compact list row the way it can for
@@ -697,7 +702,9 @@ var STORAGE_KEY = "rhabbits_state_v1";
 // confirmed against what was actually deployed. Distinct from any
 // data-schema/localStorage version (this app has none yet).
 var APP_VERSION = "1.0.0";
-var EMOJI_CHOICES = ["🌴","🌱","☀️","🌊","🥥","🥕","⛵","🏴‍☠️","🧭","⚓","🦜","🐚","🌙","🗺️","🏝️","🐶","🐕","🐩","🦮","🐕‍🦺","🐺","🐱","🐈","🐈‍⬛","🦁"];
+// Sorted into one logical sequence -- nature, fitness/routine, pirate/
+// nautical, then animals -- rather than grouped under separate UI headers.
+var EMOJI_CHOICES = ["🌴","🌱","☀️","🌊","🥥","🥕","🌙","💪","🏋️","🧘","🤸","📖","💊","🛏️","⛵","🏴‍☠️","🧭","⚓","🦜","🐚","🗺️","🏝️","🐶","🐕","🐩","🦮","🐕‍🦺","🐺","🐱","🐈","🐈‍⬛","🦁"];
 
 var REWARDS = [
   {
@@ -1182,8 +1189,16 @@ function unlockedJournalEntries(state){
 function onceoffCompletedCount(state){
   return state.habits.filter(function(h){ return h.type==="onceoff" && h.completions.length>0; }).length;
 }
-function todayStr(){ return new Date().toISOString().slice(0,10); }
-function monthStr(d){ return (d||new Date()).toISOString().slice(0,7); }
+// Local calendar date ("YYYY-MM-DD"), read off the device clock rather than
+// toISOString() (which is always UTC) -- so a habit's "day" rolls over at
+// 12am in the player's own timezone, not at UTC midnight.
+function localDateStr(d){
+  d = d || new Date();
+  var y = d.getFullYear(), m = d.getMonth()+1, day = d.getDate();
+  return y + "-" + (m<10?"0":"") + m + "-" + (day<10?"0":"") + day;
+}
+function todayStr(){ return localDateStr(); }
+function monthStr(d){ d = d||new Date(); return localDateStr(d).slice(0,7); }
 // ISO-8601 week key ("2026-W34") -- used the same way monthStr() is for
 // monthly habits, just at week grain: one credit per Mon-Sun week rather
 // than per calendar month. Aligns to the week's Thursday first (standard
@@ -1199,14 +1214,14 @@ function isoWeekStr(d){
 
 function daysSince(iso){
   if(!iso) return 0;
-  // Parsed as UTC (the "Z" suffix), not local midnight -- every date string
-  // in this app is produced via toISOString().slice(0,10) (todayStr(), the
-  // day-pip loop in renderHabitDetailModal(), etc.), which is inherently a
-  // UTC calendar date. Parsing it back as local time here used to disagree
-  // with that by exactly the local UTC offset, silently rounding this
-  // function down a day for part of the day in any negative-offset
-  // timezone (e.g. US time zones) -- most visible in habitEveryDue().
-  var ms = Date.now() - new Date(iso+"T00:00:00Z").getTime();
+  // Parsed as local midnight (no "Z" suffix) -- every date string in this
+  // app is produced via localDateStr() (todayStr(), the day-pip loop in
+  // renderHabitDetailModal(), etc.), which is the device clock's local
+  // calendar date. Parsing it back as UTC here would disagree with that by
+  // exactly the local UTC offset, silently rounding this function down a
+  // day for part of the day in any positive-offset timezone -- most visible
+  // in habitEveryDue().
+  var ms = Date.now() - new Date(iso+"T00:00:00").getTime();
   return Math.max(0, Math.floor(ms/86400000));
 }
 function uid(){ return Math.random().toString(36).slice(2,10) + Date.now().toString(36); }
@@ -1499,7 +1514,8 @@ function freshHabitDraft(){
     description:"",
     dueDate: todayStr(),
     everyUnit: "days",
-    everyN: 2
+    everyN: 2,
+    dayOfWeek: new Date().getDay()
   };
 }
 
@@ -1573,11 +1589,22 @@ function defaultState(){
     cocoLivesDays:[],
     cocoTrialGrantedOn:null,
     cocoHighScore:0,
+    // Level/score snapshot taken at the start of the run's *current* level
+    // (see saveCocoCheckpoint() in initCocoCannon()) -- not updated again
+    // until that level is actually cleared, so a coconut/tab close mid-level
+    // resumes at this level fresh rather than mid-wave, with any score from
+    // that level's partial kills backed out. Reset to 1/0 whenever a run
+    // actually ends (see endGame()), so a closed-then-reopened game-over
+    // screen starts the next attempt from scratch rather than replaying a
+    // dead run's position.
+    cocoCheckpointLevel:1,
+    cocoCheckpointScore:0,
     screen:"logbook",
     pendingCelebration:null,
     toast:null,
-    _draft:{ name:"", emoji:"🌴", type:"daily", description:"", dueDate:todayStr(), everyUnit:"days", everyN:2 },
+    _draft:{ name:"", emoji:"🌴", type:"daily", description:"", dueDate:todayStr(), everyUnit:"days", everyN:2, dayOfWeek:new Date().getDay() },
     _detailHabitId:null,
+    _detailEmojiPickerOpen:false,
     _detailRewardId:null,
     // Special Days -- birthdays/anniversaries/custom occasions, recurring
     // every year (month+day only, no year stored) rather than tied to a
@@ -1708,7 +1735,7 @@ function activeDayStreak(){
   var n = 0, d = new Date();
   if(state.activeDays.indexOf(todayStr())===-1) d.setDate(d.getDate()-1);
   while(true){
-    var ds = d.toISOString().slice(0,10);
+    var ds = localDateStr(d);
     if(state.activeDays.indexOf(ds)!==-1){ n++; d.setDate(d.getDate()-1); } else break;
   }
   return n;
@@ -2010,7 +2037,7 @@ function everyUnitLabel(h){
 }
 function habitTypeBadge(h){
   if(h.type==="daily") return "Daily";
-  if(h.type==="weekly") return "Weekly";
+  if(h.type==="weekly") return typeof h.dayOfWeek==="number" ? "Weekly · "+SPECIAL_DAY_WEEKDAY_ABBR[h.dayOfWeek] : "Weekly";
   if(h.type==="monthly") return "Monthly";
   if(h.type==="every") return "Every "+h.everyN+" "+everyUnitLabel(h);
   return "Once-off";
@@ -2060,7 +2087,10 @@ function renderHabitDetailModal(id){
   var html = '<div class="modal-backdrop" data-backdrop="habit-detail">';
   html += '<div class="modal">';
   html += '<button class="modal-close" data-action="close-modal">✕</button>';
-  html += '<div class="habit-head"><span class="habit-emoji">'+h.emoji+'</span><input type="text" class="habit-name-input" id="habitDetailName" maxlength="40" value="'+escapeAttr(h.name)+'"><span class="habit-type-badge">'+badge+'</span></div>';
+  html += '<div class="habit-head"><button class="habit-emoji habit-emoji-btn" data-action="toggle-detail-emoji-picker" aria-label="Change icon">'+h.emoji+'</button><input type="text" class="habit-name-input" id="habitDetailName" maxlength="40" value="'+escapeAttr(h.name)+'"><span class="habit-type-badge">'+badge+'</span></div>';
+  if(state._detailEmojiPickerOpen){
+    html += '<div class="emoji-picker">'+EMOJI_CHOICES.map(function(e){return '<button class="emoji-opt '+(h.emoji===e?'selected':'')+'" data-action="pick-detail-emoji" data-id="'+h.id+'" data-emoji="'+e+'">'+e+'</button>';}).join('')+'</div>';
+  }
   html += '<textarea class="habit-desc-input" id="habitDetailDescription" maxlength="140" placeholder="Add a description (optional)">'+escapeHtml(h.description||"")+'</textarea>';
 
   if(h.type==="daily"){
@@ -2069,7 +2099,7 @@ function renderHabitDetailModal(id){
     var pips = '';
     for(var i=0;i<=6;i++){
       var d = new Date(); d.setDate(d.getDate()-i);
-      var ds = d.toISOString().slice(0,10);
+      var ds = localDateStr(d);
       var done = h.completions.indexOf(ds)!==-1;
       var isToday = ds===today;
       // A note badge on the specific day it belongs to (not just today) --
@@ -2111,7 +2141,7 @@ function renderHabitDetailModal(id){
     } else {
       html += '<button class="log-btn" data-action="toggle-weekly" data-id="'+h.id+'">Log this Week  +1 🥕</button>';
     }
-    html += '<div class="habit-meta">'+h.completions.length+' week'+(h.completions.length===1?'':'s')+' logged</div>';
+    html += '<div class="habit-meta">'+h.completions.length+' week'+(h.completions.length===1?'':'s')+' logged'+(typeof h.dayOfWeek==="number" ? ' · Target: '+SPECIAL_DAY_WEEKDAY_ABBR[h.dayOfWeek] : '')+'</div>';
   } else if(h.type==="every"){
     var everyDue = habitEveryDue(h);
     if(!everyDue){
@@ -2142,7 +2172,7 @@ function dailyStreak(h){
   var today = todayStr();
   if(h.completions.indexOf(today)===-1){ d.setDate(d.getDate()-1); }
   while(true){
-    var ds = d.toISOString().slice(0,10);
+    var ds = localDateStr(d);
     if(h.completions.indexOf(ds)!==-1){ n++; d.setDate(d.getDate()-1); } else break;
   }
   return n;
@@ -2661,6 +2691,11 @@ function renderAddHabitModal(){
     }
     html += typeOptRow("daily","Daily", dailyCount+"/"+dailyMax+" rHabbits used", d.type==="daily", dailyDisabled);
     html += typeOptRow("weekly","Weekly", weeklyCount+"/"+weeklyMax+" used", d.type==="weekly", weeklyDisabled);
+    if(d.type==="weekly"){
+      html += '<div class="field freq-subfield"><label>Day of week</label><select id="addHabitWeekday">' +
+        SPECIAL_DAY_WEEKDAY_ABBR.map(function(name,i){return '<option value="'+i+'"'+(d.dayOfWeek===i?' selected':'')+'>'+name+'</option>';}).join('') +
+      '</select></div>';
+    }
     html += typeOptRow("monthly","Monthly", monthlyCount+"/"+monthlyMax+" used", d.type==="monthly", monthlyDisabled);
     html += typeOptRow("every","Every X", everyCount+"/"+everyMax+" used", d.type==="every", everyDisabled);
     if(d.type==="every"){
@@ -2878,6 +2913,10 @@ function wireEvents(){
   if(addDueDateInput){
     addDueDateInput.addEventListener("input", function(e){ state._draft.dueDate = e.target.value; });
   }
+  var addWeekdaySelect = root.querySelector("#addHabitWeekday");
+  if(addWeekdaySelect){
+    addWeekdaySelect.addEventListener("change", function(e){ state._draft.dayOfWeek = parseInt(e.target.value,10); });
+  }
   var addEveryNInput = root.querySelector("#addHabitEveryN");
   if(addEveryNInput){
     addEveryNInput.addEventListener("input", function(e){
@@ -3020,8 +3059,19 @@ function onAction(e){
     case "show-habit-detail":
       navigateTo(function(){
         state._detailHabitId = el.getAttribute("data-id");
+        state._detailEmojiPickerOpen = false;
         state.screen = "habit-detail-modal";
       });
+      break;
+    case "toggle-detail-emoji-picker":
+      state._detailEmojiPickerOpen = !state._detailEmojiPickerOpen;
+      render();
+      break;
+    case "pick-detail-emoji":
+      var detailHabit = findHabit(el.getAttribute("data-id"));
+      if(detailHabit){ detailHabit.emoji = el.getAttribute("data-emoji"); save(); }
+      state._detailEmojiPickerOpen = false;
+      render();
       break;
     case "show-reward-detail":
       navigateTo(function(){
@@ -3216,6 +3266,7 @@ function addHabit(){
   var habit = { id:uid(), name:name, emoji:d.emoji, type:d.type, description:d.description.trim(), createdAt:todayStr(), completions:[] };
   if(d.type==="onceoff") habit.dueDate = d.dueDate || todayStr();
   if(d.type==="every"){ habit.everyUnit = d.everyUnit; habit.everyN = Math.max(everyMinN(d.everyUnit), parseInt(d.everyN,10)||everyMinN(d.everyUnit)); }
+  if(d.type==="weekly") habit.dayOfWeek = (typeof d.dayOfWeek==="number") ? d.dayOfWeek : new Date().getDay();
   state.habits.push(habit);
   save();
   // Pops the add-habit-modal's history entry (pushed by navigateTo() when it
@@ -3789,7 +3840,7 @@ function validBackupShape(parsed){
 function applyRestoredState(parsed){
   var merged = Object.assign(defaultState(), parsed);
   merged.unlocks = Object.assign({}, parsed.unlocks || {});
-  merged._draft = { name:"", emoji:"🌴", type:"daily", description:"", dueDate:todayStr(), everyUnit:"days", everyN:2 };
+  merged._draft = { name:"", emoji:"🌴", type:"daily", description:"", dueDate:todayStr(), everyUnit:"days", everyN:2, dayOfWeek:new Date().getDay() };
   merged._specialDayDraft = freshSpecialDayDraft();
   merged._detailSpecialDayId = null;
   merged.toast = null;
@@ -4277,9 +4328,13 @@ function initCocoCannon(){
     cannon = { x0: W/2, angle: 0, w: 13, rotSpeed: 1.85 }; // rad/sec while held; x0 is the fixed base position -- w halved from 26 (see close-range hit tolerance boost in update() below, which compensates for the shorter barrel this implies)
     coconut = null;
     smoke = []; stars = [];
-    level = 1;
+    // Resume from the last level-cleared checkpoint (see saveCocoCheckpoint())
+    // rather than always level 1/score 0 -- this only runs once, the first
+    // time start() is ever called after a fresh page load, so it's exactly
+    // the "reopened the app" moment a mid-level exit should resume from.
+    level = state.cocoCheckpointLevel || 1;
     levelKills = 0;
-    score = 0;
+    score = state.cocoCheckpointScore || 0;
     phase = "ready";
     spawnLevel();
     updateHud();
@@ -4296,6 +4351,7 @@ function initCocoCannon(){
       overlay.innerHTML =
         '<h3>Coco Cannon</h3>' +
         '<p>Captain Crow and his flock are after your carrot seeds. Shoot them down before they land!</p>' +
+        (level>1 ? '<div class="coco-sub">Resuming at Level '+level+' · Score '+score+'</div>' : '') +
         (state.cocoHighScore ? '<div class="coco-sub">Best score: '+state.cocoHighScore+'</div>' : '') +
         (state.cocoLives>0
           ? '<button class="btn" id="cocoStartBtn">Start</button>'
@@ -4327,6 +4383,7 @@ function initCocoCannon(){
       levelKills = 0;
       spawnLevel();
       phase = "playing";
+      saveCocoCheckpoint(level, score);
     }, 1600);
   }
   // Shown exactly once, right after the one-time trial top-up in
@@ -4376,9 +4433,22 @@ function initCocoCannon(){
     updateHud();
     if(state.cocoLives<=0) endGame();
   }
+  // Persists the run's current level+score as the resume point (see
+  // resetGame()) -- called only at the moment a level is actually cleared
+  // (or a fresh run/level 1 begins), never mid-level, so a level in
+  // progress when the app closes is never itself the checkpoint.
+  function saveCocoCheckpoint(lvl, sc){
+    state.cocoCheckpointLevel = lvl;
+    state.cocoCheckpointScore = sc;
+    save();
+  }
   function endGame(){
     phase = "gameover";
     if(score > state.cocoHighScore){ state.cocoHighScore = score; save(); }
+    // The run is over -- the next Start (whether "Play Again" now or
+    // reopening the app later) begins a brand new run at level 1, not a
+    // resume of this dead one.
+    saveCocoCheckpoint(1, 0);
     showOverlay();
   }
   function fire(){
@@ -4457,6 +4527,7 @@ function initCocoCannon(){
         level++;
         levelKills = 0;
         spawnLevel();
+        saveCocoCheckpoint(level, score);
       }
     }
   }
