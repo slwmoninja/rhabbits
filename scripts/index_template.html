@@ -387,7 +387,17 @@ img{max-width:100%; display:block;}
 
 /* ---------- Habit log notes (see renderHabitNoteModal()) ---------- */
 .habit-note-daylabel{color:var(--wood); font-size:.78rem; font-weight:700; margin-bottom:4px;}
+.habit-note-info{color:var(--wood); font-size:.68rem; line-height:1.4; opacity:.8; margin-bottom:8px;}
 .habit-note-meta{color:var(--carrot-deep); font-size:.68rem; font-weight:700; margin-bottom:8px;}
+.note-save-btn{
+  appearance:none; border:none; border-radius:50%; width:30px; height:30px; padding:0;
+  display:flex; align-items:center; justify-content:center;
+  font-size:1rem; font-weight:700; line-height:1; color:#fff7ea;
+  background:linear-gradient(180deg, var(--carrot), var(--carrot-deep));
+  box-shadow:0 2px 0 var(--wood-darker);
+  transition:transform .12s ease, box-shadow .12s ease;
+}
+.note-save-btn:active{transform:translateY(1px); box-shadow:0 1px 0 var(--wood-darker);}
 .habit-note-input{
   width:100%; min-height:70px; resize:vertical; border-radius:9px; border:1px solid var(--parchment-edge);
   background:var(--parchment-hi); color:var(--wood-dark); font:inherit; font-size:.85rem; padding:8px 12px;
@@ -701,7 +711,7 @@ var STORAGE_KEY = "rhabbits_state_v1";
 // every future code change to this file so a reload can be visually
 // confirmed against what was actually deployed. Distinct from any
 // data-schema/localStorage version (this app has none yet).
-var APP_VERSION = "1.0+31a43933";
+var APP_VERSION = "1.0+a58322f7";
 // Sorted into one logical sequence -- nature, fitness/routine, pirate/
 // nautical, then animals -- rather than grouped under separate UI headers.
 var EMOJI_CHOICES = ["🌴","🌱","☀️","🌊","🥥","🥕","🌙","💪","🏋️","🧘","🤸","📖","💊","🛏️","⛵","🏴‍☠️","🧭","⚓","🦜","🐚","🗺️","🏝️","🐶","🐕","🐩","🦮","🐕‍🦺","🐺","🐱","🐈","🐈‍⬛","🦁"];
@@ -3421,17 +3431,27 @@ function renderHabitNoteModal(id){
   var note = (h.notes||{})[key];
   var html = '<div class="modal-backdrop" data-backdrop="habit-note">';
   html += '<div class="modal">';
-  html += '<button class="modal-close" data-action="close-modal">✕</button>';
-  html += '<h3>'+h.emoji+' '+escapeHtml(h.name)+'</h3>';
+  // Save note lives as a small checkmark next to the close X, not a
+  // full-width button down in .habit-note-actions -- same header-row
+  // pattern as renderProfileModal's install pill next to its own close X.
+  html += '<div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px;">';
+  html += '  <h3 style="margin:0;">'+h.emoji+' '+escapeHtml(h.name)+'</h3>';
+  html += '  <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">';
+  html += '    <button class="note-save-btn" data-action="save-habit-note" data-id="'+h.id+'" aria-label="Save note">✓</button>';
+  html += '    <button class="modal-close" data-action="close-modal" style="float:none; margin:0;">✕</button>';
+  html += '  </div>';
+  html += '</div>';
   html += '<div class="habit-note-daylabel">'+formatNoteDateLabel(key, h.type)+'</div>';
+  html += '<div class="habit-note-info">Notes reset after 7 entries. Notes are accessible only to you on this device.</div>';
   if(note){
     html += '<div class="habit-note-meta">'+(note.updatedAt!==note.loggedAt?"Updated ":"Logged ")+formatNoteTimestamp(note.updatedAt)+'</div>';
   }
   html += '<textarea class="habit-note-input" id="habitNoteText" maxlength="280" placeholder="Add a note...">'+escapeHtml(note?note.text:"")+'</textarea>';
-  html += '<div class="habit-note-actions">';
-  html += '<button class="btn btn-block" data-action="save-habit-note" data-id="'+h.id+'">Save note</button>';
-  if(note){ html += '<button class="btn-ghost btn-block" data-action="delete-habit-note" data-id="'+h.id+'">Delete note</button>'; }
-  html += '</div>';
+  if(note){
+    html += '<div class="habit-note-actions">';
+    html += '<button class="btn-ghost btn-block" data-action="delete-habit-note" data-id="'+h.id+'">Delete note</button>';
+    html += '</div>';
+  }
   html += '</div></div>';
   return html;
 }
