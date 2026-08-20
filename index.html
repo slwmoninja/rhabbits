@@ -726,7 +726,7 @@ var STORAGE_KEY = "rhabbits_state_v1";
 // every future code change to this file so a reload can be visually
 // confirmed against what was actually deployed. Distinct from any
 // data-schema/localStorage version (this app has none yet).
-var APP_VERSION = "1.0+b9765f58";
+var APP_VERSION = "1.0+90c9672f";
 // Sorted into one logical sequence -- nature, fitness/routine, pirate/
 // nautical, then animals -- rather than grouped under separate UI headers.
 var EMOJI_CHOICES = ["🌴","🌱","☀️","🌊","🥥","🥕","🌙","💪","🏋️","🧘","🤸","📖","💊","🛏️","⛵","🏴‍☠️","🧭","⚓","🦜","🐚","🗺️","🏝️","🐶","🐕","🐩","🦮","🐕‍🦺","🐺","🐱","🐈","🐈‍⬛","🦁"];
@@ -1601,7 +1601,11 @@ function defaultState(){
     onboarded:false,
     onbStep:0,
     avatar:null,
-    castawayName:"",
+    // Keyed by avatar gender, not a single shared name -- switching
+    // Castaway (see "switch-avatar") swaps which one is being displayed/
+    // edited, and each variant's name persists independently across that
+    // switch (see renderProfileModal()/wireEvents()'s castawayNameInput).
+    castawayNames:{male:"", female:""},
     startDate:null,
     carrots:0,
     habits:[],
@@ -1947,7 +1951,12 @@ function render(){
 // top. Use this instead of a bare render() for dialog choices that can
 // reveal a new subfield below them: land on the freshly revealed subfield,
 // centered, instead of the top; if nothing new was revealed, just hold the
-// scroll position steady rather than resetting it.
+// scroll position steady rather than resetting it. behavior:"auto" (instant),
+// not "smooth", is deliberate -- a fresh DOM node always starts at
+// scrollTop 0, so a *smooth* scrollIntoView still paints one frame at the
+// top before animating away from it, which reads as "snaps to the top,
+// then slides" rather than "already there". Landing instantly, before the
+// browser's next paint, means that top frame is never shown at all.
 function renderPreservingModalScroll(){
   var modalEl = document.querySelector(".modal");
   var scrollTop = modalEl ? modalEl.scrollTop : 0;
@@ -1960,7 +1969,7 @@ function renderPreservingModalScroll(){
   // that the user just brought into existence and needs to see.
   var subfields = modalEl.querySelectorAll(".freq-subfield");
   if(subfields.length){
-    subfields[subfields.length-1].scrollIntoView({block:"center", behavior:"smooth"});
+    subfields[subfields.length-1].scrollIntoView({block:"center", behavior:"auto"});
   } else {
     modalEl.scrollTop = scrollTop;
   }
@@ -2940,7 +2949,7 @@ function renderProfileModal(){
   // confirm state, so it switches to an inert "Installed" line instead of
   // disappearing. Same row as the heading, matching the topbar's own layout.
   html += '<div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px;">';
-  html += '  <input type="text" id="castawayNameInput" class="castaway-name-input" maxlength="30" placeholder="Name your castaway" value="'+escapeAttr(state.castawayName||"")+'">';
+  html += '  <input type="text" id="castawayNameInput" class="castaway-name-input" maxlength="30" placeholder="Name your castaway" value="'+escapeAttr(state.castawayNames[state.avatar]||"")+'">';
   html += '  <div style="display:flex; align-items:center; gap:10px; flex-shrink:0;">'+installTopbarBtnHtml(true)+'<button class="modal-close" data-action="close-modal" style="float:none; margin:0;">✕</button></div>';
   html += '</div>';
   html += '<div class="profile-cutout-row">';
@@ -3202,14 +3211,16 @@ function wireEvents(){
   // Free-text, optional -- unlike habit names there's no fallback-to-default
   // on blur, since an empty name is a valid state (placeholder "Name your
   // castaway" shows through) and clearing it back to empty IS the "delete"
-  // path rather than a special action. Persists via the ordinary state/save/
-  // backup path (see defaultState()'s castawayName and applyRestoredState()),
-  // so switching avatar (which only ever touches state.avatar) and
-  // backup/restore both leave it untouched.
+  // path rather than a special action. Keyed by state.avatar (see
+  // defaultState()'s castawayNames), so it always edits whichever variant
+  // is currently showing -- switching Castaway re-renders this same input
+  // pointed at the other variant's own name, and each one keeps its own
+  // value across that switch. Persists via the ordinary state/save/backup
+  // path, same as everything else in state.
   var castawayNameInput = root.querySelector("#castawayNameInput");
   if(castawayNameInput){
     castawayNameInput.addEventListener("input", function(e){
-      state.castawayName = e.target.value;
+      state.castawayNames[state.avatar] = e.target.value;
       save();
     });
   }
@@ -3970,7 +3981,7 @@ function backupFingerprint(){
   var d = {
     onboarded: state.onboarded,
     avatar: state.avatar,
-    castawayName: state.castawayName,
+    castawayNames: state.castawayNames,
     startDate: state.startDate,
     carrots: state.carrots,
     habits: state.habits,
