@@ -720,7 +720,7 @@ var STORAGE_KEY = "rhabbits_state_v1";
 // every future code change to this file so a reload can be visually
 // confirmed against what was actually deployed. Distinct from any
 // data-schema/localStorage version (this app has none yet).
-var APP_VERSION = "1.0+54dd9bc3";
+var APP_VERSION = "1.0+799cbe83";
 // Sorted into one logical sequence -- nature, fitness/routine, pirate/
 // nautical, then animals -- rather than grouped under separate UI headers.
 var EMOJI_CHOICES = ["🌴","🌱","☀️","🌊","🥥","🥕","🌙","💪","🏋️","🧘","🤸","📖","💊","🛏️","⛵","🏴‍☠️","🧭","⚓","🦜","🐚","🗺️","🏝️","🐶","🐕","🐩","🦮","🐕‍🦺","🐺","🐱","🐈","🐈‍⬛","🦁"];
@@ -3462,11 +3462,13 @@ function renderHabitNoteModal(id){
   html += '  </div>';
   html += '</div>';
   html += '<div class="habit-note-daylabel">'+formatNoteDateLabel(key, h.type)+'</div>';
-  html += '<div class="habit-note-info">Notes reset after 7 entries. Notes are accessible only to you on this device.</div>';
   if(note){
     html += '<div class="habit-note-meta">'+(note.updatedAt!==note.loggedAt?"Updated ":"Logged ")+formatNoteTimestamp(note.updatedAt)+'</div>';
   }
-  html += '<textarea class="habit-note-input" id="habitNoteText" maxlength="280" placeholder="Add a note...">'+escapeHtml(note?note.text:"")+'</textarea>';
+  // The reset/privacy hint used to sit in its own line above the textarea
+  // (.habit-note-info) -- moved into the placeholder itself so it disappears
+  // the moment the user starts typing instead of permanently taking up space.
+  html += '<textarea class="habit-note-input" id="habitNoteText" maxlength="280" placeholder="Add a note... Notes reset after 7 entries and are accessible only to you on this device.">'+escapeHtml(note?note.text:"")+'</textarea>';
   if(note){
     html += '<div class="habit-note-actions">';
     html += '<button class="btn-ghost btn-block" data-action="delete-habit-note" data-id="'+h.id+'">Delete note</button>';
