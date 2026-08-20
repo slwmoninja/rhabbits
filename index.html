@@ -711,7 +711,7 @@ var STORAGE_KEY = "rhabbits_state_v1";
 // every future code change to this file so a reload can be visually
 // confirmed against what was actually deployed. Distinct from any
 // data-schema/localStorage version (this app has none yet).
-var APP_VERSION = "1.0+a58322f7";
+var APP_VERSION = "1.0+27b1af52";
 // Sorted into one logical sequence -- nature, fitness/routine, pirate/
 // nautical, then animals -- rather than grouped under separate UI headers.
 var EMOJI_CHOICES = ["🌴","🌱","☀️","🌊","🥥","🥕","🌙","💪","🏋️","🧘","🤸","📖","💊","🛏️","⛵","🏴‍☠️","🧭","⚓","🦜","🐚","🗺️","🏝️","🐶","🐕","🐩","🦮","🐕‍🦺","🐺","🐱","🐈","🐈‍⬛","🦁"];
@@ -1900,8 +1900,8 @@ function renderOnboarding(){
     '<div class="onb-screen">' +
       '<h2 style="color:var(--parchment-hi)">Let\'s get started!</h2>' +
       '<p class="onb-copy">Choose one rHabbit you\'d like to track daily. Once you\'re in, you can add up to 5 rHabbits on any schedule -- daily, weekly, monthly, once-off, or custom.</p>' +
-      '<div class="field"><label>rHabbit name</label><input type="text" id="firstHabitName" maxlength="40" placeholder="e.g. Drink 8 glasses of water" value="'+escapeAttr(d.name)+'"></div>' +
-      '<div class="field"><label>rHabbit description (optional)</label><textarea id="firstHabitDescription" maxlength="140" placeholder="e.g. A big glass with breakfast, lunch, and dinner">'+escapeHtml(d.description)+'</textarea></div>' +
+      '<div class="field"><label><span style="text-transform:lowercase">r</span>Habbit name</label><input type="text" id="firstHabitName" maxlength="40" placeholder="e.g. Drink 8 glasses of water" value="'+escapeAttr(d.name)+'"></div>' +
+      '<div class="field"><label><span style="text-transform:lowercase">r</span>Habbit description (optional)</label><textarea id="firstHabitDescription" maxlength="140" placeholder="e.g. A big glass with breakfast, lunch, and dinner">'+escapeHtml(d.description)+'</textarea></div>' +
       '<div class="emoji-picker">'+EMOJI_CHOICES.map(function(e){return '<button class="emoji-opt '+(d.emoji===e?'selected':'')+'" data-action="pick-emoji" data-emoji="'+e+'">'+e+'</button>';}).join('')+'</div>' +
       '<button class="btn mt" data-action="finish-onboarding" '+(d.name.trim()?'':'disabled')+'>Start Tracking 🌴</button>' +
     '</div>'
@@ -1998,12 +1998,12 @@ function renderLogbookScreen(){
 
   html += renderSpecialDaysLink();
 
-  html += renderHabitGroup("daily","rHabbits: Activity Tracking");
+  html += renderHabitGroup("daily", 'Daily <span style="text-transform:lowercase">r</span>Habbits');
   if(state.unlocks.second_garden || countActive(state,"weekly")>0){
-    html += renderHabitGroup("weekly","Weekly rHabbits");
+    html += renderHabitGroup("weekly", 'Weekly <span style="text-transform:lowercase">r</span>Habbits');
   }
   if(state.unlocks.second_garden || countActive(state,"monthly")>0){
-    html += renderHabitGroup("monthly","Monthly rHabbits");
+    html += renderHabitGroup("monthly", 'Monthly <span style="text-transform:lowercase">r</span>Habbits');
   }
   if(state.unlocks.second_garden || countActive(state,"every")>0){
     html += renderHabitGroup("every","Custom Schedule");
@@ -2684,7 +2684,7 @@ function renderAddHabitModal(){
   html += '<button class="modal-close" data-action="close-modal">✕</button>';
   html += '<h3>Add a rHabbit</h3>';
   html += '<div class="field"><label>Name</label><input type="text" id="addHabitName" maxlength="40" placeholder="e.g. Stretch for 5 minutes" value="'+escapeAttr(d.name)+'"></div>';
-  html += '<div class="field"><label>rHabbit description (optional)</label><textarea id="addHabitDescription" maxlength="140" placeholder="e.g. Right after brushing my teeth">'+escapeHtml(d.description)+'</textarea></div>';
+  html += '<div class="field"><label><span style="text-transform:lowercase">r</span>Habbit description (optional)</label><textarea id="addHabitDescription" maxlength="140" placeholder="e.g. Right after brushing my teeth">'+escapeHtml(d.description)+'</textarea></div>';
   html += '<div class="emoji-picker">'+EMOJI_CHOICES.map(function(e){return '<button class="emoji-opt '+(d.emoji===e?'selected':'')+'" data-action="pick-emoji" data-emoji="'+e+'">'+e+'</button>';}).join('')+'</div>';
   html += '<div class="type-picker">';
   if(!typesUnlocked){
@@ -2766,7 +2766,7 @@ function renderProfileModal(){
   html += '<div class="profile-stats">';
   html += '<div class="profile-stat"><b>'+state.carrots+'</b><span>Carrots</span></div>';
   html += '<div class="profile-stat"><b>'+daysAshore(state)+'</b><span>Days Ashore</span></div>';
-  html += '<div class="profile-stat"><b>'+state.habits.length+'</b><span>rHabbits</span></div>';
+  html += '<div class="profile-stat"><b>'+state.habits.length+'</b><span><span style="text-transform:lowercase">r</span>Habbits</span></div>';
   html += '</div>';
   // One combined "Settings" section -- every account/data action and every
   // toggle together, as small same-look chips wrapped multiple-per-row
