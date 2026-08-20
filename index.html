@@ -140,7 +140,7 @@ img{max-width:100%; display:block;}
 
 .field{width:100%; max-width:340px; text-align:left; margin:0 auto 16px;}
 .field label{display:block; color:var(--parchment-edge); font-size:.78rem; text-transform:uppercase; letter-spacing:.1em; margin-bottom:6px;}
-.field input[type=text], .field input[type=date], .field input[type=time], .field input[type=number], .field select, .field textarea{
+.field input[type=text], .field input[type=date], .field input[type=number], .field select, .field textarea{
   width:100%; padding:13px 14px; border-radius:10px; border:1px solid var(--parchment-edge);
   background:var(--parchment-hi); color:var(--ink); font-size:1rem; font-family:inherit;
 }
@@ -766,7 +766,7 @@ var STORAGE_KEY = "rhabbits_state_v1";
 // every future code change to this file so a reload can be visually
 // confirmed against what was actually deployed. Distinct from any
 // data-schema/localStorage version (this app has none yet).
-var APP_VERSION = "1.0+a33480da";
+var APP_VERSION = "1.0+7f2e7001";
 // Sorted into one logical sequence -- nature, fitness/routine, pirate/
 // nautical, then animals -- rather than grouped under separate UI headers.
 var EMOJI_CHOICES = ["🌴","🌱","☀️","🌊","🥥","🥕","🌙","💪","🏋️","🧘","🤸","📖","💊","🛏️","⛵","🏴‍☠️","🧭","⚓","🦜","🐚","🗺️","🏝️","🐶","🐕","🐩","🦮","🐕‍🦺","🐺","🐱","🐈","🐈‍⬛","🦁"];
@@ -2301,11 +2301,31 @@ function dueTodayHabits(state){
 // button, so the Logbook stays scannable as someone accumulates many habits
 // across daily/monthly/once-off. Tapping opens renderHabitDetailModal() for
 // everything else (log/toggle, streak, delete).
-// "07:30" (the raw <input type=time> value habit.alarmTime is stored as)
-// -> "7:30 AM", for display only -- storage/comparison in checkAlarms()
-// stays on the raw 24h string throughout.
+// "07:30" (the raw 24h string habit.alarmTime is stored as, produced by
+// parseAlarmTimeText() below) -> "7:30 AM", for display only -- storage/
+// comparison in checkAlarms() stays on the raw 24h string throughout.
 function formatAlarmTime(t){
   return new Date("1970-01-01T"+t+":00").toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"});
+}
+// Free-typed "2:15pm" / "2:15 PM" / "2pm" / "14:15" -> the same 24h "HH:MM"
+// string formatAlarmTime() above expects, or null if it doesn't parse --
+// used by the plain text alarm field in renderHabitAlarmModal() so people
+// aren't stuck fighting a native <input type=time> widget.
+function parseAlarmTimeText(str){
+  var m = String(str||"").trim().toLowerCase().match(/^(\d{1,2})(?::(\d{2}))?\s*([ap]\.?m\.?)?$/);
+  if(!m) return null;
+  var hour = parseInt(m[1],10);
+  var minute = m[2] ? parseInt(m[2],10) : 0;
+  var ampm = m[3] ? m[3].replace(/\./g,"") : null;
+  if(minute<0 || minute>59) return null;
+  if(ampm){
+    if(hour<1 || hour>12) return null;
+    if(ampm==="am"){ hour = hour===12 ? 0 : hour; }
+    else { hour = hour===12 ? 12 : hour+12; }
+  } else if(hour<0 || hour>23){
+    return null;
+  }
+  return (hour<10?"0":"")+hour+":"+(minute<10?"0":"")+minute;
 }
 function renderHabitCard(h){
   var badge = habitTypeBadge(h);
@@ -3547,7 +3567,11 @@ function onAction(e){
       break;
     case "save-habit-alarm":
       var alarmInput = root.querySelector("#habitAlarmTimeInput");
-      saveHabitAlarm(el.getAttribute("data-id"), alarmInput ? alarmInput.value : "");
+      var alarmText = alarmInput ? alarmInput.value.trim() : "";
+      if(!alarmText){ showToast("Enter a time, like 2:15pm"); break; }
+      var parsedAlarm = parseAlarmTimeText(alarmText);
+      if(!parsedAlarm){ showToast("Couldn't read that time -- try something like 2:15pm"); break; }
+      saveHabitAlarm(el.getAttribute("data-id"), parsedAlarm);
       break;
     case "clear-habit-alarm":
       saveHabitAlarm(el.getAttribute("data-id"), "");
@@ -3850,7 +3874,7 @@ function renderHabitAlarmModal(id){
   html += '<div class="modal">';
   html += '<button class="modal-close" data-action="close-modal">✕</button>';
   html += '<h3>'+h.emoji+' '+escapeHtml(h.name)+'</h3>';
-  html += '<div class="field"><label>Alarm time</label><input type="time" id="habitAlarmTimeInput" value="'+escapeAttr(h.alarmTime||"")+'"></div>';
+  html += '<div class="field"><label>Alarm time</label><input type="text" id="habitAlarmTimeInput" autocomplete="off" placeholder="2:15pm" value="'+escapeAttr(h.alarmTime?formatAlarmTime(h.alarmTime):"")+'"></div>';
   html += '<button class="btn btn-block" data-action="save-habit-alarm" data-id="'+h.id+'">'+(h.alarmTime?"Update Alarm":"Set Alarm")+' ⏰</button>';
   if(h.alarmTime){
     html += '<button class="btn-ghost btn-block mt" data-action="clear-habit-alarm" data-id="'+h.id+'">Clear alarm</button>';
