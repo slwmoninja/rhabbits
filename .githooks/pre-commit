@@ -5,6 +5,13 @@
 
 python3 "$(git rev-parse --show-toplevel)/scripts/sync_icon_version.py" || exit 1
 
+# Keeps APP_VERSION (shown in Settings -> About) stamped with a content hash
+# of the template + embedded assets, so it changes with every real code
+# change instead of sitting frozen at whatever it was hand-set to once.
+# See scripts/sync_app_version.py. Must run before verify_build.py below,
+# since it rewrites both the template and the built index.html together.
+python3 "$(git rev-parse --show-toplevel)/scripts/sync_app_version.py" || exit 1
+
 # Blocks committing an index.html that doesn't match building
 # scripts/index_template.html -- catches both a hand-edited index.html and a
 # template edit that never got rebuilt. See scripts/verify_build.py.
