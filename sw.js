@@ -83,3 +83,18 @@ self.addEventListener('fetch', (e)=>{
     return (await networkFetch) || Response.error();
   })());
 });
+
+// Habit alarms (see notifyAlarm() in index.html) call registration.
+// showNotification() directly from the page -- this just handles what
+// happens when the user taps that notification: close it and focus an
+// already-open rHabbits tab/window if there is one, or open a new one.
+self.addEventListener('notificationclick', (e)=>{
+  e.notification.close();
+  e.waitUntil((async ()=>{
+    const clientsList = await self.clients.matchAll({type:'window', includeUncontrolled:true});
+    for(const client of clientsList){
+      if('focus' in client) return client.focus();
+    }
+    if(self.clients.openWindow) return self.clients.openWindow('./index.html');
+  })());
+});

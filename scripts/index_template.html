@@ -140,7 +140,7 @@ img{max-width:100%; display:block;}
 
 .field{width:100%; max-width:340px; text-align:left; margin:0 auto 16px;}
 .field label{display:block; color:var(--parchment-edge); font-size:.78rem; text-transform:uppercase; letter-spacing:.1em; margin-bottom:6px;}
-.field input[type=text], .field input[type=date], .field input[type=number], .field select, .field textarea{
+.field input[type=text], .field input[type=date], .field input[type=time], .field input[type=number], .field select, .field textarea{
   width:100%; padding:13px 14px; border-radius:10px; border:1px solid var(--parchment-edge);
   background:var(--parchment-hi); color:var(--ink); font-size:1rem; font-family:inherit;
 }
@@ -216,6 +216,22 @@ img{max-width:100%; display:block;}
   border:2px solid var(--gold); box-shadow:var(--shadow);
 }
 .special-day-btn:active{transform:translateY(1px);}
+/* Shown whenever an alarm is ringing (state.pendingAlarmIds non-empty, see
+   checkAlarms()) regardless of which screen is active -- an alarm can fire
+   while the user is on Rewards or inside a modal, not just the Logbook, so
+   unlike due-today-btn/special-day-btn above this isn't gated to onLogbook.
+   Pulses until "dismiss-alarm" is tapped, independent of the beep itself
+   (see startBeep()'s own 30s cutoff) -- the beep can time out while this
+   keeps pulsing to show there's still an unacknowledged alarm. */
+.alarm-ringing-btn{
+  position:relative; width:40px; height:40px; border-radius:50%; flex-shrink:0;
+  background:linear-gradient(180deg, var(--danger), #7a2318);
+  font-size:1.1rem; line-height:1;
+  display:flex; align-items:center; justify-content:center;
+  border:2px solid var(--gold); box-shadow:var(--shadow);
+  animation:alarmPulse 1s ease-in-out infinite;
+}
+@keyframes alarmPulse{0%,100%{transform:scale(1);} 50%{transform:scale(1.14);}}
 
 /* ---------- Install pill (topbar + Profile) ---------- */
 .topbar-install-btn{
@@ -325,6 +341,21 @@ img{max-width:100%; display:block;}
   padding:10px 12px; margin-bottom:8px;
 }
 .habit-row:active{transform:translateY(1px);}
+/* Wraps a habit's .habit-row together with its alarm-clock button (see
+   renderHabitCard()) so the row itself stays a single <button> (tap opens
+   habit detail) with the alarm toggle as a separate sibling control rather
+   than a second, invalid nested <button>. Only Logbook's own habit cards
+   use this -- Special Days/Due Today rows render a bare .habit-row with no
+   wrap, so .habit-row keeps its own margin-bottom for those. */
+.habit-row-wrap{display:flex; align-items:center; gap:8px; margin-bottom:8px;}
+.habit-row-wrap .habit-row{margin-bottom:0; flex:1; min-width:0;}
+.habit-alarm-btn{
+  flex-shrink:0; width:38px; height:38px; border-radius:50%;
+  border:1px solid var(--parchment-edge); background:var(--parchment-hi);
+  color:#9a9186; font-size:1.05rem; display:flex; align-items:center; justify-content:center;
+}
+.habit-alarm-btn:active{transform:translateY(1px);}
+.habit-alarm-btn.set{color:var(--leaf-bright); border-color:var(--leaf-bright);}
 .due-today-empty{color:var(--wood); font-size:.9rem; text-align:center; padding:12px 0 4px;}
 .habit-status{width:30px; flex-shrink:0; text-align:center; font-size:1rem;}
 .habit-status.done{color:var(--leaf-bright); font-weight:800; font-size:1.15rem;}
@@ -726,7 +757,7 @@ var STORAGE_KEY = "rhabbits_state_v1";
 // every future code change to this file so a reload can be visually
 // confirmed against what was actually deployed. Distinct from any
 // data-schema/localStorage version (this app has none yet).
-var APP_VERSION = "1.0+90c9672f";
+var APP_VERSION = "1.0+1169481e";
 // Sorted into one logical sequence -- nature, fitness/routine, pirate/
 // nautical, then animals -- rather than grouped under separate UI headers.
 var EMOJI_CHOICES = ["🌴","🌱","☀️","🌊","🥥","🥕","🌙","💪","🏋️","🧘","🤸","📖","💊","🛏️","⛵","🏴‍☠️","🧭","⚓","🦜","🐚","🗺️","🏝️","🐶","🐕","🐩","🦮","🐕‍🦺","🐺","🐱","🐈","🐈‍⬛","🦁"];
@@ -1601,6 +1632,10 @@ function defaultState(){
     onboarded:false,
     onbStep:0,
     avatar:null,
+    // Habit ids whose alarm is currently ringing (unacknowledged) -- drives
+    // the pulsing topbar bell (see renderTopbar()) and the beep loop (see
+    // startBeep()/checkAlarms()). Cleared together by "dismiss-alarm".
+    pendingAlarmIds:[],
     // Keyed by avatar gender, not a single shared name -- switching
     // Castaway (see "switch-avatar") swaps which one is being displayed/
     // edited, and each variant's name persists independently across that
@@ -1647,11 +1682,19 @@ function defaultState(){
     // move allowance only, same one-day-only spirit as the trial above.
     treasureStreakBonusDays:[],
     // General cross-type "was the player active this day" record (see
-    // evaluateActiveDays()) and the 7-day-streak milestone bonus it
-    // powers (see evaluateStreakBonus()) -- streakBonusCount is how many
-    // 7-day milestones have been rewarded on the *current* unbroken streak.
+    // markActiveToday()) and the 7-day-streak milestone bonus it powers
+    // (see evaluateStreakBonus()) -- streakBonusCount is how many 7-day
+    // milestones have been rewarded on the *current* unbroken streak.
     activeDays:[],
     streakBonusCount:0,
+    // All-time best activeDayStreak() ever reached -- only ever goes up
+    // (see evaluateLongestStreak()), shown on the Logbook's "Carrots
+    // earned" plaque. pendingStreakRecord drives the one-time celebration
+    // popup (renderStreakRecordModal()) the moment a fresh streak actually
+    // exceeds it, same pendingX pattern as pendingMapComplete/
+    // pendingCelebration.
+    longestActiveStreak:0,
+    pendingStreakRecord:false,
     // Coco Cannon -- cocoLives IS the in-game life count directly (not a
     // separate "bank" vs "active" split): reset (not accumulated) at most
     // once/day to that day's ration -- day 1 of play = 1 life, day 2 = 2,
@@ -1782,8 +1825,14 @@ function evaluateRewards(){
   }
   evaluateSightings();
   evaluateCocoCannon();
-  evaluateActiveDays();
+  // Passive backfill, safe to run every load: if a habit was already
+  // completed today (e.g. logged before this feature shipped, or a
+  // completion restored from an older backup) but no further explicit
+  // action happens afterward, today should still count -- markActiveToday()
+  // no-ops harmlessly if today's already recorded.
+  if(hasCompletionToday(state)) markActiveToday();
   evaluateStreakBonus();
+  evaluateLongestStreak();
 }
 
 // Coco Cannon lives reset (not accumulate) on each new day a habit gets
@@ -1813,17 +1862,23 @@ function evaluateCocoCannon(){
 // A general, type-agnostic "was the player active on day X" record --
 // separate from cocoLivesDays/treasureMoveDays/discoveryCarrotDays (which
 // are each their own currency's day-cap) so the 7-day streak bonus below
-// isn't tangled up with any one reward's own bookkeeping, and keeps
-// counting correctly even before Coco Cannon/Treasure Hunt happen to be
-// relevant. Same one-credit-per-day gate as everything else.
-function evaluateActiveDays(){
+// isn't tangled up with any one reward's own bookkeeping. Marks a real,
+// direct action -- logging/unlogging a habit, creating a new habit, adding
+// a special day -- not just having the app open; called explicitly from
+// each of those action sites (toggleDaily() etc., addHabit(),
+// finishOnboarding(), saveSpecialDay()) rather than centrally from
+// evaluateRewards(), since that also runs once on every page load
+// regardless of whether the player actually did anything. Same
+// one-credit-per-day gate as everything else.
+function markActiveToday(){
   if(!state.onboarded) return;
   var t = todayStr();
-  if(state.activeDays.indexOf(t)===-1 && hasCompletionToday(state)) state.activeDays.push(t);
+  if(state.activeDays.indexOf(t)===-1) state.activeDays.push(t);
 }
 // Consecutive days (ending today, or yesterday if today's not logged yet)
-// the player has been active, per evaluateActiveDays() above -- a gap of
-// even one day breaks the count back to 0.
+// the player has been active, per markActiveToday() above -- a gap of even
+// one day breaks the count back to 0, and the next active day after a gap
+// starts a fresh count at 1.
 function activeDayStreak(){
   var n = 0, d = new Date();
   if(state.activeDays.indexOf(todayStr())===-1) d.setDate(d.getDate()-1);
@@ -1832,6 +1887,20 @@ function activeDayStreak(){
     if(state.activeDays.indexOf(ds)!==-1){ n++; d.setDate(d.getDate()-1); } else break;
   }
   return n;
+}
+// All-time best activeDayStreak() ever reached (state.longestActiveStreak
+// only ever goes up) -- and the one-time "new personal best" celebration
+// (see renderStreakRecordModal()) the moment a fresh streak actually
+// exceeds the *previous* best. Gated on longestActiveStreak already being
+// >0 so day one of ever using the app (0 -> 1) doesn't read as "beating"
+// a streak that never existed.
+function evaluateLongestStreak(){
+  if(!state.onboarded) return;
+  var streak = activeDayStreak();
+  if(streak > state.longestActiveStreak){
+    if(state.longestActiveStreak > 0) state.pendingStreakRecord = true;
+    state.longestActiveStreak = streak;
+  }
 }
 // Every fresh 7-day milestone (7, 14, 21, ...) of an unbroken active
 // streak earns a one-time top-up: Coco Cannon lives refilled to a full 7
@@ -2029,6 +2098,14 @@ function renderTopbar(){
   html += '  <button class="icon-btn" data-action="show-profile" aria-label="Profile"><img class="avatar-thumb" src="'+avatarImg+'" alt=""></button>';
   html += '  <div class="wordmark">rHABBITS</div>';
   html += '  <div class="topbar-right">';
+  // Unlike due-today/special-day below, shown on every screen -- an alarm
+  // can go off no matter where the user currently is in the app, not just
+  // the Logbook -- and stays pulsing until "dismiss-alarm" regardless of
+  // whether the beep itself has already timed out (see startBeep()).
+  if(state.pendingAlarmIds && state.pendingAlarmIds.length>0){
+    var alarmCount = state.pendingAlarmIds.length;
+    html += '  <button class="icon-btn alarm-ringing-btn" data-action="dismiss-alarm" aria-label="'+alarmCount+' rHabbit alarm'+(alarmCount===1?'':'s')+' ringing -- tap to dismiss"><span>⏰</span>'+(alarmCount>1?'<span class="due-today-badge">'+alarmCount+'</span>':'')+'</button>';
+  }
   // Due-today/special-day icons only on the Logbook itself (not Rewards,
   // not while a modal is layered over it) -- Rewards has nothing to do
   // with today's habits, and a modal's own screen value already overwrote
@@ -2087,27 +2164,20 @@ function carrotPipsHtml(filled, total){
 
 function renderLogbookScreen(){
   var html = '<section class="screen">';
-  var next = nextLockedReward();
   html += '<div class="plaque-wrap"><div class="plaque">';
   html += '<span class="plaque-rivet tl"></span><span class="plaque-rivet tr"></span><span class="plaque-rivet bl"></span><span class="plaque-rivet br"></span>';
   html += '<div class="plaque-label">Carrots earned</div>';
-  var sightingsActiveLB = state.sightings.length < SIGHTINGS_TOTAL;
   // Generic 7-carrot cycle progress -- used to point specifically at
   // second_garden (7 carrots for a 2nd habit slot) back when that was
   // the gate; now that it's a starter unlock, this is just a running
   // visual of carrot-earning pace rather than progress toward one
   // specific reward.
   html += '<div class="pip-row">'+carrotPipsHtml(state.carrots%7,7)+'</div>';
-  var nextParts = [];
-  if(next){ nextParts.push(next.title); }
-  if(sightingsActiveLB){ nextParts.push("Discovery"); }
-  // Streak Bonus (see evaluateStreakBonus()) recurs every 7-day active
-  // streak, refilling Coco Cannon lives and granting a bonus Treasure Hunt
-  // move together -- same short, ever-recurring cadence as New Discovery
-  // above (not a one-time long-term goal), so it's always listed here too,
-  // not gated behind an imminent() check like seven_seasons/bucket_list.
-  nextParts.push("Streak Bonus");
-  html += '<div class="plaque-progress-text">Next: '+nextParts.join(' + ')+'</div>';
+  // Used to be "Next: <locked reward> + Discovery + Streak Bonus" --
+  // dropped in favor of the all-time streak record (state.longestActiveStreak,
+  // see evaluateLongestStreak()) since what's next to unlock already has its
+  // own home on the Rewards tab, and doesn't need repeating here too.
+  html += '<div class="plaque-progress-text">Longest Daily Streak: '+state.longestActiveStreak+'</div>';
   html += '</div></div>';
 
   html += renderSpecialDaysLink();
@@ -2222,19 +2292,33 @@ function dueTodayHabits(state){
 // button, so the Logbook stays scannable as someone accumulates many habits
 // across daily/monthly/once-off. Tapping opens renderHabitDetailModal() for
 // everything else (log/toggle, streak, delete).
+// "07:30" (the raw <input type=time> value habit.alarmTime is stored as)
+// -> "7:30 AM", for display only -- storage/comparison in checkAlarms()
+// stays on the raw 24h string throughout.
+function formatAlarmTime(t){
+  return new Date("1970-01-01T"+t+":00").toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"});
+}
 function renderHabitCard(h){
   var badge = habitTypeBadge(h);
   var logged = habitLogged(h);
   var status = logged ? '<span class="habit-status done">✓</span>'
     : (h.type==="daily" && dailyStreak(h)>0) ? '<span class="habit-status streak">🔥'+dailyStreak(h)+'</span>'
     : '<span class="habit-status idle"></span>';
+  var alarmSet = !!h.alarmTime;
+  var alarmLabel = alarmSet ? "Alarm set for "+formatAlarmTime(h.alarmTime)+" -- tap to change" : "Set an alarm";
+  // A second, sibling <button> next to .habit-row (not nested inside it --
+  // see .habit-row-wrap) so tapping the row still opens habit detail while
+  // the clock has its own independent tap target.
   return (
-    '<button class="habit-row" data-action="show-habit-detail" data-id="'+h.id+'">' +
-      '<span class="habit-emoji">'+h.emoji+'</span>' +
-      '<span class="habit-name">'+escapeHtml(h.name)+'</span>' +
-      '<span class="habit-type-badge">'+badge+'</span>' +
-      status +
-    '</button>'
+    '<div class="habit-row-wrap">' +
+      '<button class="habit-row" data-action="show-habit-detail" data-id="'+h.id+'">' +
+        '<span class="habit-emoji">'+h.emoji+'</span>' +
+        '<span class="habit-name">'+escapeHtml(h.name)+'</span>' +
+        '<span class="habit-type-badge">'+badge+'</span>' +
+        status +
+      '</button>' +
+      '<button class="habit-alarm-btn'+(alarmSet?' set':'')+'" data-action="open-habit-alarm" data-id="'+h.id+'" aria-label="'+escapeAttr(alarmLabel)+'">⏰</button>' +
+    '</div>'
   );
 }
 
@@ -2807,6 +2891,7 @@ function renderModals(){
   if(state.screen==="profile-modal"){ html += renderProfileModal(); }
   if(state.screen==="habit-detail-modal"){ html += renderHabitDetailModal(state._detailHabitId); }
   if(state.screen==="habit-note-modal"){ html += renderHabitNoteModal(state._detailHabitId); }
+  if(state.screen==="habit-alarm-modal"){ html += renderHabitAlarmModal(state._detailHabitId); }
   if(state.screen==="reward-detail-modal"){ html += renderRewardDetailModal(state._detailRewardId); }
   if(state.screen==="sightings-gallery-modal"){ html += renderSightingsGalleryModal(); }
   if(state.screen==="due-today-modal"){ html += renderDueTodayModal(); }
@@ -2816,6 +2901,7 @@ function renderModals(){
   if(state.screen==="treasure-hunt-modal"){ html += renderTreasureHuntModal(); }
   if(state.screen==="story-modal"){ html += renderStoryModal(); }
   if(state.pendingCelebration){ html += renderCelebrationModal(REWARDS.filter(function(r){return r.id===state.pendingCelebration;})[0]); }
+  if(state.pendingStreakRecord){ html += renderStreakRecordModal(); }
   if(state.pendingTreasureFound!==null){ html += renderTreasureFoundModal(state.pendingTreasureFound); }
   if(state.pendingMapComplete){ html += renderMapCompleteModal(); }
   if(state.pendingTreasureTrial){ html += renderTreasureTrialModal(); }
@@ -3037,6 +3123,22 @@ function renderCelebrationModal(r){
   return html;
 }
 
+// Shown once, the moment evaluateLongestStreak() sees a fresh streak beat
+// the previous all-time best (state.pendingStreakRecord) -- same shape as
+// renderCelebrationModal() above, just for a streak milestone instead of a
+// reward unlock.
+function renderStreakRecordModal(){
+  var html = '<div class="modal-backdrop" data-backdrop="streak-record">';
+  html += '<div class="modal celebration">';
+  html += '<div class="confetti">🔥🥕✨</div>';
+  html += '<h3>New Personal Best!</h3>';
+  html += '<p>You just beat your last daily streak!</p>';
+  html += '<p class="onb-copy">'+state.longestActiveStreak+'-day streak and counting.</p>';
+  html += '<button class="btn mt" data-action="ack-streak-record">OK</button>';
+  html += '</div></div>';
+  return html;
+}
+
 function escapeHtml(s){
   return String(s).replace(/[&<>"']/g, function(c){
     return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
@@ -3250,6 +3352,11 @@ function closeModal(){
 function onAction(e){
   var el = e.currentTarget;
   var action = el.getAttribute("data-action");
+  // Browsers block audio that isn't kicked off by a user gesture -- any tap
+  // at all counts, so unlocking here (idempotent, see unlockAudio()) means
+  // the alarm beep (which fires later from a bare setInterval, with no
+  // gesture of its own) is ready to play by the time it's actually needed.
+  unlockAudio();
   switch(action){
     // Every explicit forward navigation below (onboarding steps, tapping the
     // home-icon/avatar to switch screens, opening the add-habit modal) goes
@@ -3419,6 +3526,22 @@ function onAction(e){
     case "delete-habit-note":
       deleteHabitNote(el.getAttribute("data-id"), state._noteKey);
       break;
+    case "open-habit-alarm":
+      navigateTo(function(){ state._detailHabitId = el.getAttribute("data-id"); state.screen = "habit-alarm-modal"; });
+      break;
+    case "save-habit-alarm":
+      var alarmInput = root.querySelector("#habitAlarmTimeInput");
+      saveHabitAlarm(el.getAttribute("data-id"), alarmInput ? alarmInput.value : "");
+      break;
+    case "clear-habit-alarm":
+      saveHabitAlarm(el.getAttribute("data-id"), "");
+      break;
+    case "dismiss-alarm":
+      stopBeepTone();
+      state.pendingAlarmIds = [];
+      save();
+      render();
+      break;
     case "delete-habit":
       deleteHabit(el.getAttribute("data-id"));
       break;
@@ -3436,6 +3559,10 @@ function onAction(e){
       break;
     case "ack-celebration":
       state.pendingCelebration = null;
+      save(); render();
+      break;
+    case "ack-streak-record":
+      state.pendingStreakRecord = false;
       save(); render();
       break;
     case "ack-treasure-found":
@@ -3478,8 +3605,11 @@ function finishOnboarding(){
   unlockStarterRewards();
   state.onboarded = true;
   state.screen = "logbook";
-  // Must come after state.onboarded=true -- showToast()'s toast only
-  // renders as part of renderApp(), not renderOnboarding().
+  // Must come after state.onboarded=true -- markActiveToday()/showToast()
+  // both no-op or render as part of renderApp() (not renderOnboarding())
+  // until then.
+  markActiveToday();
+  evaluateLongestStreak();
   unlockFirstDiscoveryFree();
   save();
   render();
@@ -3511,6 +3641,8 @@ function addHabit(){
   if(d.type==="weekly") habit.dayOfWeek = (typeof d.dayOfWeek==="number") ? d.dayOfWeek : new Date().getDay();
   if(d.type==="monthly") habit.dayOfMonth = (typeof d.dayOfMonth==="number") ? d.dayOfMonth : new Date().getDate();
   state.habits.push(habit);
+  markActiveToday();
+  evaluateLongestStreak();
   save();
   // Pops the add-habit-modal's history entry (pushed by navigateTo() when it
   // was opened) rather than setting state.screen directly -- keeps the
@@ -3533,6 +3665,7 @@ function toggleDaily(id){
   // user deletes it explicitly from the note pop-up.
   if(idx===-1){ h.completions.push(t); state.carrots++; }
   else { h.completions.splice(idx,1); state.carrots=Math.max(0,state.carrots-1); }
+  markActiveToday();
   evaluateRewards();
   save(); render();
 }
@@ -3547,6 +3680,7 @@ function toggleMonthly(id){
   // more honest than leaving orphaned, inaccessible data.
   if(idx===-1){ h.completions.push(m); state.carrots++; }
   else { h.completions.splice(idx,1); state.carrots=Math.max(0,state.carrots-1); deleteHabitNoteFor(h,m); }
+  markActiveToday();
   evaluateRewards();
   save(); render();
 }
@@ -3557,6 +3691,7 @@ function toggleWeekly(id){
   // Same reasoning as toggleMonthly() -- period key, note goes with it.
   if(idx===-1){ h.completions.push(w); state.carrots++; }
   else { h.completions.splice(idx,1); state.carrots=Math.max(0,state.carrots-1); deleteHabitNoteFor(h,w); }
+  markActiveToday();
   evaluateRewards();
   save(); render();
 }
@@ -3570,6 +3705,7 @@ function toggleEvery(id){
   var idx = h.completions.indexOf(t);
   if(idx===-1){ h.completions.push(t); state.carrots++; }
   else { h.completions.splice(idx,1); state.carrots=Math.max(0,state.carrots-1); deleteHabitNoteFor(h,t); }
+  markActiveToday();
   evaluateRewards();
   save(); render();
 }
@@ -3582,6 +3718,7 @@ function toggleOnceoff(id){
   // toggleDaily()/toggleMonthly() its note has to go too.
   if(h.completions.length){ deleteHabitNoteFor(h,h.completions[0]); h.completions=[]; state.carrots=Math.max(0,state.carrots-1); }
   else { h.completions=[todayStr()]; state.carrots++; }
+  markActiveToday();
   evaluateRewards();
   save(); render();
 }
@@ -3686,6 +3823,24 @@ function renderHabitNoteModal(id){
   html += '</div></div>';
   return html;
 }
+// Reached by tapping a habit row's clock icon (see renderHabitCard()'s
+// "open-habit-alarm") -- centered popup like the install prompts, since
+// this is a single time field, not a bottom-sheet-worthy form.
+function renderHabitAlarmModal(id){
+  var h = findHabit(id);
+  if(!h) return '';
+  var html = '<div class="modal-backdrop center" data-backdrop="habit-alarm">';
+  html += '<div class="modal">';
+  html += '<button class="modal-close" data-action="close-modal">✕</button>';
+  html += '<h3>'+h.emoji+' '+escapeHtml(h.name)+'</h3>';
+  html += '<div class="field"><label>Alarm time</label><input type="time" id="habitAlarmTimeInput" value="'+escapeAttr(h.alarmTime||"")+'"></div>';
+  html += '<button class="btn btn-block" data-action="save-habit-alarm" data-id="'+h.id+'">'+(h.alarmTime?"Update Alarm":"Set Alarm")+' ⏰</button>';
+  if(h.alarmTime){
+    html += '<button class="btn-ghost btn-block mt" data-action="clear-habit-alarm" data-id="'+h.id+'">Clear alarm</button>';
+  }
+  html += '</div></div>';
+  return html;
+}
 function deleteHabit(id){
   if(!confirm("Delete this rHabbit?")) return;
   var h = findHabit(id);
@@ -3736,6 +3891,10 @@ function saveSpecialDay(){
   } else {
     entry.id = uid();
     state.specialDays.push(entry);
+    // Only adding a new one counts as a tracked action -- editing an
+    // existing entry isn't "doing something new" today the same way.
+    markActiveToday();
+    evaluateLongestStreak();
   }
   save();
   closeModal();
@@ -5013,6 +5172,133 @@ function syncCocoScreenUI(){
 })();
 
 /* =========================================================
+   ALARMS -- best-effort only, no backend/push server. checkAlarms() runs
+   off a plain setInterval in the page itself, so it can only fire while
+   this tab/PWA process is actually alive (foreground or backgrounded, not
+   fully closed) -- there's no way for a static, serverless site to wake
+   the browser up after it's been closed. See renderHabitAlarmModal() for
+   where alarmTime gets set and the topbar bell (renderTopbar()) for the
+   pulsing "ringing" indicator.
+   ========================================================= */
+function saveHabitAlarm(id, time){
+  var h = findHabit(id); if(!h) return;
+  if(!time){
+    delete h.alarmTime;
+    delete h.alarmFiredOn;
+    save();
+    closeModal();
+    return;
+  }
+  h.alarmTime = time;
+  save();
+  // Ask for OS-notification permission right when intent is clearest (the
+  // user just asked for an alarm) -- browsers require a user gesture for
+  // this prompt anyway, and this tap qualifies. "default" means never
+  // asked/answered yet; skip re-asking if already granted or denied.
+  if("Notification" in window && Notification.permission==="default"){
+    Notification.requestPermission().catch(function(){});
+  }
+  showToast("Alarm set for "+formatAlarmTime(time)+" -- audio alarm only works while rHabbits is open (foreground or backgrounded), not after the app/browser is fully closed.");
+  closeModal();
+}
+function currentHHMM(){
+  var d = new Date();
+  var h = String(d.getHours()); if(h.length<2) h = "0"+h;
+  var m = String(d.getMinutes()); if(m.length<2) m = "0"+m;
+  return h+":"+m;
+}
+// Polled every 15s rather than computed from a single setTimeout-to-exact-
+// time per alarm -- habits (and their alarmTime) can be added/edited/
+// deleted at any moment, which would mean constantly re-scheduling; a
+// short poll is simpler and plenty precise for a minute-resolution alarm.
+// alarmFiredOn (today's date string) is what stops it from re-firing every
+// tick for the rest of that same matching minute, and naturally re-arms
+// the next day once todayStr() moves on.
+function checkAlarms(){
+  var hhmm = currentHHMM();
+  var today = todayStr();
+  var anyFired = false;
+  state.habits.forEach(function(h){
+    if(h.alarmTime && h.alarmTime===hhmm && h.alarmFiredOn!==today){
+      h.alarmFiredOn = today;
+      anyFired = true;
+      if(state.pendingAlarmIds.indexOf(h.id)===-1) state.pendingAlarmIds.push(h.id);
+      showToast(h.emoji+" "+h.name+" -- alarm!");
+      notifyAlarm(h);
+    }
+  });
+  if(anyFired){
+    save();
+    startBeep();
+    render();
+  }
+}
+function initAlarmClock(){
+  setInterval(checkAlarms, 15000);
+}
+// Best-effort OS notification via the service worker -- may still surface
+// even if rHabbits' own tab isn't in front (another app/tab active), but
+// same caveat as everything else here: only while the browser process
+// itself is still running somewhere.
+function notifyAlarm(h){
+  if(!("Notification" in window) || Notification.permission!=="granted") return;
+  if(!("serviceWorker" in navigator)) return;
+  navigator.serviceWorker.ready.then(function(reg){
+    reg.showNotification(h.emoji+" "+h.name, {
+      body:"Your rHabbit alarm is going off.",
+      icon:"./icon-192.png",
+      tag:"rhabbits-alarm-"+h.id,
+      requireInteraction:true,
+      vibrate:[200,100,200,100,200]
+    });
+  }).catch(function(){});
+}
+// Web Audio beep -- avoids needing an audio asset file, and (unlike an
+// <audio> element) survives being started with no direct user gesture of
+// its own, as long as the shared AudioContext was already unlocked by an
+// earlier tap (see unlockAudio(), called from every onAction()).
+var alarmAudioCtx = null;
+var alarmBeepStopFn = null;
+var alarmBeepTimeoutId = null;
+function unlockAudio(){
+  if(alarmAudioCtx) return;
+  try{ alarmAudioCtx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){}
+}
+function playBeepTone(){
+  if(!alarmAudioCtx) return;
+  var osc = alarmAudioCtx.createOscillator();
+  var gain = alarmAudioCtx.createGain();
+  osc.type = "sine";
+  osc.frequency.value = 880;
+  var t = alarmAudioCtx.currentTime;
+  gain.gain.setValueAtTime(0.0001, t);
+  gain.gain.exponentialRampToValueAtTime(0.35, t+0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t+0.35);
+  osc.connect(gain); gain.connect(alarmAudioCtx.destination);
+  osc.start(t); osc.stop(t+0.4);
+}
+// Beeps on a 0.7s cadence for up to 30s, or until "dismiss-alarm" calls
+// stopBeepTone() early -- restarting (a second alarm firing before the
+// first was dismissed) clears any prior loop/timeout first so beeps never
+// double up.
+function startBeep(){
+  unlockAudio();
+  if(!alarmAudioCtx) return;
+  if(alarmAudioCtx.state==="suspended") alarmAudioCtx.resume().catch(function(){});
+  stopBeepTone();
+  playBeepTone();
+  var intervalId = setInterval(playBeepTone, 700);
+  alarmBeepStopFn = function(){ clearInterval(intervalId); };
+  alarmBeepTimeoutId = setTimeout(function(){
+    if(alarmBeepStopFn){ alarmBeepStopFn(); alarmBeepStopFn=null; }
+  }, 30000);
+}
+function stopBeepTone(){
+  if(alarmBeepStopFn){ alarmBeepStopFn(); alarmBeepStopFn=null; }
+  if(alarmBeepTimeoutId){ clearTimeout(alarmBeepTimeoutId); alarmBeepTimeoutId=null; }
+}
+
+/* =========================================================
    BOOTSTRAP
    ========================================================= */
 evaluateRewards();
@@ -5022,6 +5308,7 @@ try{ history.replaceState(currentNavState(), ""); }catch(e){} // the first scree
 initBottombar();
 initCocoCannon();
 initExitBackup();
+initAlarmClock();
 
 if(!state.onboarded){
   maybeOfferAutoRestore();
