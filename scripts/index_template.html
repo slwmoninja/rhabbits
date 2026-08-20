@@ -725,7 +725,7 @@ var STORAGE_KEY = "rhabbits_state_v1";
 // every future code change to this file so a reload can be visually
 // confirmed against what was actually deployed. Distinct from any
 // data-schema/localStorage version (this app has none yet).
-var APP_VERSION = "1.0+16669fde";
+var APP_VERSION = "1.0+5d142fe0";
 // Sorted into one logical sequence -- nature, fitness/routine, pirate/
 // nautical, then animals -- rather than grouped under separate UI headers.
 var EMOJI_CHOICES = ["🌴","🌱","☀️","🌊","🥥","🥕","🌙","💪","🏋️","🧘","🤸","📖","💊","🛏️","⛵","🏴‍☠️","🧭","⚓","🦜","🐚","🗺️","🏝️","🐶","🐕","🐩","🦮","🐕‍🦺","🐺","🐱","🐈","🐈‍⬛","🦁"];
@@ -1223,6 +1223,14 @@ function localDateStr(d){
 }
 function todayStr(){ return localDateStr(); }
 function monthStr(d){ d = d||new Date(); return localDateStr(d).slice(0,7); }
+// A monthly habit's target day-of-month (see the "Day of month" picker in
+// renderAddHabitModal()), clamped into the current month the same way
+// habitAnnualDueDayThisYear() clamps a yearly date -- the 31st in a 30-day
+// month resolves to that month's last day instead of never firing.
+function habitMonthlyDueDayThisMonth(h){
+  var now = new Date();
+  return Math.min(h.dayOfMonth, daysInMonth(now.getFullYear(), now.getMonth()+1));
+}
 // ISO-8601 week key ("2026-W34") -- used the same way monthStr() is for
 // monthly habits, just at week grain: one credit per Mon-Sun week rather
 // than per calendar month. Aligns to the week's Thursday first (standard
@@ -1255,9 +1263,13 @@ function uid(){ return Math.random().toString(36).slice(2,10) + Date.now().toStr
 // same as daily, and become due again once enough days have rolled by
 // since the last one -- a rolling interval, unlike the named Weekly/Monthly
 // presets above which reset on a fixed calendar boundary instead. Months
-// and years are approximated as 30/365 days each (good enough for a
-// personal habit tracker; exact calendar-month/leap-year arithmetic isn't
-// worth the complexity here).
+// are approximated as 30 days (good enough for a personal habit tracker;
+// exact calendar-month arithmetic isn't worth the complexity here). Years
+// are the one exception: an annualMonth/annualDay pair (set via the date
+// picker shown for everyUnit==="years", see renderAddHabitModal()) pins the
+// habit to the same calendar date every year instead of a rolling 365*N-day
+// approximation, so "annual" habits (birthdays, renewals, checkups) actually
+// land on the date picked rather than drifting a little each cycle.
 function habitEveryUnitDays(h){
   if(h.everyUnit==="years") return h.everyN*365;
   if(h.everyUnit==="months") return h.everyN*30;
@@ -1270,11 +1282,48 @@ function habitEveryUnitDays(h){
 function everyMinN(unit){
   return unit==="years" ? 1 : 2;
 }
+// Clamped so a date picked as the 29th/30th/31st still resolves to a real
+// day in months that don't have one (e.g. annualDay 29 in a non-leap
+// February lands on the 28th instead of rolling into March).
+function daysInMonth(year, month1based){
+  return new Date(year, month1based, 0).getDate();
+}
+function habitHasAnnualDate(h){
+  return h.everyUnit==="years" && typeof h.annualMonth==="number" && typeof h.annualDay==="number";
+}
+function habitAnnualDueDayThisYear(h, year){
+  return Math.min(h.annualDay, daysInMonth(year, h.annualMonth));
+}
+function habitAnnualDueToday(h){
+  var now = new Date();
+  return (now.getMonth()+1)===h.annualMonth && now.getDate()===habitAnnualDueDayThisYear(h, now.getFullYear());
+}
 function habitEveryDue(h){
+  if(habitHasAnnualDate(h)){
+    if(!habitAnnualDueToday(h)) return false;
+    if(!h.completions.length) return true;
+    var lastYear = parseInt(h.completions[h.completions.length-1].slice(0,4),10);
+    return (new Date().getFullYear() - lastYear) >= h.everyN;
+  }
   if(!h.completions.length) return true;
   return daysSince(h.completions[h.completions.length-1]) >= habitEveryUnitDays(h);
 }
+// Next occurrence of the fixed annual date, honoring everyN (e.g. every 2
+// years lands on the date picked, but only every other year) -- looks ahead
+// year by year rather than computing it in closed form since everyN is
+// always a small integer (2-365 by the same UI bound as the other units).
+function daysUntilAnnualDue(h){
+  var now = new Date(); now.setHours(0,0,0,0);
+  var lastYear = h.completions.length ? parseInt(h.completions[h.completions.length-1].slice(0,4),10) : now.getFullYear()-h.everyN;
+  var year = lastYear + h.everyN;
+  while(true){
+    var target = new Date(year, h.annualMonth-1, habitAnnualDueDayThisYear(h, year));
+    if(target >= now) return Math.round((target-now)/86400000);
+    year += h.everyN;
+  }
+}
 function habitEveryDaysRemaining(h){
+  if(habitHasAnnualDate(h)) return daysUntilAnnualDue(h);
   if(!h.completions.length) return 0;
   return Math.max(0, habitEveryUnitDays(h) - daysSince(h.completions[h.completions.length-1]));
 }
@@ -1539,7 +1588,10 @@ function freshHabitDraft(){
     dueDate: todayStr(),
     everyUnit: "days",
     everyN: 2,
-    dayOfWeek: new Date().getDay()
+    dayOfWeek: new Date().getDay(),
+    dayOfMonth: new Date().getDate(),
+    annualMonth: new Date().getMonth()+1,
+    annualDay: new Date().getDate()
   };
 }
 
@@ -1627,7 +1679,7 @@ function defaultState(){
     screen:"logbook",
     pendingCelebration:null,
     toast:null,
-    _draft:{ name:"", emoji:"🌴", type:"daily", description:"", dueDate:todayStr(), everyUnit:"days", everyN:2, dayOfWeek:new Date().getDay() },
+    _draft:{ name:"", emoji:"🌴", type:"daily", description:"", dueDate:todayStr(), everyUnit:"days", everyN:2, dayOfWeek:new Date().getDay(), dayOfMonth:new Date().getDate(), annualMonth:new Date().getMonth()+1, annualDay:new Date().getDate() },
     _detailHabitId:null,
     _detailEmojiPickerOpen:false,
     _detailRewardId:null,
@@ -1890,9 +1942,13 @@ function renderPreservingModalScroll(){
   render();
   modalEl = document.querySelector(".modal");
   if(!modalEl) return;
-  var subfield = modalEl.querySelector(".freq-subfield");
-  if(subfield){
-    subfield.scrollIntoView({block:"center", behavior:"smooth"});
+  // Last, not first: a type can reveal more than one .freq-subfield at once
+  // (e.g. "every" years shows both "Repeat every" and "On this date"), and
+  // it's always the most-recently-added one -- last in document order --
+  // that the user just brought into existence and needs to see.
+  var subfields = modalEl.querySelectorAll(".freq-subfield");
+  if(subfields.length){
+    subfields[subfields.length-1].scrollIntoView({block:"center", behavior:"smooth"});
   } else {
     modalEl.scrollTop = scrollTop;
   }
@@ -2085,8 +2141,11 @@ function everyUnitLabel(h){
 function habitTypeBadge(h){
   if(h.type==="daily") return "Daily";
   if(h.type==="weekly") return typeof h.dayOfWeek==="number" ? "Weekly · "+SPECIAL_DAY_WEEKDAY_ABBR[h.dayOfWeek] : "Weekly";
-  if(h.type==="monthly") return "Monthly";
-  if(h.type==="every") return "Every "+h.everyN+" "+everyUnitLabel(h);
+  if(h.type==="monthly") return typeof h.dayOfMonth==="number" ? "Monthly · "+h.dayOfMonth : "Monthly";
+  if(h.type==="every"){
+    if(habitHasAnnualDate(h)) return (h.everyN===1?"Annual":"Every "+h.everyN+" years")+" · "+SPECIAL_DAY_MONTH_ABBR[h.annualMonth-1]+" "+h.annualDay;
+    return "Every "+h.everyN+" "+everyUnitLabel(h);
+  }
   return "Once-off";
 }
 // A habit is "due" right now if it's not currently satisfied for its
@@ -2101,6 +2160,9 @@ function habitDueToday(h){
     return !h.dueDate || h.dueDate<=todayStr();
   }
   if(h.type==="weekly" && typeof h.dayOfWeek==="number" && h.dayOfWeek!==new Date().getDay()){
+    return false;
+  }
+  if(h.type==="monthly" && typeof h.dayOfMonth==="number" && habitMonthlyDueDayThisMonth(h)!==new Date().getDate()){
     return false;
   }
   return !habitLogged(h);
@@ -2190,7 +2252,7 @@ function renderHabitDetailModal(id){
     } else {
       logBtnHtml = '<button class="log-btn log-btn-sm" data-action="toggle-monthly" data-id="'+h.id+'">Log this Month  +1 🥕</button>';
     }
-    metaHtml = '<div class="habit-meta">'+h.completions.length+'/7 months toward next reward</div>';
+    metaHtml = '<div class="habit-meta">'+h.completions.length+'/7 months toward next reward'+(typeof h.dayOfMonth==="number" ? ' · Target: '+h.dayOfMonth : '')+'</div>';
   } else if(h.type==="weekly"){
     var w = isoWeekStr();
     var doneWeek = h.completions.indexOf(w)!==-1;
@@ -2208,7 +2270,9 @@ function renderHabitDetailModal(id){
       metaHtml = '<div class="habit-meta">Due again in '+remaining+' day'+(remaining===1?'':'s')+'</div>';
     } else {
       logBtnHtml = '<button class="log-btn log-btn-sm" data-action="toggle-every" data-id="'+h.id+'">Log Now  +1 🥕</button>';
-      metaHtml = '<div class="habit-meta">Repeats every '+h.everyN+' '+everyUnitLabel(h)+'</div>';
+      metaHtml = habitHasAnnualDate(h)
+        ? '<div class="habit-meta">'+(h.everyN===1?"Annual":"Every "+h.everyN+" years")+' · Target: '+SPECIAL_DAY_MONTH_ABBR[h.annualMonth-1]+' '+h.annualDay+'</div>'
+        : '<div class="habit-meta">Repeats every '+h.everyN+' '+everyUnitLabel(h)+'</div>';
     }
   } else {
     var done = h.completions.length>0;
@@ -2738,7 +2802,6 @@ function renderAddHabitModal(){
   html += '<h3>Add a rHabbit</h3>';
   html += '<div class="field"><label>Name</label><input type="text" id="addHabitName" maxlength="40" placeholder="e.g. Stretch for 5 minutes" value="'+escapeAttr(d.name)+'"></div>';
   html += '<div class="field"><label><span style="text-transform:lowercase">r</span>Habbit description (optional)</label><textarea id="addHabitDescription" maxlength="140" placeholder="e.g. Right after brushing my teeth">'+escapeHtml(d.description)+'</textarea></div>';
-  html += '<div class="emoji-picker">'+EMOJI_CHOICES.map(function(e){return '<button class="emoji-opt '+(d.emoji===e?'selected':'')+'" data-action="pick-emoji" data-emoji="'+e+'">'+e+'</button>';}).join('')+'</div>';
   html += '<div class="type-picker">';
   if(!typesUnlocked){
     // Pre-unlock: the original 3-way picker, unchanged in spirit -- just
@@ -2760,6 +2823,11 @@ function renderAddHabitModal(){
       '</select></div>';
     }
     html += typeOptRow("monthly","Monthly", monthlyCount+"/"+monthlyMax+" used", d.type==="monthly", monthlyDisabled);
+    if(d.type==="monthly"){
+      html += '<div class="field freq-subfield"><label>Day of month</label><select id="addHabitDayOfMonth">' +
+        dayOfMonthOptionsHtml(d.dayOfMonth) +
+      '</select></div>';
+    }
     html += typeOptRow("every","Every X", everyCount+"/"+everyMax+" used", d.type==="every", everyDisabled);
     if(d.type==="every"){
       // "years" is the one unit where 1 is a meaningful, common value (an
@@ -2775,14 +2843,38 @@ function renderAddHabitModal(){
           '<option value="years"'+(d.everyUnit==="years"?' selected':'')+'>years</option>' +
         '</select>' +
       '</div></div>';
+      // Pins an "every N years" habit to an actual calendar date (see
+      // habitAnnualDueToday()) instead of the rolling ~365*N-day
+      // approximation the other units use -- so a birthday/renewal lands on
+      // the same date each year rather than drifting.
+      if(d.everyUnit==="years"){
+        html += '<div class="field freq-subfield"><label>On this date</label><div class="freq-every-inputs">' +
+          '<select id="addHabitAnnualMonth">' +
+            SPECIAL_DAY_MONTH_NAMES.map(function(name,i){return '<option value="'+(i+1)+'"'+(d.annualMonth===i+1?' selected':'')+'>'+name+'</option>';}).join('') +
+          '</select>' +
+          '<select id="addHabitAnnualDay">' +
+            dayOfMonthOptionsHtml(d.annualDay) +
+          '</select>' +
+        '</div></div>';
+      }
     }
   }
   html += '</div>';
+  html += '<div class="field"><label>Icon</label><div class="emoji-picker">'+EMOJI_CHOICES.map(function(e){return '<button class="emoji-opt '+(d.emoji===e?'selected':'')+'" data-action="pick-emoji" data-emoji="'+e+'">'+e+'</button>';}).join('')+'</div></div>';
   var canSubmit = d.name.trim() &&
     !(d.type==="daily"&&dailyDisabled) && !(d.type==="monthly"&&monthlyDisabled) &&
     !(d.type==="onceoff"&&onceoffDisabled) && !(d.type==="weekly"&&weeklyDisabled) && !(d.type==="every"&&everyDisabled);
   html += '<button class="btn btn-block" data-action="confirm-add-habit" '+(canSubmit?'':'disabled')+'>Start tracking 🌴</button>';
   html += '</div></div>';
+  return html;
+}
+// Shared by the Monthly "Day of month" picker and the annual "On this date"
+// day picker above -- same plain 1-31 option list either way.
+function dayOfMonthOptionsHtml(selected){
+  var html = '';
+  for(var day=1; day<=31; day++){
+    html += '<option value="'+day+'"'+(selected===day?' selected':'')+'>'+day+'</option>';
+  }
   return html;
 }
 function typeOptRow(value,title,sub,selected,disabled){
@@ -2983,6 +3075,18 @@ function wireEvents(){
   if(addWeekdaySelect){
     addWeekdaySelect.addEventListener("change", function(e){ state._draft.dayOfWeek = parseInt(e.target.value,10); });
   }
+  var addDayOfMonthSelect = root.querySelector("#addHabitDayOfMonth");
+  if(addDayOfMonthSelect){
+    addDayOfMonthSelect.addEventListener("change", function(e){ state._draft.dayOfMonth = parseInt(e.target.value,10); });
+  }
+  var addAnnualMonthSelect = root.querySelector("#addHabitAnnualMonth");
+  if(addAnnualMonthSelect){
+    addAnnualMonthSelect.addEventListener("change", function(e){ state._draft.annualMonth = parseInt(e.target.value,10); });
+  }
+  var addAnnualDaySelect = root.querySelector("#addHabitAnnualDay");
+  if(addAnnualDaySelect){
+    addAnnualDaySelect.addEventListener("change", function(e){ state._draft.annualDay = parseInt(e.target.value,10); });
+  }
   var addEveryNInput = root.querySelector("#addHabitEveryN");
   if(addEveryNInput){
     addEveryNInput.addEventListener("input", function(e){
@@ -3001,7 +3105,7 @@ function wireEvents(){
       // fix a value already below the new floor.
       var min = everyMinN(state._draft.everyUnit);
       if(state._draft.everyN < min) state._draft.everyN = min;
-      render();
+      renderPreservingModalScroll();
     });
   }
   // Special Day add/edit form (see renderSpecialDayFormModal()) -- occasion
@@ -3348,8 +3452,16 @@ function addHabit(){
   if(!name) return;
   var habit = { id:uid(), name:name, emoji:d.emoji, type:d.type, description:d.description.trim(), createdAt:todayStr(), completions:[] };
   if(d.type==="onceoff") habit.dueDate = d.dueDate || todayStr();
-  if(d.type==="every"){ habit.everyUnit = d.everyUnit; habit.everyN = Math.max(everyMinN(d.everyUnit), parseInt(d.everyN,10)||everyMinN(d.everyUnit)); }
+  if(d.type==="every"){
+    habit.everyUnit = d.everyUnit;
+    habit.everyN = Math.max(everyMinN(d.everyUnit), parseInt(d.everyN,10)||everyMinN(d.everyUnit));
+    if(d.everyUnit==="years"){
+      habit.annualMonth = (typeof d.annualMonth==="number") ? d.annualMonth : new Date().getMonth()+1;
+      habit.annualDay = (typeof d.annualDay==="number") ? d.annualDay : new Date().getDate();
+    }
+  }
   if(d.type==="weekly") habit.dayOfWeek = (typeof d.dayOfWeek==="number") ? d.dayOfWeek : new Date().getDay();
+  if(d.type==="monthly") habit.dayOfMonth = (typeof d.dayOfMonth==="number") ? d.dayOfMonth : new Date().getDate();
   state.habits.push(habit);
   save();
   // Pops the add-habit-modal's history entry (pushed by navigateTo() when it
@@ -3998,7 +4110,7 @@ function validBackupShape(parsed){
 function applyRestoredState(parsed){
   var merged = Object.assign(defaultState(), parsed);
   merged.unlocks = Object.assign({}, parsed.unlocks || {});
-  merged._draft = { name:"", emoji:"🌴", type:"daily", description:"", dueDate:todayStr(), everyUnit:"days", everyN:2, dayOfWeek:new Date().getDay() };
+  merged._draft = { name:"", emoji:"🌴", type:"daily", description:"", dueDate:todayStr(), everyUnit:"days", everyN:2, dayOfWeek:new Date().getDay(), dayOfMonth:new Date().getDate(), annualMonth:new Date().getMonth()+1, annualDay:new Date().getDate() };
   merged._specialDayDraft = freshSpecialDayDraft();
   merged._detailSpecialDayId = null;
   merged.toast = null;
