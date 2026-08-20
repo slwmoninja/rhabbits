@@ -726,7 +726,7 @@ var STORAGE_KEY = "rhabbits_state_v1";
 // every future code change to this file so a reload can be visually
 // confirmed against what was actually deployed. Distinct from any
 // data-schema/localStorage version (this app has none yet).
-var APP_VERSION = "1.0+d0489b5b";
+var APP_VERSION = "1.0+b9765f58";
 // Sorted into one logical sequence -- nature, fitness/routine, pirate/
 // nautical, then animals -- rather than grouped under separate UI headers.
 var EMOJI_CHOICES = ["🌴","🌱","☀️","🌊","🥥","🥕","🌙","💪","🏋️","🧘","🤸","📖","💊","🛏️","⛵","🏴‍☠️","🧭","⚓","🦜","🐚","🗺️","🏝️","🐶","🐕","🐩","🦮","🐕‍🦺","🐺","🐱","🐈","🐈‍⬛","🦁"];
@@ -1735,6 +1735,17 @@ function load(){
     var parsed = JSON.parse(raw);
     var d = defaultState();
     for(var k in d){ if(!(k in parsed)) parsed[k]=d[k]; }
+    // _draft accrues new optional fields over time as habit types gain new
+    // pickers (e.g. dayOfMonth/annualMonth/annualDay) -- a returning user's
+    // stored _draft predates those and is missing the keys outright (a
+    // field that was ever assigned JS `undefined` is dropped entirely by
+    // JSON.stringify, not saved as null), so the top-level "already
+    // present" check above skips backfilling it. Merge _draft's own fields
+    // the same way, one level deeper, so e.g. description/dayOfMonth default
+    // back to a real value instead of staying undefined and crashing the
+    // first `.trim()` call that touches them (see finishOnboarding()/
+    // addHabit()).
+    parsed._draft = Object.assign({}, d._draft, parsed._draft||{});
     return parsed;
   }catch(e){ return defaultState(); }
 }
@@ -3450,7 +3461,7 @@ function finishOnboarding(){
   state.startDate = todayStr();
   state.habits.push({
     id: uid(), name:name, emoji: state._draft.emoji, type:"daily",
-    description: state._draft.description.trim(),
+    description: (state._draft.description||"").trim(),
     createdAt: todayStr(), completions:[]
   });
   unlockStarterRewards();
@@ -3476,7 +3487,7 @@ function addHabit(){
   var d = state._draft;
   var name = d.name.trim();
   if(!name) return;
-  var habit = { id:uid(), name:name, emoji:d.emoji, type:d.type, description:d.description.trim(), createdAt:todayStr(), completions:[] };
+  var habit = { id:uid(), name:name, emoji:d.emoji, type:d.type, description:(d.description||"").trim(), createdAt:todayStr(), completions:[] };
   if(d.type==="onceoff") habit.dueDate = d.dueDate || todayStr();
   if(d.type==="every"){
     habit.everyUnit = d.everyUnit;
