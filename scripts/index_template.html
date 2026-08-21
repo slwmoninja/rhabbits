@@ -761,7 +761,7 @@ var STORAGE_KEY = "rhabbits_state_v1";
 // every future code change to this file so a reload can be visually
 // confirmed against what was actually deployed. Distinct from any
 // data-schema/localStorage version (this app has none yet).
-var APP_VERSION = "1.0+f617d9d2";
+var APP_VERSION = "1.0+28d78069";
 // Sorted into one logical sequence -- nature, fitness/routine, pirate/
 // nautical, then animals -- rather than grouped under separate UI headers.
 var EMOJI_CHOICES = ["🌴","🌱","☀️","🌊","🥥","🥕","🌙","💪","🏋️","🧘","🤸","📖","💊","🛏️","⛵","🏴‍☠️","🧭","⚓","🦜","🐚","🗺️","🏝️","🐶","🐕","🐩","🦮","🐕‍🦺","🐺","🐱","🐈","🐈‍⬛","🦁"];
@@ -2360,7 +2360,14 @@ function renderHabitDetailModal(id){
     var today = todayStr();
     var doneToday = h.completions.indexOf(today) !== -1;
     var pips = '';
-    for(var i=0;i<=6;i++){
+    // i counts down from 6 (oldest day in the window) to 0 (today) so pips
+    // build left-to-right in calendar order -- oldest slot leftmost, today
+    // always the rightmost slot. Building today-first (i=0..6) used to put
+    // today on the *left* instead, which read as tracking going backwards:
+    // e.g. logging yesterday but not yet today would fill the 2nd slot
+    // while the 1st (today) stayed empty, worst right after restoring a
+    // backup with a few historical days already logged.
+    for(var i=6;i>=0;i--){
       var d = new Date(); d.setDate(d.getDate()-i);
       var ds = localDateStr(d);
       var done = h.completions.indexOf(ds)!==-1;
