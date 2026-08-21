@@ -761,7 +761,7 @@ var STORAGE_KEY = "rhabbits_state_v1";
 // every future code change to this file so a reload can be visually
 // confirmed against what was actually deployed. Distinct from any
 // data-schema/localStorage version (this app has none yet).
-var APP_VERSION = "1.0+0affce0e";
+var APP_VERSION = "1.0+f617d9d2";
 // Sorted into one logical sequence -- nature, fitness/routine, pirate/
 // nautical, then animals -- rather than grouped under separate UI headers.
 var EMOJI_CHOICES = ["🌴","🌱","☀️","🌊","🥥","🥕","🌙","💪","🏋️","🧘","🤸","📖","💊","🛏️","⛵","🏴‍☠️","🧭","⚓","🦜","🐚","🗺️","🏝️","🐶","🐕","🐩","🦮","🐕‍🦺","🐺","🐱","🐈","🐈‍⬛","🦁"];
@@ -918,29 +918,14 @@ function treasureChestAt(r,c){
   }
   return -1;
 }
-// Same one-credit-per-calendar-day cap as New Discovery (see
-// hasCompletionToday() below) -- a move becomes available the moment any
-// habit is logged today, and (unlike Discovery credits) doesn't expire if
-// unspent -- it just waits until a direction is picked. Normally that's a
-// single move/day, but the very first time the map is opened (see
-// "show-treasure-hunt" in onAction()) grants 7 moves usable that one day
-// only, so a brand new player can actually see some of the map right away
-// instead of crawling one tile/day -- treasureTrialGrantedOn being today
-// is the only thing that raises the cap, so it automatically reverts to
-// the normal 1/day the moment the calendar date moves on, no separate
-// "expire it" step needed.
-function treasureMovesUsedToday(){
-  var t = todayStr(), n = 0;
-  for(var i=0;i<state.treasureMoveDays.length;i++){ if(state.treasureMoveDays[i]===t) n++; }
-  return n;
-}
-function treasureMovesAllowedToday(){
-  var base = state.treasureTrialGrantedOn===todayStr() ? 7 : 1;
-  var streakBonus = state.treasureStreakBonusDays.indexOf(todayStr())!==-1 ? 1 : 0;
-  return base + streakBonus;
-}
+// Every single habit log (any type, see grantTreasureMove() in each
+// toggle*() function) banks +1 move, spent whenever a direction is picked --
+// unspent moves never expire, they just sit in state.treasureMovesAvailable
+// until used. The first-open trial (see "show-treasure-hunt" in onAction())
+// and the 7-day streak bonus (evaluateStreakBonus()) are just one-time
+// top-ups into that same pool, not a separate daily ceiling.
 function treasureMoveAvailable(){
-  return !state.treasureMapComplete && hasCompletionToday(state) && treasureMovesUsedToday() < treasureMovesAllowedToday();
+  return !state.treasureMapComplete && state.treasureMovesAvailable > 0;
 }
 function treasureLegalDirections(){
   var p = state.treasurePos;
@@ -955,9 +940,8 @@ function treasureStatusText(){
   if(state.treasureMapComplete) return "You mapped the whole island!";
   if(state.treasureFound.length>=TREASURE_CHESTS.length) return "All treasure found — keep exploring the map.";
   var status = state.treasureFound.length+"/"+TREASURE_CHESTS.length+" treasures found.";
-  if(treasureMoveAvailable()){
-    var left = treasureMovesAllowedToday() - treasureMovesUsedToday();
-    status += left>1 ? " "+left+" moves ready!" : " Move ready!";
+  if(state.treasureMovesAvailable>0){
+    status += state.treasureMovesAvailable>1 ? " "+state.treasureMovesAvailable+" moves ready!" : " Move ready!";
   }
   return status;
 }
@@ -969,7 +953,7 @@ function treasureMove(dir){
   var d = TREASURE_DIRS[dir];
   var np = {r:p.r+d.dr, c:p.c+d.dc};
   state.treasurePos = np;
-  state.treasureMoveDays.push(todayStr());
+  state.treasureMovesAvailable--;
   var key = treasureCellKey(np.r, np.c);
   if(state.treasureFog.indexOf(key)===-1) state.treasureFog.push(key);
   var chestIdx = treasureChestAt(np.r, np.c);
@@ -995,7 +979,7 @@ function treasurePlayAgain(){
   state.treasureFog = [treasureCellKey(TREASURE_START.r, TREASURE_START.c)];
   state.treasurePos = {r:TREASURE_START.r, c:TREASURE_START.c};
   state.treasureFound = [];
-  state.treasureMoveDays = [];
+  state.treasureMovesAvailable = 0;
   state.treasureMapComplete = false;
   state.pendingTreasureFound = null;
   state.pendingMapComplete = false;
@@ -1670,21 +1654,22 @@ function defaultState(){
     treasureFog:[treasureCellKey(TREASURE_START.r, TREASURE_START.c)],
     treasurePos:{r:TREASURE_START.r, c:TREASURE_START.c},
     treasureFound:[],
-    treasureMoveDays:[],
+    // Every habit log banks +1 move here (see grantTreasureMove(), called
+    // from each toggle*() function's "marked complete" branch); moves never
+    // expire, they just sit here until spent via treasureMove(). The
+    // first-open trial and the 7-day streak bonus below are just one-time
+    // top-ups into this same pool.
+    treasureMovesAvailable:0,
     treasureMapComplete:false,
     pendingTreasureFound:null,
     pendingMapComplete:false,
     // Same one-time trial idea as Coco Cannon's cocoTrialGrantedOn -- the
-    // date (or null) the 7-moves-in-one-day bonus was granted, see
-    // treasureMovesAllowedToday() above. pendingTreasureTrial is the
+    // date (or null) the first-open +7-move top-up was granted (see
+    // "show-treasure-hunt" in onAction()). pendingTreasureTrial is the
     // announcement overlay itself (see renderTreasureTrialModal()),
     // following the exact same pendingX pattern as pendingMapComplete.
     treasureTrialGrantedOn:null,
     pendingTreasureTrial:false,
-    // Dates an extra Treasure Hunt move was earned via the 7-day streak
-    // bonus below (see evaluateStreakBonus()) -- adds +1 to that day's
-    // move allowance only, same one-day-only spirit as the trial above.
-    treasureStreakBonusDays:[],
     // General cross-type "was the player active this day" record (see
     // markActiveToday()) and the 7-day-streak milestone bonus it powers
     // (see evaluateStreakBonus()) -- streakBonusCount is how many 7-day
@@ -1700,22 +1685,17 @@ function defaultState(){
     longestActiveStreak:0,
     pendingStreakRecord:false,
     // Coco Cannon -- cocoLives IS the in-game life count directly (not a
-    // separate "bank" vs "active" split): reset (not accumulated) at most
-    // once/day to that day's ration -- day 1 of play = 1 life, day 2 = 2,
-    // up to a 7-life cap (see evaluateCocoCannon()) -- and only ever spent
-    // when a crow actually reaches the bottom row. Quitting or clearing a
-    // level never costs anything, so a session can always safely resume
-    // wherever the player left off. cocoTrialGrantedOn is separate: the
-    // calendar date (or null, if never granted) of a one-time top-up to 7,
-    // the very first time Start is actually pressed (see startPlaying()),
-    // so a brand new player isn't stuck on a 1-life first session just
-    // because they unlocked the game on day 1. evaluateCocoCannon() checks
-    // this date to keep the trial's leftover lives intact for the rest of
-    // that exact calendar day even if a habit gets logged afterward, but
-    // still lets the very next new day resume the normal ration reset,
-    // exactly as if the trial had never happened.
+    // separate "bank" vs "active" split): every single habit log grants +1
+    // life, capped at 7 (see grantCocoLife(), called from each toggle*()
+    // function's "marked complete" branch), and only ever spent when a crow
+    // actually reaches the bottom row. Quitting or clearing a level never
+    // costs anything, so a session can always safely resume wherever the
+    // player left off. cocoTrialGrantedOn is separate: the calendar date
+    // (or null, if never granted) of a one-time top-up to 7, the very first
+    // time Start is actually pressed (see startPlaying()), so a brand new
+    // player isn't stuck on a low life count their first session just
+    // because they haven't logged much yet.
     cocoLives:0,
-    cocoLivesDays:[],
     cocoTrialGrantedOn:null,
     cocoHighScore:0,
     // Level/score snapshot taken at the start of the run's *current* level
@@ -1828,7 +1808,6 @@ function evaluateRewards(){
     }
   }
   evaluateSightings();
-  evaluateCocoCannon();
   // Passive backfill, safe to run every load: if a habit was already
   // completed today (e.g. logged before this feature shipped, or a
   // completion restored from an older backup) but no further explicit
@@ -1839,33 +1818,25 @@ function evaluateRewards(){
   evaluateLongestStreak();
 }
 
-// Coco Cannon lives reset (not accumulate) on each new day a habit gets
-// logged: day 1 of play = 1 life, day 2 = 2, and so on up to a 7-life cap --
-// an increasing reward for continued logging, rather than a bank that just
-// trickles +1/day on top of whatever's left over from playing. Losing
-// lives in-game only ever reduces cocoLives within the same day; the next
-// new day resets it back up to that day's ration regardless of how many
-// were spent. Same one-credit-per-calendar-day cap as New Discovery/
-// Treasure Hunt (see hasCompletionToday() below) -- at most one reset per
-// day, regardless of how many habits get completed that day.
-function evaluateCocoCannon(){
+// +1 Coco Cannon life (capped at 7) and +1 banked Treasure Hunt move --
+// called from each toggle*() function's "marked complete" branch, right
+// alongside the state.carrots++ they already do, so every single log pays
+// out immediately rather than at most once/day. Un-logging doesn't claw
+// either back (same spirit as discoveryCarrots never decrementing) --
+// lives/moves already granted stay granted even if the habit is unchecked
+// again.
+function grantCocoLife(){
   if(!state.onboarded) return;
-  var t = todayStr();
-  if(state.cocoLivesDays.indexOf(t)===-1 && hasCompletionToday(state)){
-    state.cocoLivesDays.push(t);
-    // The one-time trial bonus (see startPlaying()) stays intact for the
-    // rest of the exact calendar day it was granted, even if today's
-    // ration gets credited (or credited late) that same day -- only a
-    // genuinely later day resumes the normal reset-to-ration behavior.
-    if(state.cocoTrialGrantedOn !== t){
-      state.cocoLives = Math.min(7, state.cocoLivesDays.length);
-    }
-  }
+  state.cocoLives = Math.min(7, state.cocoLives+1);
+}
+function grantTreasureMove(){
+  if(!state.onboarded) return;
+  state.treasureMovesAvailable++;
 }
 
 // A general, type-agnostic "was the player active on day X" record --
-// separate from cocoLivesDays/treasureMoveDays/discoveryCarrotDays (which
-// are each their own currency's day-cap) so the 7-day streak bonus below
+// separate from discoveryCarrotDays (its own currency's day-cap) so the
+// 7-day streak bonus below
 // isn't tangled up with any one reward's own bookkeeping. Marks a real,
 // direct action -- logging/unlogging a habit, creating a new habit, adding
 // a special day -- not just having the app open; called explicitly from
@@ -1908,12 +1879,11 @@ function evaluateLongestStreak(){
 }
 // Every fresh 7-day milestone (7, 14, 21, ...) of an unbroken active
 // streak earns a one-time top-up: Coco Cannon lives refilled to a full 7
-// (regardless of gameplay losses so far today) and one extra Treasure Hunt
-// move usable today (see treasureMovesAllowedToday()). streakBonusCount
-// tracks how many milestones have been rewarded so far on the *current*
-// streak -- reset to 0 the moment the streak breaks, so a brand new streak
-// earns the day-7 bonus again rather than being stuck remembering a much
-// higher watermark from before the gap.
+// (regardless of gameplay losses so far today) and +1 banked Treasure Hunt
+// move. streakBonusCount tracks how many milestones have been rewarded so
+// far on the *current* streak -- reset to 0 the moment the streak breaks,
+// so a brand new streak earns the day-7 bonus again rather than being
+// stuck remembering a much higher watermark from before the gap.
 function evaluateStreakBonus(){
   if(!state.onboarded) return;
   var streak = activeDayStreak();
@@ -1922,7 +1892,7 @@ function evaluateStreakBonus(){
   if(milestone > state.streakBonusCount){
     state.streakBonusCount = milestone;
     state.cocoLives = 7;
-    state.treasureStreakBonusDays.push(todayStr());
+    state.treasureMovesAvailable++;
     showToast("🔥 7-day streak! Bonus Coco Cannon life + Treasure Hunt move earned.");
   }
 }
@@ -2545,7 +2515,7 @@ function renderTreasureHuntCard(favorited){
   html += '<div class="reward-title">Treasure Hunt</div>';
   html += '<div class="reward-desc">'+treasureStatusText()+'</div>';
   if(!state.treasureMapComplete){
-    html += '<div class="reward-desc">'+treasureMovesUsedToday()+'/'+treasureMovesAllowedToday()+' moves used today</div>';
+    html += '<div class="reward-desc">'+state.treasureMovesAvailable+' move'+(state.treasureMovesAvailable===1?'':'s')+' banked</div>';
   }
   html += '</div></div>';
   return html;
@@ -2576,8 +2546,7 @@ function renderTreasureHuntModal(){
     html += dirBtn('SW','◣')+dirBtn('S','▼')+dirBtn('SE','◢');
     html += '</div>';
     if(!canMove){
-      var allowedToday = treasureMovesAllowedToday();
-      html += '<p class="tmap-hint">Log a rHabbit today to earn your next move.<br>Up to '+allowedToday+' move'+(allowedToday===1?'':'s')+' earned per day.</p>';
+      html += '<p class="tmap-hint">Log a rHabbit to earn your next move.</p>';
     }
   }
   html += '</div></div>';
@@ -2615,7 +2584,7 @@ function renderTreasureTrialModal(){
   html += '<div class="modal celebration">';
   html += '<div class="confetti">🗺️✨</div>';
   html += '<h3>7 Free Moves!</h3>';
-  html += '<p>You\'ve got 7 moves today only, so you can explore a real chunk of the island right away. They expire tomorrow -- make them count!</p>';
+  html += '<p>You\'ve got 7 moves banked right away, so you can explore a real chunk of the island immediately. Every rHabbit you log banks another.</p>';
   html += '<button class="btn mt" data-action="ack-treasure-trial">Let\'s Go!</button>';
   html += '</div></div>';
   return html;
@@ -3503,12 +3472,11 @@ function onAction(e){
         state.screen = "treasure-hunt-modal";
         // One-time trial: the very first time the map is actually opened,
         // not just when it exists (it's always unlocked from minute one),
-        // grant 7 moves usable today only, so a brand new player can see a
-        // real chunk of the island right away instead of one tile/day --
-        // see treasureMovesAllowedToday() for how the bonus expires
-        // automatically the next calendar day.
+        // bank +7 moves right away so a brand new player can see a real
+        // chunk of the island immediately instead of waiting on logs.
         if(!state.treasureTrialGrantedOn){
           state.treasureTrialGrantedOn = todayStr();
+          state.treasureMovesAvailable += 7;
           state.pendingTreasureTrial = true;
         }
       });
@@ -3710,7 +3678,7 @@ function toggleDaily(id){
   // is always todayStr() regardless of completions, so it stays perfectly
   // reachable (and re-checking the same day reunites with it) until the
   // user deletes it explicitly from the note pop-up.
-  if(idx===-1){ h.completions.push(t); state.carrots++; }
+  if(idx===-1){ h.completions.push(t); state.carrots++; grantCocoLife(); grantTreasureMove(); }
   else { h.completions.splice(idx,1); state.carrots=Math.max(0,state.carrots-1); }
   markActiveToday();
   evaluateRewards();
@@ -3725,7 +3693,7 @@ function toggleMonthly(id){
   // while doneMonth), so a note would become genuinely unreachable while
   // unlogged this month -- deleting it here, same as toggleOnceoff(), is
   // more honest than leaving orphaned, inaccessible data.
-  if(idx===-1){ h.completions.push(m); state.carrots++; }
+  if(idx===-1){ h.completions.push(m); state.carrots++; grantCocoLife(); grantTreasureMove(); }
   else { h.completions.splice(idx,1); state.carrots=Math.max(0,state.carrots-1); deleteHabitNoteFor(h,m); }
   markActiveToday();
   evaluateRewards();
@@ -3736,7 +3704,7 @@ function toggleWeekly(id){
   var w = isoWeekStr();
   var idx = h.completions.indexOf(w);
   // Same reasoning as toggleMonthly() -- period key, note goes with it.
-  if(idx===-1){ h.completions.push(w); state.carrots++; }
+  if(idx===-1){ h.completions.push(w); state.carrots++; grantCocoLife(); grantTreasureMove(); }
   else { h.completions.splice(idx,1); state.carrots=Math.max(0,state.carrots-1); deleteHabitNoteFor(h,w); }
   markActiveToday();
   evaluateRewards();
@@ -3750,7 +3718,7 @@ function toggleEvery(id){
   // "Log Now" when due, so a re-tap always means "undo today's own log",
   // never an older logged date).
   var idx = h.completions.indexOf(t);
-  if(idx===-1){ h.completions.push(t); state.carrots++; }
+  if(idx===-1){ h.completions.push(t); state.carrots++; grantCocoLife(); grantTreasureMove(); }
   else { h.completions.splice(idx,1); state.carrots=Math.max(0,state.carrots-1); deleteHabitNoteFor(h,t); }
   markActiveToday();
   evaluateRewards();
@@ -3764,7 +3732,7 @@ function toggleOnceoff(id){
   // "today"/"this month" fallback exists for a once-off), so unlike
   // toggleDaily()/toggleMonthly() its note has to go too.
   if(h.completions.length){ deleteHabitNoteFor(h,h.completions[0]); h.completions=[]; state.carrots=Math.max(0,state.carrots-1); }
-  else { h.completions=[todayStr()]; state.carrots++; }
+  else { h.completions=[todayStr()]; state.carrots++; grantCocoLife(); grantTreasureMove(); }
   markActiveToday();
   evaluateRewards();
   save(); render();
@@ -4687,11 +4655,10 @@ function syncBottombarUI(){
    Captain Crow appears alone -- a red crow that takes 3 hits instead of 1,
    falls faster than any regular crow, and respawns rather than being
    skipped if he reaches the ground undefeated -- then it loops back to
-   level 1. cocoLives IS state.cocoLives directly (see evaluateCocoCannon()
-   above): it resets, once per day, to that day's ration (day 1 = 1 life,
-   day 2 = 2, up to 7) rather than accumulating +1 on top of whatever's
-   left, and spending only happens when a crow reaches the bottom row, so
-   quitting mid-level never costs anything.
+   level 1. cocoLives IS state.cocoLives directly (see grantCocoLife() above):
+   every single habit log adds +1, capped at 7, and spending only happens
+   when a crow reaches the bottom row, so quitting mid-level never costs
+   anything.
    ========================================================= */
 var COCO_MAX_LEVEL = 7; // Captain Crow is the encounter right after this, then it loops back to 1
 
@@ -4942,7 +4909,7 @@ function initCocoCannon(){
     overlay.classList.remove("hidden");
     overlay.innerHTML =
       '<h3>🥕 7 Free Carrots!</h3>' +
-      '<p>You\'ve got a full week\'s worth of lives today only, so you can really get a feel for the game. They expire tomorrow -- make them count!</p>' +
+      '<p>You\'ve got a full 7 lives right away, so you can really get a feel for the game. Every rHabbit you log earns another.</p>' +
       '<button class="btn" id="cocoTrialOkBtn">Let\'s Go!</button>';
     var okBtn = document.getElementById("cocoTrialOkBtn");
     if(okBtn) okBtn.addEventListener("click", function(){
