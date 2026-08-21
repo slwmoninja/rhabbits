@@ -334,6 +334,14 @@ img{max-width:100%; display:block;}
 .pip-row{display:flex; gap:6px; justify-content:center; flex-wrap:wrap; margin-top:10px;}
 .pip{font-size:1.15rem; opacity:.28; filter:grayscale(1);}
 .pip.filled{opacity:1; filter:none;}
+/* The 8th, bonus-only Coco Cannon life (see cocoLivesPipsHtml()) -- a
+   golden glow around the same 🥕 rather than trying to recolor the emoji
+   itself (emoji ignore CSS `color`), so it reads as a special/bonus pip
+   distinct from the 7 regular ones. Selector is .pip.pip-gold, not just
+   .pip-gold, so it matches .pip.filled's specificity above and actually
+   wins (a plain .pip-gold rule was silently losing to filter:none there). */
+.pip.pip-gold{filter:drop-shadow(0 0 3px var(--gold)) drop-shadow(0 0 6px var(--gold)); animation:pipGoldPulse 1.6s ease-in-out infinite;}
+@keyframes pipGoldPulse{0%,100%{transform:scale(1);} 50%{transform:scale(1.12);}}
 /* Sized to hold 7 pips on one line inside a narrow reward-card body (~190px
    usable width) without wrapping -- the plain .pip-row above is tuned for
    the wider Logbook plaque instead. */
@@ -551,6 +559,12 @@ img{max-width:100%; display:block;}
 .reward-body{padding:10px 12px 12px;}
 .reward-title{font-weight:700; color:var(--wood-dark); font-size:.86rem; margin-bottom:3px;}
 .reward-desc{color:var(--wood); font-size:.72rem; line-height:1.4; margin-bottom:6px;}
+/* Gold background rather than gold text -- gold-on-parchment text is too
+   low-contrast to read at this size, same reasoning as .due-today-badge. */
+.reward-desc-bonus{
+  display:inline-block; background:var(--gold); color:var(--wood-darker);
+  font-weight:800; padding:2px 7px; border-radius:8px; margin-bottom:6px;
+}
 .next-rewards-list{list-style:none; padding:0; margin:0; font-size:.72rem; color:var(--wood-dark); font-weight:700; line-height:1.6;}
 .reward-status{font-size:.68rem; font-weight:700;}
 .reward-status.unlocked{color:var(--leaf-deep);}
@@ -775,7 +789,7 @@ var STORAGE_KEY = "rhabbits_state_v1";
 // every future code change to this file so a reload can be visually
 // confirmed against what was actually deployed. Distinct from any
 // data-schema/localStorage version (this app has none yet).
-var APP_VERSION = "1.0+6bc363cd";
+var APP_VERSION = "1.0+f2669ed8";
 // Sorted into one logical sequence -- nature, fitness/routine, pirate/
 // nautical, then animals -- rather than grouped under separate UI headers.
 var EMOJI_CHOICES = ["🌴","🌱","☀️","🌊","🥥","🥕","🌙","💪","🏋️","🧘","🤸","📖","💊","🛏️","⛵","🏴‍☠️","🧭","⚓","🦜","🐚","🗺️","🏝️","🐶","🐕","🐩","🦮","🐕‍🦺","🐺","🐱","🐈","🐈‍⬛","🦁"];
@@ -968,6 +982,7 @@ function treasureMove(dir){
   var np = {r:p.r+d.dr, c:p.c+d.dc};
   state.treasurePos = np;
   state.treasureMovesAvailable--;
+  if(state.treasureBonusMovesAvailable>0) state.treasureBonusMovesAvailable--;
   var key = treasureCellKey(np.r, np.c);
   if(state.treasureFog.indexOf(key)===-1) state.treasureFog.push(key);
   var chestIdx = treasureChestAt(np.r, np.c);
@@ -994,6 +1009,7 @@ function treasurePlayAgain(){
   state.treasurePos = {r:TREASURE_START.r, c:TREASURE_START.c};
   state.treasureFound = [];
   state.treasureMovesAvailable = 0;
+  state.treasureBonusMovesAvailable = 0;
   state.treasureMapComplete = false;
   state.pendingTreasureFound = null;
   state.pendingMapComplete = false;
@@ -1674,6 +1690,12 @@ function defaultState(){
     // first-open trial and the 7-day streak bonus below are just one-time
     // top-ups into this same pool.
     treasureMovesAvailable:0,
+    // How many of the moves currently banked above came from the 7-day
+    // streak bonus (see evaluateStreakBonus()) -- purely so the Rewards
+    // card can flag "you've got a bonus move" with a gold star; moves
+    // themselves are fungible, so treasureMove() just decrements this
+    // alongside treasureMovesAvailable whenever it's still >0.
+    treasureBonusMovesAvailable:0,
     treasureMapComplete:false,
     pendingTreasureFound:null,
     pendingMapComplete:false,
@@ -1893,11 +1915,17 @@ function evaluateLongestStreak(){
 }
 // Every fresh 7-day milestone (7, 14, 21, ...) of an unbroken active
 // streak earns a one-time top-up: Coco Cannon lives refilled to a full 7
-// (regardless of gameplay losses so far today) and +1 banked Treasure Hunt
-// move. streakBonusCount tracks how many milestones have been rewarded so
-// far on the *current* streak -- reset to 0 the moment the streak breaks,
-// so a brand new streak earns the day-7 bonus again rather than being
-// stuck remembering a much higher watermark from before the gap.
+// (regardless of gameplay losses so far today) -- or, if regular per-log
+// grantCocoLife() had already filled all 7, an 8th *golden* life instead
+// of the bonus just being wasted on an already-full meter (see
+// .pip-gold/cocoLivesPipsHtml()). Treasure Hunt gets +1 banked move,
+// flagged as a bonus move (treasureBonusMovesAvailable) purely for the
+// golden-star indicator on its card -- it spends like any other banked
+// move, see treasureMove(). streakBonusCount tracks how many milestones
+// have been rewarded so far on the *current* streak -- reset to 0 the
+// moment the streak breaks, so a brand new streak earns the day-7 bonus
+// again rather than being stuck remembering a much higher watermark from
+// before the gap.
 function evaluateStreakBonus(){
   if(!state.onboarded) return;
   var streak = activeDayStreak();
@@ -1905,8 +1933,9 @@ function evaluateStreakBonus(){
   var milestone = Math.floor(streak/7);
   if(milestone > state.streakBonusCount){
     state.streakBonusCount = milestone;
-    state.cocoLives = 7;
+    state.cocoLives = state.cocoLives<7 ? 7 : 8;
     state.treasureMovesAvailable++;
+    state.treasureBonusMovesAvailable++;
     showToast("🔥 7-day streak! Bonus Coco Cannon life + Treasure Hunt move earned.");
   }
 }
@@ -2155,6 +2184,15 @@ function carrotPipsHtml(filled, total){
   for(var i=1;i<=total;i++){ html += '<span class="pip '+(filled>=i?'filled':'')+'">🥕</span>'; }
   return html;
 }
+// Coco Cannon's own lives meter -- same 7 regular pips as carrotPipsHtml(),
+// plus an 8th *golden* pip (see .pip-gold) only when state.cocoLives is
+// actually 8, which only ever happens via the 7-day streak bonus banking an
+// extra life on top of an already-full 7 (see evaluateStreakBonus()).
+function cocoLivesPipsHtml(){
+  var html = carrotPipsHtml(Math.min(state.cocoLives,7), 7);
+  if(state.cocoLives>7){ html += '<span class="pip pip-gold filled">🥕</span>'; }
+  return html;
+}
 
 function renderLogbookScreen(){
   var html = '<section class="screen">';
@@ -2379,24 +2417,27 @@ function renderHabitDetailModal(id){
   if(h.type==="daily"){
     var today = todayStr();
     var doneToday = h.completions.indexOf(today) !== -1;
-    var pips = '';
-    // i counts down from 6 (oldest day in the window) to 0 (today) so pips
-    // build left-to-right in calendar order -- oldest slot leftmost, today
-    // always the rightmost slot. Building today-first (i=0..6) used to put
-    // today on the *left* instead, which read as tracking going backwards:
-    // e.g. logging yesterday but not yet today would fill the 2nd slot
-    // while the 1st (today) stayed empty, worst right after restoring a
-    // backup with a few historical days already logged.
+    // A packed "how many of the last 7 days" meter, not a fixed-date strip:
+    // every day in the window that's done (or still carries a note, see
+    // below) becomes a pip, in oldest-first order, packed against the left
+    // edge -- a day simply skipped doesn't leave a gap, it just doesn't
+    // count. Trailing slots (7 minus however many had content) are plain
+    // empty placeholders with no date of their own. This means "today"
+    // only gets its outline if today itself already has content -- there's
+    // no fixed "this slot is always today" position to hang it on once
+    // gaps no longer hold their place.
+    var pips = '', filledCount = 0;
     for(var i=6;i>=0;i--){
       var d = new Date(); d.setDate(d.getDate()-i);
       var ds = localDateStr(d);
       var done = h.completions.indexOf(ds)!==-1;
-      var isToday = ds===today;
       // A note badge on the specific day it belongs to (not just today) --
       // h.notes can hold entries for past days too (nothing deletes them
       // when the day rolls over, only an explicit unlog does, see
       // deleteHabitNoteFor()).
       var hasNote = h.notes && (ds in h.notes);
+      if(!done && !hasNote) continue;
+      var isToday = ds===today;
       var pipCls = 'day-pip '+(done?'done':'')+' '+(isToday?'today':'');
       var pipInner = (done?'✓':'')+(hasNote?'<span class="day-pip-note">📝</span>':'');
       // Tapping the pip itself (not the Log/Logged button below, which
@@ -2405,12 +2446,10 @@ function renderHabitDetailModal(id){
       // before it was unchecked (unchecking no longer deletes the note,
       // see toggleDaily()), so it stays reachable until the user deletes
       // it explicitly from the note pop-up.
-      if(done || hasNote){
-        pips += '<button class="'+pipCls+'" data-action="open-habit-note" data-id="'+h.id+'" data-date="'+ds+'">'+pipInner+'</button>';
-      } else {
-        pips += '<div class="'+pipCls+'">'+pipInner+'</div>';
-      }
+      pips += '<button class="'+pipCls+'" data-action="open-habit-note" data-id="'+h.id+'" data-date="'+ds+'">'+pipInner+'</button>';
+      filledCount++;
     }
+    for(var e=filledCount; e<7; e++){ pips += '<div class="day-pip"></div>'; }
     html += '<div class="habit-week">'+pips+'</div>';
     logBtnHtml = '<button class="log-btn log-btn-sm '+(doneToday?'done':'')+'" data-action="toggle-daily" data-id="'+h.id+'">'+(doneToday?'✓ Logged Today':'Log Today  +1 🥕')+'</button>';
     metaHtml = '<div class="habit-meta">Streak: '+dailyStreak(h)+' day'+(dailyStreak(h)===1?'':'s')+'</div>';
@@ -2543,6 +2582,12 @@ function renderTreasureHuntCard(favorited){
   html += '<div class="reward-desc">'+treasureStatusText()+'</div>';
   if(!state.treasureMapComplete){
     html += '<div class="reward-desc">'+state.treasureMovesAvailable+' move'+(state.treasureMovesAvailable===1?'':'s')+' banked</div>';
+    // Flags that at least one of the moves banked above came from the 7-day
+    // streak bonus (see evaluateStreakBonus()/treasureBonusMovesAvailable) --
+    // same golden-glow treatment as Coco Cannon's bonus life pip.
+    if(state.treasureBonusMovesAvailable>0){
+      html += '<div class="reward-desc reward-desc-bonus">🌟 +'+state.treasureBonusMovesAvailable+' bonus move'+(state.treasureBonusMovesAvailable===1?'':'s')+' earned!</div>';
+    }
   }
   html += '</div></div>';
   return html;
@@ -2651,7 +2696,7 @@ function renderCocoCannonCard(favorited){
   html += '<div class="reward-body">';
   html += '<div class="reward-title">Coco Cannon</div>';
   html += '<div class="reward-desc">Defend your carrot seeds from Captain Crow and his evil garden invaders.</div>';
-  html += '<div class="pip-row compact coco-card-lives">'+carrotPipsHtml(state.cocoLives,7)+'</div>';
+  html += '<div class="pip-row compact coco-card-lives">'+cocoLivesPipsHtml()+'</div>';
   html += '</div></div>';
   return html;
 }
@@ -4882,7 +4927,7 @@ function initCocoCannon(){
     showOverlay();
   }
   function updateHud(){
-    livesEl.innerHTML = carrotPipsHtml(state.cocoLives, 7);
+    livesEl.innerHTML = cocoLivesPipsHtml();
     scoreEl.textContent = "Score: " + score;
   }
   function showOverlay(){
