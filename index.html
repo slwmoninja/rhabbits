@@ -729,7 +729,18 @@ img.reward-hero{max-height:240px; max-width:100%; margin:0 auto 10px; border-rad
   border:1px solid var(--wood-dark); font-size:1.3rem; box-shadow:0 3px 0 var(--wood-darker);
 }
 .coco-btn:active{transform:translateY(2px); box-shadow:0 1px 0 var(--wood-darker);}
-.coco-fire{background:var(--carrot); border-color:var(--carrot-deep); box-shadow:0 3px 0 var(--carrot-deep); font-size:1.5rem;}
+/* Plain red 3D button, no icon -- same red-gradient-plus-solid-offset-
+   shadow language as .add-habit-fab/.due-today-btn elsewhere, just bigger
+   and circular so it reads as the primary action next to the smaller
+   rounded-rect move buttons either side. Previously a 🥥 coconut emoji on
+   an orange .coco-btn; a plain red button reads more like an actual "fire"
+   button (arcade-style) without needing an icon at all. */
+.coco-fire{
+  width:64px; height:64px; border-radius:50%;
+  background:linear-gradient(180deg, var(--danger), #7a2318);
+  border:2px solid #5c160f; box-shadow:0 4px 0 #5c160f, var(--shadow);
+}
+.coco-fire:active{transform:translateY(3px); box-shadow:0 1px 0 #5c160f;}
 .coco-card-lives{margin-top:4px;}
 </style>
 </head>
@@ -763,7 +774,7 @@ img.reward-hero{max-height:240px; max-width:100%; margin:0 auto 10px; border-rad
   <div class="coco-lives" id="cocoLivesDisplay"></div>
   <div class="coco-controls">
     <button class="coco-btn" id="cocoLeftBtn" aria-label="Move left">◀</button>
-    <button class="coco-btn coco-fire" id="cocoFireBtn" aria-label="Fire coconut">🥥</button>
+    <button class="coco-btn coco-fire" id="cocoFireBtn" aria-label="Fire coconut"></button>
     <button class="coco-btn" id="cocoRightBtn" aria-label="Move right">▶</button>
   </div>
 </div>
@@ -794,7 +805,7 @@ var STORAGE_KEY = "rhabbits_state_v1";
 // every future code change to this file so a reload can be visually
 // confirmed against what was actually deployed. Distinct from any
 // data-schema/localStorage version (this app has none yet).
-var APP_VERSION = "1.0+6aa61e58";
+var APP_VERSION = "1.0+1d7f8a1b";
 // Sorted into one logical sequence -- nature, fitness/routine, pirate/
 // nautical, then animals -- rather than grouped under separate UI headers.
 var EMOJI_CHOICES = ["🌴","🌱","☀️","🌊","🥥","🥕","🌙","💪","🏋️","🧘","🤸","📖","💊","🛏️","⛵","🏴‍☠️","🧭","⚓","🦜","🐚","🗺️","🏝️","🐶","🐕","🐩","🦮","🐕‍🦺","🐺","🐱","🐈","🐈‍⬛","🦁"];
