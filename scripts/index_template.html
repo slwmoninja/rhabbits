@@ -433,6 +433,11 @@ img{max-width:100%; display:block;}
   color:var(--leaf-deep); background:rgba(92,122,63,.15); padding:3px 7px; border-radius:6px;
 }
 .habit-week{display:flex; gap:5px; margin-bottom:10px;}
+/* Weekly/monthly/every's "logged 7x" progress meter (see
+   habitProgressPipsHtml()) -- same left-aligned row spacing as .habit-week
+   above so it sits consistently regardless of habit type, just carrot pips
+   instead of day-checkmarks since there's no per-period note to browse. */
+.habit-progress-pips{display:flex; gap:5px; margin-bottom:10px;}
 .day-pip{
   flex:1; height:22px; border-radius:5px; background:rgba(107,69,38,.15); position:relative;
   display:flex; align-items:center; justify-content:center; font-size:.7rem; color:var(--wood);
@@ -789,7 +794,7 @@ var STORAGE_KEY = "rhabbits_state_v1";
 // every future code change to this file so a reload can be visually
 // confirmed against what was actually deployed. Distinct from any
 // data-schema/localStorage version (this app has none yet).
-var APP_VERSION = "1.0+f2669ed8";
+var APP_VERSION = "1.0+6aa61e58";
 // Sorted into one logical sequence -- nature, fitness/routine, pirate/
 // nautical, then animals -- rather than grouped under separate UI headers.
 var EMOJI_CHOICES = ["🌴","🌱","☀️","🌊","🥥","🥕","🌙","💪","🏋️","🧘","🤸","📖","💊","🛏️","⛵","🏴‍☠️","🧭","⚓","🦜","🐚","🗺️","🏝️","🐶","🐕","🐩","🦮","🐕‍🦺","🐺","🐱","🐈","🐈‍⬛","🦁"];
@@ -2193,6 +2198,18 @@ function cocoLivesPipsHtml(){
   if(state.cocoLives>7){ html += '<span class="pip pip-gold filled">🥕</span>'; }
   return html;
 }
+// "Log a habit 7x and see the progress" for weekly/monthly/every habits --
+// the same idea as the daily strip above, just without per-period notes to
+// browse (only the *current* period's note is reachable for these types,
+// via the log button itself, see the habit-detail branches below), so a
+// plain capped count meter (reusing carrotPipsHtml(), same visual language
+// as Discovery/Coco Cannon's progress pips) is enough: it fills left-to-
+// right as completions come in and simply stays full past 7 rather than
+// resetting, since these types have no repeating per-habit reward tied to
+// hitting a fresh multiple of 7.
+function habitProgressPipsHtml(h){
+  return '<div class="habit-progress-pips">'+carrotPipsHtml(Math.min(h.completions.length,7), 7)+'</div>';
+}
 
 function renderLogbookScreen(){
   var html = '<section class="screen">';
@@ -2456,15 +2473,17 @@ function renderHabitDetailModal(id){
   } else if(h.type==="monthly"){
     var m = monthStr();
     var doneMonth = h.completions.indexOf(m)!==-1;
+    html += habitProgressPipsHtml(h);
     if(doneMonth){
       logBtnHtml = '<button class="log-btn log-btn-sm done" data-action="open-habit-note" data-id="'+h.id+'">'+(habitHasNote(h)?'📝':'✓')+' Logged this month</button>';
     } else {
       logBtnHtml = '<button class="log-btn log-btn-sm" data-action="toggle-monthly" data-id="'+h.id+'">Log this Month  +1 🥕</button>';
     }
-    metaHtml = '<div class="habit-meta">'+h.completions.length+'/7 months toward next reward'+(typeof h.dayOfMonth==="number" ? ' · Target: '+h.dayOfMonth : '')+'</div>';
+    metaHtml = '<div class="habit-meta">'+h.completions.length+' month'+(h.completions.length===1?'':'s')+' logged'+(typeof h.dayOfMonth==="number" ? ' · Target: '+h.dayOfMonth : '')+'</div>';
   } else if(h.type==="weekly"){
     var w = isoWeekStr();
     var doneWeek = h.completions.indexOf(w)!==-1;
+    html += habitProgressPipsHtml(h);
     if(doneWeek){
       logBtnHtml = '<button class="log-btn log-btn-sm done" data-action="open-habit-note" data-id="'+h.id+'">'+(habitHasNote(h)?'📝':'✓')+' Logged this week</button>';
     } else {
@@ -2473,6 +2492,7 @@ function renderHabitDetailModal(id){
     metaHtml = '<div class="habit-meta">'+h.completions.length+' week'+(h.completions.length===1?'':'s')+' logged'+(typeof h.dayOfWeek==="number" ? ' · Target: '+SPECIAL_DAY_WEEKDAY_ABBR[h.dayOfWeek] : '')+'</div>';
   } else if(h.type==="every"){
     var everyDue = habitEveryDue(h);
+    html += habitProgressPipsHtml(h);
     if(!everyDue){
       logBtnHtml = '<button class="log-btn log-btn-sm done" data-action="open-habit-note" data-id="'+h.id+'">'+(habitHasNote(h)?'📝':'✓')+' Logged</button>';
       var remaining = habitEveryDaysRemaining(h);
