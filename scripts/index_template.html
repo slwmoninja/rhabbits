@@ -202,6 +202,20 @@ img{max-width:100%; display:block;}
   border:2px solid var(--gold); box-shadow:var(--shadow);
 }
 .due-today-btn:active{transform:translateY(1px);}
+/* Hand-built rather than the 📅 emoji -- most emoji fonts bake in a fixed
+   date (commonly the 17th or 31st) that never matches the real date, which
+   read as a stale/wrong day. This actually shows today's day-of-month (see
+   dueTodayIconHtml()), so it's correct every day without any lookup table. */
+.due-today-cal{
+  width:21px; height:21px; border-radius:4px; overflow:hidden;
+  background:var(--parchment-hi); box-shadow:0 1px 2px rgba(0,0,0,.35);
+  display:flex; flex-direction:column;
+}
+.due-today-cal-hdr{height:6px; background:var(--gold); flex-shrink:0;}
+.due-today-cal-day{
+  flex:1; display:flex; align-items:center; justify-content:center;
+  font-size:.66rem; font-weight:800; color:var(--wood-darker); line-height:1; font-family:inherit;
+}
 .due-today-badge{
   position:absolute; top:-4px; right:-4px; min-width:16px; height:16px; padding:0 3px;
   border-radius:8px; background:var(--gold); color:var(--wood-darker);
@@ -761,7 +775,7 @@ var STORAGE_KEY = "rhabbits_state_v1";
 // every future code change to this file so a reload can be visually
 // confirmed against what was actually deployed. Distinct from any
 // data-schema/localStorage version (this app has none yet).
-var APP_VERSION = "1.0+28d78069";
+var APP_VERSION = "1.0+6bc363cd";
 // Sorted into one logical sequence -- nature, fitness/routine, pirate/
 // nautical, then animals -- rather than grouped under separate UI headers.
 var EMOJI_CHOICES = ["🌴","🌱","☀️","🌊","🥥","🥕","🌙","💪","🏋️","🧘","🤸","📖","💊","🛏️","⛵","🏴‍☠️","🧭","⚓","🦜","🐚","🗺️","🏝️","🐶","🐕","🐩","🦮","🐕‍🦺","🐺","🐱","🐈","🐈‍⬛","🦁"];
@@ -2065,6 +2079,12 @@ function renderOnboarding(){
   );
 }
 
+// See .due-today-cal above -- a tiny two-tone square showing today's real
+// day-of-month, standing in for the 📅 emoji (whose glyph is baked to a
+// fixed date by the font/OS, not the device clock).
+function dueTodayIconHtml(){
+  return '<span class="due-today-cal"><span class="due-today-cal-hdr"></span><span class="due-today-cal-day">'+new Date().getDate()+'</span></span>';
+}
 function renderTopbar(){
   var avatarImg = state.avatar==="female" ? ASSET.avatar_female : ASSET.avatar_male;
   var html = '<header class="topbar">';
@@ -2092,7 +2112,7 @@ function renderTopbar(){
     html += '  <button class="icon-btn special-day-btn" data-action="show-special-days" aria-label="A special day is tomorrow"><span>🎂</span></button>';
   }
   if(dueCount>0){
-    html += '  <button class="icon-btn due-today-btn" data-action="show-due-today" aria-label="'+dueCount+' rHabbit'+(dueCount===1?'':'s')+' due today"><span>📅</span><span class="due-today-badge">'+dueCount+'</span></button>';
+    html += '  <button class="icon-btn due-today-btn" data-action="show-due-today" aria-label="'+dueCount+' rHabbit'+(dueCount===1?'':'s')+' due today">'+dueTodayIconHtml()+'<span class="due-today-badge">'+dueCount+'</span></button>';
   }
   if(canAddAnyHabit(state)){
     html += '  <button class="icon-btn add-habit-fab" data-action="open-add-habit" aria-label="Add a rHabbit" title="You have unlocked a new rHabbit">+</button>';
