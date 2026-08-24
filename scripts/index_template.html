@@ -359,7 +359,7 @@ img{max-width:100%; display:block;}
   width:100%; display:flex; align-items:center; gap:10px; text-align:left;
   background:linear-gradient(180deg, var(--parchment-hi), var(--parchment));
   border:1px solid var(--parchment-edge); border-radius:9px;
-  padding:10px 12px; margin-bottom:8px;
+  padding:10px 12px; margin-bottom:8px; cursor:pointer;
 }
 .habit-row:active{transform:translateY(1px);}
 /* Alarm is set from inside the habit detail modal now (see
@@ -371,7 +371,14 @@ img{max-width:100%; display:block;}
    fill behind it isn't achievable with the emoji glyph. */
 .habit-alarm-indicator{flex-shrink:0; color:var(--leaf-bright); display:flex; align-items:center; background:transparent;}
 .due-today-empty{color:var(--wood); font-size:.9rem; text-align:center; padding:12px 0 4px;}
-.habit-status{width:30px; flex-shrink:0; text-align:center; font-size:1rem;}
+/* Doubles as a <button> when the habit can be checked/unchecked straight
+   from the card (see renderHabitCard()) -- background/border/padding/margin
+   reset back down to nothing, same as .habit-emoji-btn, since the base
+   `button{}` rule only resets font-family/cursor, not full button chrome. */
+.habit-status{
+  width:30px; flex-shrink:0; text-align:center; font-size:1rem;
+  background:none; border:none; padding:0; margin:0; cursor:pointer;
+}
 .habit-status.done{color:var(--leaf-bright); font-weight:800; font-size:1.15rem;}
 .habit-status.streak{font-size:.8rem; font-weight:700; color:var(--carrot-deep);}
 .habit-status.idle::after{content:""; display:inline-block; width:8px; height:8px; border-radius:50%; border:1.5px solid var(--parchment-edge);}
@@ -826,7 +833,7 @@ var STORAGE_KEY = "rhabbits_state_v1";
 // every future code change to this file so a reload can be visually
 // confirmed against what was actually deployed. Distinct from any
 // data-schema/localStorage version (this app has none yet).
-var APP_VERSION = "1.0+986b4060";
+var APP_VERSION = "1.0+f9b27efe";
 // Sorted into one logical sequence -- nature, fitness/routine, pirate/
 // nautical, then animals -- rather than grouped under separate UI headers.
 var EMOJI_CHOICES = ["🌴","🌱","☀️","🌊","🥥","🥕","🌙","💪","🏋️","🧘","🤸","📖","💊","🛏️","⛵","🏴‍☠️","🧭","⚓","🦜","🐚","🗺️","🏝️","🐶","🐕","🐩","🦮","🐕‍🦺","🐺","🐱","🐈","🐈‍⬛","🦁"];
@@ -2430,25 +2437,49 @@ function alarmIconSvg(size){
     '<path d="M19 5l-2.2 2.2"/>' +
   '</svg>';
 }
+// Maps each habit type to the toggle-* action already wired in onAction()
+// for the detail modal's Log/Logged button -- reused here so the card's
+// status circle (see renderHabitCard()) can check/uncheck a habit through
+// the exact same, already-correct toggle logic.
+var HABIT_TOGGLE_ACTION = {daily:"toggle-daily", weekly:"toggle-weekly", monthly:"toggle-monthly", onceoff:"toggle-onceoff", every:"toggle-every"};
 function renderHabitCard(h){
   var badge = habitTypeBadge(h);
   var logged = habitLogged(h);
-  var status = logged ? '<span class="habit-status done">✓</span>'
-    : (h.type==="daily" && dailyStreak(h)>0) ? '<span class="habit-status streak">🔥'+dailyStreak(h)+'</span>'
-    : '<span class="habit-status idle"></span>';
+  var streak = h.type==="daily" ? dailyStreak(h) : 0;
+  var statusCls = 'habit-status '+(logged?'done':(streak>0?'streak':'idle'));
+  var statusInner = logged ? '✓' : (streak>0 ? '🔥'+streak : '');
+  // "every" only toggles safely from here while due -- toggleEvery() always
+  // targets *today's* date, but an "every" habit already logged this cycle
+  // may have been logged on an earlier day, so tapping it off-cycle would
+  // add a stray new completion instead of undoing the real one (same reason
+  // renderHabitDetailModal()'s log-btn only shows "Log Now" while due,
+  // swapping to a plain note button once logged). Every other type's toggle
+  // operates on a period key (today/this week/this month/ever), not a
+  // specific date, so it's unambiguous to flip either direction any time.
+  var canToggle = h.type!=="every" || habitEveryDue(h);
+  var status = canToggle
+    ? '<button class="'+statusCls+'" data-action="'+HABIT_TOGGLE_ACTION[h.type]+'" data-id="'+h.id+'" aria-label="'+(logged?'Mark not done':'Mark done')+'">'+statusInner+'</button>'
+    : '<span class="'+statusCls+'">'+statusInner+'</span>';
   // Alarm is set from inside the habit detail modal (renderHabitDetailModal())
   // -- this row only shows a small green indicator when one is set, and
   // takes up no space at all when it isn't, so rows without an alarm stay
   // exactly as compact as before.
   var alarmIndicator = h.alarmTime ? '<span class="habit-alarm-indicator" aria-label="Alarm set for '+escapeAttr(formatAlarmTime(h.alarmTime))+'">'+alarmIconSvg("16")+'</span>' : '';
+  // A <div>, not a <button>, now that it wraps the status circle's own
+  // <button> above -- a button can't nest another button. Still carries
+  // data-action/data-id so the existing generic [data-action] click wiring
+  // (see wireEvents()) opens the detail view the same as before for a tap
+  // anywhere else on the row (see the toggle-* cases' e.stopPropagation()
+  // in onAction(), which keeps a status-circle tap from also bubbling up
+  // and opening detail).
   return (
-    '<button class="habit-row" data-action="show-habit-detail" data-id="'+h.id+'">' +
+    '<div class="habit-row" data-action="show-habit-detail" data-id="'+h.id+'">' +
       '<span class="habit-emoji">'+h.emoji+'</span>' +
       '<span class="habit-name">'+escapeHtml(h.name)+'</span>' +
       alarmIndicator +
       '<span class="habit-type-badge">'+badge+'</span>' +
       status +
-    '</button>'
+    '</div>'
   );
 }
 
@@ -3705,19 +3736,29 @@ function onAction(e){
     case "confirm-add-habit":
       addHabit();
       break;
+    // Also reachable straight from the habit card's status circle (see
+    // renderHabitCard()), nested inside that card's own show-habit-detail
+    // element -- stop the click from also bubbling up and opening the
+    // detail modal. Harmless no-op when reached from the detail modal's own
+    // Log/Logged button instead, which has no such ancestor listener.
     case "toggle-daily":
+      e.stopPropagation();
       toggleDaily(el.getAttribute("data-id"));
       break;
     case "toggle-monthly":
+      e.stopPropagation();
       toggleMonthly(el.getAttribute("data-id"));
       break;
     case "toggle-onceoff":
+      e.stopPropagation();
       toggleOnceoff(el.getAttribute("data-id"));
       break;
     case "toggle-weekly":
+      e.stopPropagation();
       toggleWeekly(el.getAttribute("data-id"));
       break;
     case "toggle-every":
+      e.stopPropagation();
       toggleEvery(el.getAttribute("data-id"));
       break;
     case "open-habit-note":
