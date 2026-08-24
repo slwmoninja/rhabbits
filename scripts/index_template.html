@@ -153,7 +153,7 @@ img{max-width:100%; display:block;}
 .freq-every-inputs{display:flex; gap:8px;}
 .freq-every-inputs input[type=number]{width:80px; flex-shrink:0;}
 .freq-every-inputs select{flex:1;}
-.emoji-picker{display:flex; flex-wrap:wrap; gap:8px; max-width:340px; margin:0 auto 18px; justify-content:center;}
+.emoji-picker{display:flex; flex-wrap:wrap; gap:1px; max-width:340px; margin:0 auto 18px; justify-content:center;}
 .emoji-opt{
   width:42px; height:42px; border-radius:10px; border:2px solid transparent;
   background:transparent; font-size:1.3rem; display:flex; align-items:center; justify-content:center;
@@ -661,14 +661,36 @@ img{max-width:100%; display:block;}
 .modal h3{color:var(--wood-dark);}
 .modal-close{float:right; background:none; border:none; font-size:1.3rem; color:var(--wood); line-height:1;}
 .type-picker{display:flex; flex-direction:column; gap:8px; margin-bottom:18px;}
-.type-opt{
-  display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:9px;
-  background:rgba(107,69,38,.08); border:1px solid transparent;
+/* Once/Daily/Weekly/Monthly/Every X frequency picker -- a single horizontal
+   slider instead of a stacked list of full-width buttons (former .type-opt),
+   so a 3-5-way choice takes one row instead of 3-5. */
+.freq-slider{padding:10px 12px; border-radius:9px; background:rgba(107,69,38,.08);}
+.freq-slider-label{display:flex; align-items:baseline; justify-content:space-between; gap:8px;}
+.freq-slider-label .freq-slider-title{font-weight:700; color:var(--wood-dark); font-size:.92rem;}
+.freq-slider-label .freq-slider-sub{font-size:.72rem; color:var(--wood);}
+.freq-slider-label.disabled .freq-slider-sub{color:var(--carrot-deep);}
+.freq-slider input[type=range]{
+  -webkit-appearance:none; appearance:none; width:100%; height:6px; border-radius:4px;
+  background:var(--parchment-edge); outline:none; margin:10px 0 4px; display:block;
 }
-.type-opt.selected{border-color:var(--carrot); background:rgba(224,123,46,.14);}
-.type-opt.disabled{opacity:.45;}
-.type-opt .t-title{font-weight:700; color:var(--wood-dark); font-size:.92rem;}
-.type-opt .t-sub{font-size:.72rem; color:var(--wood);}
+.freq-slider input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none; appearance:none; width:22px; height:22px; border-radius:50%;
+  background:linear-gradient(180deg, var(--carrot), var(--carrot-deep));
+  border:2px solid var(--parchment-hi); box-shadow:0 2px 4px rgba(0,0,0,.3); cursor:pointer;
+}
+.freq-slider input[type=range]::-moz-range-track{background:var(--parchment-edge); height:6px; border-radius:4px;}
+.freq-slider input[type=range]::-moz-range-thumb{
+  width:22px; height:22px; border-radius:50%; background:linear-gradient(180deg, var(--carrot), var(--carrot-deep));
+  border:2px solid var(--parchment-hi); box-shadow:0 2px 4px rgba(0,0,0,.3); cursor:pointer;
+}
+.freq-slider-ticks{display:flex; justify-content:space-between; padding:0 2px;}
+/* Real <button>s (see renderAddHabitModal()) so ticks are tappable, styled
+   back down to look like the plain text labels they replaced. */
+.freq-slider-tick{
+  flex:1; text-align:center; font-size:.64rem; color:var(--wood); white-space:nowrap;
+  background:none; border:none; padding:6px 0; margin:0; font-family:inherit; cursor:pointer;
+}
+.freq-slider-tick.disabled{opacity:.45;}
 
 .celebration{text-align:center;}
 .celebration .confetti{font-size:2rem; margin-bottom:6px;}
@@ -805,7 +827,7 @@ var STORAGE_KEY = "rhabbits_state_v1";
 // every future code change to this file so a reload can be visually
 // confirmed against what was actually deployed. Distinct from any
 // data-schema/localStorage version (this app has none yet).
-var APP_VERSION = "1.0+1d7f8a1b";
+var APP_VERSION = "1.0+9b95d636";
 // Sorted into one logical sequence -- nature, fitness/routine, pirate/
 // nautical, then animals -- rather than grouped under separate UI headers.
 var EMOJI_CHOICES = ["🌴","🌱","☀️","🌊","🥥","🥕","🌙","💪","🏋️","🧘","🤸","📖","💊","🛏️","⛵","🏴‍☠️","🧭","⚓","🦜","🐚","🗺️","🏝️","🐶","🐕","🐩","🦮","🐕‍🦺","🐺","🐱","🐈","🐈‍⬛","🦁"];
@@ -2038,6 +2060,13 @@ function unlockStarterRewards(){
 
 /* ---------------- rendering ---------------- */
 var root = document.getElementById("app");
+// See renderPreservingModalScroll() -- set true for the one render() call it
+// makes, so wireEvents() knows to leave #addHabitName's focus alone.
+var skipAddHabitAutofocus = false;
+// The type/frequency slider's steps (see renderAddHabitModal()), cached here
+// so wireEvents() can map a dragged index back to {type,title,sub} without
+// recomputing habit counts itself.
+var addHabitTypeStepsCache = null;
 
 function render(){
   root.innerHTML = state.onboarded ? renderApp() : renderOnboarding();
@@ -2062,7 +2091,13 @@ function render(){
 function renderPreservingModalScroll(){
   var modalEl = document.querySelector(".modal");
   var scrollTop = modalEl ? modalEl.scrollTop : 0;
+  // wireEvents() unconditionally autofocuses #addHabitName on every render
+  // (see below) -- fine for the modal's initial open, but here it would
+  // steal focus right back off the subfield the user just revealed. Suppress
+  // it for this one render; the subfield's own control gets focus instead.
+  skipAddHabitAutofocus = true;
   render();
+  skipAddHabitAutofocus = false;
   modalEl = document.querySelector(".modal");
   if(!modalEl) return;
   // Last, not first: a type can reveal more than one .freq-subfield at once
@@ -2071,7 +2106,13 @@ function renderPreservingModalScroll(){
   // that the user just brought into existence and needs to see.
   var subfields = modalEl.querySelectorAll(".freq-subfield");
   if(subfields.length){
-    subfields[subfields.length-1].scrollIntoView({block:"center", behavior:"auto"});
+    var lastSubfield = subfields[subfields.length-1];
+    lastSubfield.scrollIntoView({block:"center", behavior:"auto"});
+    // Land the cursor on the actual next choice (day-of-week select, etc.)
+    // instead of just scrolling it into view -- preventScroll so this
+    // doesn't fight the manual scrollIntoView above.
+    var focusTarget = lastSubfield.querySelector("select, input");
+    if(focusTarget) focusTarget.focus({preventScroll:true});
   } else {
     modalEl.scrollTop = scrollTop;
   }
@@ -3043,6 +3084,36 @@ function renderAddHabitModal(){
     d.type = !monthlyDisabled ? "monthly" : (!onceoffDisabled ? "onceoff" : (!weeklyDisabled ? "weekly" : (!everyDisabled ? "every" : "daily")));
   }
 
+  // Once/Daily/Weekly/Monthly/Every X used to be a stacked list of one
+  // full-width button per type (see former typeOptRow()) -- a lot of
+  // vertical space for a 3-5-way choice. A single slider covers the same
+  // ground in one row; steps[] is cached on the module so wireEvents() can
+  // read it back (both for the live label update while dragging, and to map
+  // the committed index to a type on release) without recomputing counts.
+  var steps;
+  if(!typesUnlocked){
+    // Pre-unlock: the original 3-way picker, unchanged in spirit -- just
+    // re-pointed at the reward that now actually gates it (see the
+    // second_garden REWARDS entry, which folded in the old 28-day gate).
+    steps = [
+      {type:"daily", title:"Daily", sub:dailyCount+"/"+dailyMax+" rHabbits used", disabled:dailyDisabled},
+      {type:"monthly", title:"Monthly", sub:"🔒 Unlocks at 7 carrots", disabled:true},
+      {type:"onceoff", title:"Once-off", sub:"🔒 Unlocks at 7 carrots", disabled:true}
+    ];
+  } else {
+    steps = [
+      {type:"onceoff", title:"Once", sub:onceoffCount+"/"+onceoffMax+" used", disabled:onceoffDisabled},
+      {type:"daily", title:"Daily", sub:dailyCount+"/"+dailyMax+" rHabbits used", disabled:dailyDisabled},
+      {type:"weekly", title:"Weekly", sub:weeklyCount+"/"+weeklyMax+" used", disabled:weeklyDisabled},
+      {type:"monthly", title:"Monthly", sub:monthlyCount+"/"+monthlyMax+" used", disabled:monthlyDisabled},
+      {type:"every", title:"Every X", sub:everyCount+"/"+everyMax+" used", disabled:everyDisabled}
+    ];
+  }
+  addHabitTypeStepsCache = steps;
+  var curIndex = 0;
+  for(var si=0; si<steps.length; si++){ if(steps[si].type===d.type){ curIndex=si; break; } }
+  var curStep = steps[curIndex];
+
   var html = '<div class="modal-backdrop" data-backdrop="add-habit">';
   html += '<div class="modal">';
   html += '<button class="modal-close" data-action="close-modal">✕</button>';
@@ -3050,32 +3121,29 @@ function renderAddHabitModal(){
   html += '<div class="field"><label>Name</label><input type="text" id="addHabitName" maxlength="40" placeholder="e.g. Stretch for 5 minutes" value="'+escapeAttr(d.name)+'"></div>';
   html += '<div class="field"><label><span style="text-transform:lowercase">r</span>Habbit description (optional)</label><textarea id="addHabitDescription" maxlength="140" placeholder="e.g. Right after brushing my teeth">'+escapeHtml(d.description)+'</textarea></div>';
   html += '<div class="type-picker">';
-  if(!typesUnlocked){
-    // Pre-unlock: the original 3-way picker, unchanged in spirit -- just
-    // re-pointed at the reward that now actually gates it (see the
-    // second_garden REWARDS entry, which folded in the old 28-day gate).
-    html += typeOptRow("daily","Daily", dailyCount+"/"+dailyMax+" rHabbits used", d.type==="daily", dailyDisabled);
-    html += typeOptRow("monthly","Monthly", "🔒 Unlocks at 7 carrots", d.type==="monthly", monthlyDisabled);
-    html += typeOptRow("onceoff","Once-off", "🔒 Unlocks at 7 carrots", d.type==="onceoff", onceoffDisabled);
-  } else {
-    html += typeOptRow("onceoff","Once", onceoffCount+"/"+onceoffMax+" used", d.type==="onceoff", onceoffDisabled);
+  html += '<div class="freq-slider">';
+  html += '<div class="freq-slider-label'+(curStep.disabled?' disabled':'')+'"><span class="freq-slider-title">'+curStep.title+'</span><span class="freq-slider-sub">'+curStep.sub+'</span></div>';
+  html += '<input type="range" id="addHabitTypeSlider" min="0" max="'+(steps.length-1)+'" step="1" value="'+curIndex+'">';
+  // Buttons, not spans -- tapping a tick's label is a much bigger, easier
+  // target than the 6px-tall range track itself, and jumps straight to that
+  // step (see the "freq-slider-tick" click wiring in wireEvents()) rather
+  // than requiring a drag.
+  html += '<div class="freq-slider-ticks">' + steps.map(function(s,i){return '<button type="button" class="freq-slider-tick'+(s.disabled?' disabled':'')+'" data-index="'+i+'">'+s.title+'</button>';}).join('') + '</div>';
+  html += '</div>';
+  if(typesUnlocked){
     if(d.type==="onceoff"){
       html += '<div class="field freq-subfield"><label>Due date</label><input type="date" id="addHabitDueDate" value="'+escapeAttr(d.dueDate||todayStr())+'"></div>';
     }
-    html += typeOptRow("daily","Daily", dailyCount+"/"+dailyMax+" rHabbits used", d.type==="daily", dailyDisabled);
-    html += typeOptRow("weekly","Weekly", weeklyCount+"/"+weeklyMax+" used", d.type==="weekly", weeklyDisabled);
     if(d.type==="weekly"){
       html += '<div class="field freq-subfield"><label>Day of week</label><select id="addHabitWeekday">' +
         SPECIAL_DAY_WEEKDAY_ABBR.map(function(name,i){return '<option value="'+i+'"'+(d.dayOfWeek===i?' selected':'')+'>'+name+'</option>';}).join('') +
       '</select></div>';
     }
-    html += typeOptRow("monthly","Monthly", monthlyCount+"/"+monthlyMax+" used", d.type==="monthly", monthlyDisabled);
     if(d.type==="monthly"){
       html += '<div class="field freq-subfield"><label>Day of month</label><select id="addHabitDayOfMonth">' +
         dayOfMonthOptionsHtml(d.dayOfMonth) +
       '</select></div>';
     }
-    html += typeOptRow("every","Every X", everyCount+"/"+everyMax+" used", d.type==="every", everyDisabled);
     if(d.type==="every"){
       // "years" is the one unit where 1 is a meaningful, common value (an
       // annual habit -- a checkup, a renewal) rather than a duplicate of
@@ -3123,11 +3191,6 @@ function dayOfMonthOptionsHtml(selected){
     html += '<option value="'+day+'"'+(selected===day?' selected':'')+'>'+day+'</option>';
   }
   return html;
-}
-function typeOptRow(value,title,sub,selected,disabled){
-  return '<button class="type-opt '+(selected?'selected':'')+' '+(disabled?'disabled':'')+'" data-action="pick-type" data-type="'+value+'" '+(disabled?'disabled':'')+'>' +
-    '<div><div class="t-title">'+title+'</div><div class="t-sub">'+sub+'</div></div>' +
-  '</button>';
 }
 
 // Shared by the two Profile holiday toggles below -- a labeled row with a
@@ -3321,11 +3384,50 @@ function wireEvents(){
       var btn = root.querySelector('[data-action="confirm-add-habit"]');
       if(btn) btn.disabled = !e.target.value.trim();
     });
-    addNameInput.focus();
+    if(!skipAddHabitAutofocus) addNameInput.focus();
   }
   var addDescInput = root.querySelector("#addHabitDescription");
   if(addDescInput){
     addDescInput.addEventListener("input", function(e){ state._draft.description = e.target.value; });
+  }
+  var typeSlider = root.querySelector("#addHabitTypeSlider");
+  if(typeSlider){
+    var typeSliderLabel = root.querySelector(".freq-slider-label");
+    typeSlider.addEventListener("input", function(e){
+      // Fires continuously while dragging. A full render() here would tear
+      // down and rebuild this very <input> mid-drag (render() replaces the
+      // whole modal via innerHTML) and kill the gesture, so this only pokes
+      // the label text directly instead -- the type itself, and the subfield
+      // it reveals, only commit on "change" below.
+      var step = addHabitTypeStepsCache && addHabitTypeStepsCache[parseInt(e.target.value,10)];
+      if(step && typeSliderLabel){
+        typeSliderLabel.className = "freq-slider-label"+(step.disabled?" disabled":"");
+        typeSliderLabel.innerHTML = '<span class="freq-slider-title">'+step.title+'</span><span class="freq-slider-sub">'+step.sub+'</span>';
+      }
+    });
+    typeSlider.addEventListener("change", function(e){
+      // Fires once the drag is released (or on each arrow-key step, or a
+      // tick tap below dispatches one directly) -- that's "landing" on a
+      // choice, so this is where the type actually commits and its day/date
+      // subfield appears. renderPreservingModalScroll() re-centers the modal
+      // on that freshly revealed subfield.
+      var step = addHabitTypeStepsCache && addHabitTypeStepsCache[parseInt(e.target.value,10)];
+      if(step){
+        state._draft.type = step.type;
+        renderPreservingModalScroll();
+      }
+    });
+    // Tapping a tick's label is a bigger, easier target than dragging the
+    // thumb -- jump the slider straight to that step and replay the same
+    // "change" handling above via a real dispatched event, rather than
+    // duplicating the commit logic here.
+    var typeTicks = root.querySelectorAll(".freq-slider-tick");
+    typeTicks.forEach(function(tickBtn){
+      tickBtn.addEventListener("click", function(){
+        typeSlider.value = tickBtn.getAttribute("data-index");
+        typeSlider.dispatchEvent(new Event("change"));
+      });
+    });
   }
   // Once/Every X sub-fields (see renderAddHabitModal()) -- only present in
   // the DOM while that option is actually selected, same pattern as the
@@ -3492,11 +3594,6 @@ function onAction(e){
     case "pick-special-day-icon":
       state._specialDayDraft.icon = el.getAttribute("data-icon");
       render();
-      break;
-    case "pick-type":
-      if(el.hasAttribute("disabled")) return;
-      state._draft.type = el.getAttribute("data-type");
-      renderPreservingModalScroll();
       break;
     case "finish-onboarding":
       finishOnboarding();
