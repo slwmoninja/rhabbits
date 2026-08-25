@@ -833,7 +833,7 @@ var STORAGE_KEY = "rhabbits_state_v1";
 // every future code change to this file so a reload can be visually
 // confirmed against what was actually deployed. Distinct from any
 // data-schema/localStorage version (this app has none yet).
-var APP_VERSION = "1.0+54eb9106";
+var APP_VERSION = "1.0+ad82eb5e";
 // Sorted into one logical sequence -- nature, fitness/routine, pirate/
 // nautical, then animals -- rather than grouped under separate UI headers.
 var EMOJI_CHOICES = ["🌴","🌱","☀️","🌊","🥥","🥕","🌙","💪","🏋️","🧘","🤸","📖","💊","🛏️","⛵","🏴‍☠️","🧭","⚓","🦜","🐚","🗺️","🏝️","🐶","🐕","🐩","🦮","🐕‍🦺","🐺","🐱","🐈","🐈‍⬛","🦁"];
@@ -3273,6 +3273,17 @@ function renderProfileModal(){
   html += settingsChipHtml("toggle-us-holidays", "🇺🇸 USA holidays", state.showUSHolidays);
   html += settingsChipHtml("toggle-sa-holidays", "🇿🇦 RSA holidays", state.showSAHolidays);
   html += '</div>';
+  // Covers the gap before beforeinstallprompt happens to fire again after a
+  // real Home Screen uninstall (site storage isn't cleared by an OS-level
+  // uninstall, so installPromptAccepted can be stuck true with no other
+  // signal a page can see). Only shown in the exact ambiguous state -- not
+  // actually running standalone, but the flag still says installed --
+  // since legitimately-installed-but-viewing-in-a-tab looks identical to
+  // stale-flag-after-uninstall from here. Tapping it clears the flag and
+  // re-renders immediately, handing the real Install pill back.
+  if(!isStandaloneApp() && state.installPromptAccepted){
+    html += '<button data-action="reset-install-status" style="display:block; width:100%; text-align:left; background:none; border:none; padding:4px 0; margin-bottom:10px; color:var(--wood); font-size:.78rem; text-decoration:underline; cursor:pointer;">Not on your Home Screen? Reset install status</button>';
+  }
   html += '<input type="file" id="profileRestoreInput" accept="application/json,.json" class="hidden">';
   html += '<div style="margin-top:18px; padding-top:14px; border-top:1px solid var(--parchment-edge); display:flex; justify-content:space-between; font-size:.78rem; color:var(--wood);">';
   html += '<span>Version</span><span>'+APP_VERSION+'</span>';
@@ -3841,6 +3852,10 @@ function onAction(e){
       if(isInstalled()){ openInfoModal("Uninstall", UNINSTALL_STEPS_HTML); }
       else { triggerInstall(); }
       break;
+    case "reset-install-status":
+      state.installPromptAccepted = false;
+      save(); render();
+      break;
     case "backup-now":
       backupNow();
       break;
@@ -4309,6 +4324,19 @@ var deferredInstallPrompt = null;
 window.addEventListener("beforeinstallprompt", function(e){
   e.preventDefault();
   deferredInstallPrompt = e;
+  // Chrome only fires this event when it believes rHabbits is NOT currently
+  // installed for this origin -- that's the one reliable signal that a
+  // stuck-true installPromptAccepted flag is stale. Site storage survives an
+  // OS-level Home Screen uninstall (that's what leaves the flag stuck true
+  // in the first place), so without this the Install pill would keep
+  // reporting installed forever after a real uninstall, hiding the real
+  // Install button everywhere except Profile. See also the manual "Reset
+  // install status" escape hatch in renderProfileModal(), which covers the
+  // gap before this event happens to fire again.
+  if(state.installPromptAccepted){
+    state.installPromptAccepted = false;
+    save();
+  }
   render();
 });
 window.addEventListener("appinstalled", function(){
