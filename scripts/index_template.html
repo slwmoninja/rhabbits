@@ -158,6 +158,15 @@ img{max-width:100%; display:block;}
   background:transparent; font-size:0.68rem; display:flex; align-items:center; justify-content:center;
 }
 .emoji-opt.selected{border-color:var(--gold); background:rgba(198,153,47,.25);}
+/* Compact MTWTFSS weekly-habit day picker -- one row, no wrapping, roughly
+   the same footprint as the single-day <select> it replaced. */
+.weekday-picker{display:flex; gap:4px;}
+.weekday-opt{
+  flex:1; height:30px; border-radius:6px; border:1px solid var(--parchment-edge);
+  background:transparent; color:var(--wood); font-size:.78rem; font-weight:700;
+  display:flex; align-items:center; justify-content:center;
+}
+.weekday-opt.selected{border-color:var(--gold); background:rgba(198,153,47,.25); color:var(--wood-dark);}
 
 /* ---------- App shell ---------- */
 .topbar{
@@ -833,10 +842,10 @@ var STORAGE_KEY = "rhabbits_state_v1";
 // every future code change to this file so a reload can be visually
 // confirmed against what was actually deployed. Distinct from any
 // data-schema/localStorage version (this app has none yet).
-var APP_VERSION = "1.0+ad82eb5e";
+var APP_VERSION = "1.0+23e6cc74";
 // Sorted into one logical sequence -- nature, fitness/routine, pirate/
 // nautical, then animals -- rather than grouped under separate UI headers.
-var EMOJI_CHOICES = ["🌴","🌱","☀️","🌊","🥥","🥕","🌙","💪","🏋️","🧘","🤸","📖","💊","🛏️","⛵","🏴‍☠️","🧭","⚓","🦜","🐚","🗺️","🏝️","🐶","🐕","🐩","🦮","🐕‍🦺","🐺","🐱","🐈","🐈‍⬛","🦁"];
+var EMOJI_CHOICES = ["🌴","🌱","☀️","🌊","🥥","🥕","🌙","💪","🏋️","🧘","🤸","📖","💊","🛏️","⛵","🏴‍☠️","🧭","⚓","🦜","🐚","🗺️","🏝️","🐶","🐕","🐩","🦮","🐕‍🦺","🐺","🐱","🐈","🐈‍⬛","🦁","💄","💅","💎","👑"];
 
 var REWARDS = [
   {
@@ -1568,6 +1577,12 @@ function specialDayIcon(sd){
   return "🎂";
 }
 var SPECIAL_DAY_WEEKDAY_ABBR = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+// Monday-first day order/letters for the compact weekly-habit day picker
+// (see the "Days of week" MTWTFSS row in renderAddHabitModal()) -- getDay()
+// values in the order they should read left to right, and single-letter
+// labels lined up with that same order (title attr carries the full name).
+var WEEKDAY_MON_FIRST_ORDER = [1,2,3,4,5,6,0];
+var WEEKDAY_MON_FIRST_LETTERS = ["M","T","W","T","F","S","S"];
 var SPECIAL_DAY_MONTH_ABBR = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 function specialDayDateLabel(sd){
   var year = new Date().getFullYear();
@@ -1682,7 +1697,7 @@ function freshHabitDraft(){
     dueDate: todayStr(),
     everyUnit: "days",
     everyN: 2,
-    dayOfWeek: new Date().getDay(),
+    daysOfWeek: [new Date().getDay()],
     dayOfMonth: new Date().getDate(),
     annualMonth: new Date().getMonth()+1,
     annualDay: new Date().getDate()
@@ -1791,7 +1806,7 @@ function defaultState(){
     screen:"logbook",
     pendingCelebration:null,
     toast:null,
-    _draft:{ name:"", emoji:"🌴", type:"daily", description:"", dueDate:todayStr(), everyUnit:"days", everyN:2, dayOfWeek:new Date().getDay(), dayOfMonth:new Date().getDate(), annualMonth:new Date().getMonth()+1, annualDay:new Date().getDate() },
+    _draft:{ name:"", emoji:"🌴", type:"daily", description:"", dueDate:todayStr(), everyUnit:"days", everyN:2, daysOfWeek:[new Date().getDay()], dayOfMonth:new Date().getDate(), annualMonth:new Date().getMonth()+1, annualDay:new Date().getDate() },
     _detailHabitId:null,
     _detailEmojiPickerOpen:false,
     _detailRewardId:null,
@@ -1826,6 +1841,14 @@ function defaultState(){
     // (New Year's, Easter, Christmas, etc.) have no region and always show.
     showUSHolidays:true,
     showSAHolidays:true,
+    // Master switch for the whole carrot/reward economy (see the Settings
+    // "🥕 Rewards" toggle) -- off hides the Rewards bottom-nav tab and the
+    // Logbook's "Carrots earned" plaque, and suppresses the "New Reward
+    // Unlocked!" celebration popup. Carrots/unlocks still accrue silently
+    // underneath either way (see evaluateRewards()), so turning it back on
+    // restores exactly where things would have been -- nothing is lost or
+    // replayed by toggling this off and on.
+    rewardsEnabled:true,
     // Which date/month key the currently-open habit-note-modal is for --
     // set by "open-habit-note" in onAction(), read by renderHabitNoteModal()
     // and the save/delete-habit-note cases.
@@ -1889,7 +1912,11 @@ function evaluateRewards(){
     if(state.unlocks[r.id]) continue;
     if(r.condition(state)){
       state.unlocks[r.id] = { unlockedAt: todayStr() };
-      state.pendingCelebration = r.id;
+      // Unlocking itself still happens either way (see rewardsEnabled's
+      // doc comment in defaultState() -- carrots/unlocks keep accruing
+      // silently while off), but there's no Rewards tab left to send the
+      // player to, so don't pop the "New Reward Unlocked!" celebration.
+      if(state.rewardsEnabled) state.pendingCelebration = r.id;
     }
   }
   evaluateSightings();
@@ -2229,6 +2256,11 @@ function renderTopbar(){
 }
 
 function renderApp(){
+  // Defensive, not just the toggle handler's redirect -- a restored backup
+  // or stale history entry could otherwise land here with rewardsEnabled
+  // false and screen still "rewards" (now nav-unreachable, see
+  // syncBottombarUI()), showing a screen there's no way back out of.
+  if(state.screen==="rewards" && !state.rewardsEnabled){ state.screen = "logbook"; }
   var html = '';
   html += renderTopbar();
   html += state.screen==="rewards" ? renderRewardsScreen() : renderLogbookScreen();
@@ -2276,21 +2308,27 @@ function habitProgressPipsHtml(h){
 
 function renderLogbookScreen(){
   var html = '<section class="screen">';
-  html += '<div class="plaque-wrap"><div class="plaque">';
-  html += '<span class="plaque-rivet tl"></span><span class="plaque-rivet tr"></span><span class="plaque-rivet bl"></span><span class="plaque-rivet br"></span>';
-  html += '<div class="plaque-label">Carrots earned</div>';
-  // Generic 7-carrot cycle progress -- used to point specifically at
-  // second_garden (7 carrots for a 2nd habit slot) back when that was
-  // the gate; now that it's a starter unlock, this is just a running
-  // visual of carrot-earning pace rather than progress toward one
-  // specific reward.
-  html += '<div class="pip-row">'+carrotPipsHtml(state.carrots%7,7)+'</div>';
-  // Used to be "Next: <locked reward> + Discovery + Streak Bonus" --
-  // dropped in favor of the all-time streak record (state.longestActiveStreak,
-  // see evaluateLongestStreak()) since what's next to unlock already has its
-  // own home on the Rewards tab, and doesn't need repeating here too.
-  html += '<div class="plaque-progress-text">Longest Daily Streak: '+state.longestActiveStreak+'</div>';
-  html += '</div></div>';
+  // "Carrots earned" plaque is entirely reward-economy UI (the count itself,
+  // plus the streak stat framed as the reward-adjacent "what's next" line),
+  // so the whole card -- not just the carrot count -- goes away with the
+  // Settings "🥕 Rewards" toggle off, freeing that space back up.
+  if(state.rewardsEnabled){
+    html += '<div class="plaque-wrap"><div class="plaque">';
+    html += '<span class="plaque-rivet tl"></span><span class="plaque-rivet tr"></span><span class="plaque-rivet bl"></span><span class="plaque-rivet br"></span>';
+    html += '<div class="plaque-label">Carrots earned</div>';
+    // Generic 7-carrot cycle progress -- used to point specifically at
+    // second_garden (7 carrots for a 2nd habit slot) back when that was
+    // the gate; now that it's a starter unlock, this is just a running
+    // visual of carrot-earning pace rather than progress toward one
+    // specific reward.
+    html += '<div class="pip-row">'+carrotPipsHtml(state.carrots%7,7)+'</div>';
+    // Used to be "Next: <locked reward> + Discovery + Streak Bonus" --
+    // dropped in favor of the all-time streak record (state.longestActiveStreak,
+    // see evaluateLongestStreak()) since what's next to unlock already has its
+    // own home on the Rewards tab, and doesn't need repeating here too.
+    html += '<div class="plaque-progress-text">Longest Daily Streak: '+state.longestActiveStreak+'</div>';
+    html += '</div></div>';
+  }
 
   html += renderSpecialDaysLink();
 
@@ -2341,8 +2379,24 @@ function renderHabitGroup(type, label){
 function isoWeekdayOrdinal(getDayValue){
   return (getDayValue+6)%7; // Sun(0)->6, Mon(1)->0, ..., Sat(6)->5
 }
+// A weekly habit's target days, as an array of getDay() values (0=Sun..6=Sat).
+// Reads the current multi-day daysOfWeek field, falling back to the older
+// single dayOfWeek field for habits created before multi-day selection
+// shipped (and never migrated in place, so old backups keep working too).
+function habitWeeklyDays(h){
+  if(Array.isArray(h.daysOfWeek)) return h.daysOfWeek;
+  if(typeof h.dayOfWeek==="number") return [h.dayOfWeek];
+  return [];
+}
+// Same days, sorted Monday-first (see isoWeekdayOrdinal) for display.
+function habitWeeklyDaysSorted(h){
+  return habitWeeklyDays(h).slice().sort(function(a,b){ return isoWeekdayOrdinal(a)-isoWeekdayOrdinal(b); });
+}
 function habitDisplaySortKey(type, h){
-  if(type==="weekly") return typeof h.dayOfWeek==="number" ? isoWeekdayOrdinal(h.dayOfWeek) : Infinity;
+  if(type==="weekly"){
+    var days = habitWeeklyDays(h);
+    return days.length ? Math.min.apply(null, days.map(isoWeekdayOrdinal)) : Infinity;
+  }
   if(type==="monthly") return typeof h.dayOfMonth==="number" ? h.dayOfMonth : Infinity;
   if(type==="every") return habitHasAnnualDate(h) ? h.annualMonth*100+h.annualDay : Infinity;
   return Infinity;
@@ -2366,9 +2420,17 @@ function habitLogged(h){
 function everyUnitLabel(h){
   return h.everyN===1 ? h.everyUnit.slice(0,-1) : h.everyUnit;
 }
+// "Mon", "Mon, Wed, Fri", or "Every day" once all 7 are picked -- that last
+// case reads better than spelling out all seven abbreviations in a row.
+function habitWeeklyDaysLabel(h){
+  var days = habitWeeklyDaysSorted(h);
+  if(days.length===0) return "";
+  if(days.length===7) return "Every day";
+  return days.map(function(dv){ return SPECIAL_DAY_WEEKDAY_ABBR[dv]; }).join(", ");
+}
 function habitTypeBadge(h){
   if(h.type==="daily") return "Daily";
-  if(h.type==="weekly") return typeof h.dayOfWeek==="number" ? "Weekly · "+SPECIAL_DAY_WEEKDAY_ABBR[h.dayOfWeek] : "Weekly";
+  if(h.type==="weekly"){ var wLbl = habitWeeklyDaysLabel(h); return wLbl ? "Weekly · "+wLbl : "Weekly"; }
   if(h.type==="monthly") return typeof h.dayOfMonth==="number" ? "Monthly · "+h.dayOfMonth : "Monthly";
   if(h.type==="every"){
     if(habitHasAnnualDate(h)) return (h.everyN===1?"Annual":"Every "+h.everyN+" years")+" · "+SPECIAL_DAY_MONTH_ABBR[h.annualMonth-1]+" "+h.annualDay;
@@ -2387,8 +2449,9 @@ function habitDueToday(h){
     if(h.completions.length) return false;
     return !h.dueDate || h.dueDate<=todayStr();
   }
-  if(h.type==="weekly" && typeof h.dayOfWeek==="number" && h.dayOfWeek!==new Date().getDay()){
-    return false;
+  if(h.type==="weekly"){
+    var wDays = habitWeeklyDays(h);
+    if(wDays.length && wDays.indexOf(new Date().getDay())===-1) return false;
   }
   if(h.type==="monthly" && typeof h.dayOfMonth==="number" && habitMonthlyDueDayThisMonth(h)!==new Date().getDate()){
     return false;
@@ -2576,7 +2639,8 @@ function renderHabitDetailModal(id){
     } else {
       logBtnHtml = '<button class="log-btn log-btn-sm" data-action="toggle-weekly" data-id="'+h.id+'">Log this Week  +1 🥕</button>';
     }
-    metaHtml = '<div class="habit-meta">'+h.completions.length+' week'+(h.completions.length===1?'':'s')+' logged'+(typeof h.dayOfWeek==="number" ? ' · Target: '+SPECIAL_DAY_WEEKDAY_ABBR[h.dayOfWeek] : '')+'</div>';
+    var wTargetLbl = habitWeeklyDaysLabel(h);
+    metaHtml = '<div class="habit-meta">'+h.completions.length+' week'+(h.completions.length===1?'':'s')+' logged'+(wTargetLbl ? ' · Target: '+wTargetLbl : '')+'</div>';
   } else if(h.type==="every"){
     var everyDue = habitEveryDue(h);
     html += habitProgressPipsHtml(h);
@@ -3170,9 +3234,18 @@ function renderAddHabitModal(){
       html += '<div class="field freq-subfield"><label>Due date</label><input type="date" id="addHabitDueDate" value="'+escapeAttr(d.dueDate||todayStr())+'"></div>';
     }
     if(d.type==="weekly"){
-      html += '<div class="field freq-subfield"><label>Day of week</label><select id="addHabitWeekday">' +
-        SPECIAL_DAY_WEEKDAY_ABBR.map(function(name,i){return '<option value="'+i+'"'+(d.dayOfWeek===i?' selected':'')+'>'+name+'</option>';}).join('') +
-      '</select></div>';
+      // Compact single-letter MTWTFSS toggle row instead of a one-day
+      // dropdown -- lets a weekly rHabbit target any combination of days
+      // (e.g. gym on Mon/Wed/Fri) while taking up about as much room as
+      // the old single <select> did. Full weekday name lives in the title
+      // tooltip since bare letters alone don't disambiguate Tue/Thu or Sat/Sun.
+      var draftDays = Array.isArray(d.daysOfWeek) ? d.daysOfWeek : [];
+      html += '<div class="field freq-subfield"><label>Days of week</label><div class="weekday-picker">' +
+        WEEKDAY_MON_FIRST_ORDER.map(function(dayVal,i){
+          var selected = draftDays.indexOf(dayVal)!==-1;
+          return '<button type="button" class="weekday-opt'+(selected?' selected':'')+'" data-action="toggle-draft-weekday" data-day="'+dayVal+'" title="'+SPECIAL_DAY_WEEKDAY_ABBR[dayVal]+'">'+WEEKDAY_MON_FIRST_LETTERS[i]+'</button>';
+        }).join('') +
+      '</div></div>';
     }
     if(d.type==="monthly"){
       html += '<div class="field freq-subfield"><label>Day of month</label><select id="addHabitDayOfMonth">' +
@@ -3213,7 +3286,8 @@ function renderAddHabitModal(){
   html += '<div class="field"><label>Icon</label><div class="emoji-picker">'+EMOJI_CHOICES.map(function(e){return '<button class="emoji-opt '+(d.emoji===e?'selected':'')+'" data-action="pick-emoji" data-emoji="'+e+'">'+e+'</button>';}).join('')+'</div></div>';
   var canSubmit = d.name.trim() &&
     !(d.type==="daily"&&dailyDisabled) && !(d.type==="monthly"&&monthlyDisabled) &&
-    !(d.type==="onceoff"&&onceoffDisabled) && !(d.type==="weekly"&&weeklyDisabled) && !(d.type==="every"&&everyDisabled);
+    !(d.type==="onceoff"&&onceoffDisabled) && !(d.type==="weekly"&&weeklyDisabled) && !(d.type==="every"&&everyDisabled) &&
+    !(d.type==="weekly" && !(Array.isArray(d.daysOfWeek) && d.daysOfWeek.length));
   html += '<button class="btn btn-block" data-action="confirm-add-habit" '+(canSubmit?'':'disabled')+'>Start tracking 🌴</button>';
   html += '</div></div>';
   return html;
@@ -3272,6 +3346,7 @@ function renderProfileModal(){
   html += settingsChipHtml("restore-backup", "Restore");
   html += settingsChipHtml("toggle-us-holidays", "🇺🇸 USA holidays", state.showUSHolidays);
   html += settingsChipHtml("toggle-sa-holidays", "🇿🇦 RSA holidays", state.showSAHolidays);
+  html += settingsChipHtml("toggle-rewards", "🥕 Rewards", state.rewardsEnabled);
   html += '</div>';
   // Covers the gap before beforeinstallprompt happens to fire again after a
   // real Home Screen uninstall (site storage isn't cleared by an OS-level
@@ -3482,10 +3557,6 @@ function wireEvents(){
   if(addDueDateInput){
     addDueDateInput.addEventListener("input", function(e){ state._draft.dueDate = e.target.value; });
   }
-  var addWeekdaySelect = root.querySelector("#addHabitWeekday");
-  if(addWeekdaySelect){
-    addWeekdaySelect.addEventListener("change", function(e){ state._draft.dayOfWeek = parseInt(e.target.value,10); });
-  }
   var addDayOfMonthSelect = root.querySelector("#addHabitDayOfMonth");
   if(addDayOfMonthSelect){
     addDayOfMonthSelect.addEventListener("change", function(e){ state._draft.dayOfMonth = parseInt(e.target.value,10); });
@@ -3635,6 +3706,14 @@ function onAction(e){
       break;
     case "pick-emoji":
       state._draft.emoji = el.getAttribute("data-emoji");
+      render();
+      break;
+    case "toggle-draft-weekday":
+      var toggledDay = parseInt(el.getAttribute("data-day"),10);
+      if(!Array.isArray(state._draft.daysOfWeek)) state._draft.daysOfWeek = [];
+      var dayIdx = state._draft.daysOfWeek.indexOf(toggledDay);
+      if(dayIdx===-1){ state._draft.daysOfWeek.push(toggledDay); }
+      else { state._draft.daysOfWeek.splice(dayIdx,1); }
       render();
       break;
     case "pick-special-day-icon":
@@ -3828,6 +3907,13 @@ function onAction(e){
       state.showSAHolidays = !state.showSAHolidays;
       save(); render();
       break;
+    case "toggle-rewards":
+      state.rewardsEnabled = !state.rewardsEnabled;
+      // Its nav tab just vanished (see syncBottombarUI()) -- don't strand
+      // the player on a now-unreachable Rewards screen.
+      if(!state.rewardsEnabled && state.screen==="rewards"){ state.screen = "logbook"; }
+      save(); render();
+      break;
     case "ack-celebration":
       state.pendingCelebration = null;
       save(); render();
@@ -3913,7 +3999,7 @@ function addHabit(){
       habit.annualDay = (typeof d.annualDay==="number") ? d.annualDay : new Date().getDate();
     }
   }
-  if(d.type==="weekly") habit.dayOfWeek = (typeof d.dayOfWeek==="number") ? d.dayOfWeek : new Date().getDay();
+  if(d.type==="weekly") habit.daysOfWeek = (Array.isArray(d.daysOfWeek) && d.daysOfWeek.length) ? d.daysOfWeek.slice() : [new Date().getDay()];
   if(d.type==="monthly") habit.dayOfMonth = (typeof d.dayOfMonth==="number") ? d.dayOfMonth : new Date().getDate();
   state.habits.push(habit);
   markActiveToday();
@@ -4658,7 +4744,7 @@ function validBackupShape(parsed){
 function applyRestoredState(parsed){
   var merged = Object.assign(defaultState(), parsed);
   merged.unlocks = Object.assign({}, parsed.unlocks || {});
-  merged._draft = { name:"", emoji:"🌴", type:"daily", description:"", dueDate:todayStr(), everyUnit:"days", everyN:2, dayOfWeek:new Date().getDay(), dayOfMonth:new Date().getDate(), annualMonth:new Date().getMonth()+1, annualDay:new Date().getDate() };
+  merged._draft = { name:"", emoji:"🌴", type:"daily", description:"", dueDate:todayStr(), everyUnit:"days", everyN:2, daysOfWeek:[new Date().getDay()], dayOfMonth:new Date().getDate(), annualMonth:new Date().getMonth()+1, annualDay:new Date().getDate() };
   merged._specialDayDraft = freshSpecialDayDraft();
   merged._detailSpecialDayId = null;
   merged.toast = null;
@@ -4954,11 +5040,15 @@ function initBottombar(){
   });
 }
 // Called at the end of every render() to keep the (persistent, un-rebuilt)
-// bottombar's visibility and active-tab highlight in sync with state.
+// bottombar's visibility and active-tab highlight in sync with state. With
+// Rewards off, Logbook is the only bottombar destination left (Profile lives
+// behind the topbar avatar, not here -- see "show-profile"), so a one-tab
+// bar has nothing left to navigate between and is hidden entirely rather
+// than left showing a single, permanently-active Logbook button.
 function syncBottombarUI(){
   var bar = document.getElementById("bottombar");
   if(!bar) return;
-  bar.classList.toggle("hidden", !state.onboarded);
+  bar.classList.toggle("hidden", !state.onboarded || !state.rewardsEnabled);
   bar.querySelectorAll("[data-nav]").forEach(function(btn){
     var target = btn.getAttribute("data-nav");
     btn.classList.toggle("active", target===state.screen);
