@@ -198,7 +198,6 @@ img{max-width:100%; display:block;}
   color:var(--parchment-hi); font-size:1.35rem; text-align:center;
   text-shadow:0 2px 0 var(--wood-darker);
 }
-.topbar-spacer{width:44px; height:44px; flex-shrink:0;}
 .add-habit-fab{
   width:40px; height:40px; border-radius:50%; flex-shrink:0;
   background:linear-gradient(180deg, var(--danger), #7a2318);
@@ -691,7 +690,6 @@ img{max-width:100%; display:block;}
 .freq-slider-label{display:flex; align-items:baseline; justify-content:space-between; gap:8px;}
 .freq-slider-label .freq-slider-title{font-weight:700; color:var(--wood-dark); font-size:.92rem;}
 .freq-slider-label .freq-slider-sub{font-size:.72rem; color:var(--wood);}
-.freq-slider-label.disabled .freq-slider-sub{color:var(--carrot-deep);}
 .freq-slider input[type=range]{
   -webkit-appearance:none; appearance:none; width:100%; height:6px; border-radius:4px;
   background:var(--parchment-edge); outline:none; margin:10px 0 4px; display:block;
@@ -713,7 +711,6 @@ img{max-width:100%; display:block;}
   flex:1; text-align:center; font-size:.64rem; color:var(--wood); white-space:nowrap;
   background:none; border:none; padding:6px 0; margin:0; font-family:inherit; cursor:pointer;
 }
-.freq-slider-tick.disabled{opacity:.45;}
 
 .celebration{text-align:center;}
 .celebration .confetti{font-size:2rem; margin-bottom:6px;}
@@ -850,10 +847,12 @@ var STORAGE_KEY = "rhabbits_state_v1";
 // every future code change to this file so a reload can be visually
 // confirmed against what was actually deployed. Distinct from any
 // data-schema/localStorage version (this app has none yet).
-var APP_VERSION = "1.0+5f4f26f0";
-// Sorted into one logical sequence -- nature, fitness/routine, pirate/
-// nautical, then animals -- rather than grouped under separate UI headers.
-var EMOJI_CHOICES = ["🌴","🌱","☀️","🌊","🥥","🥕","🌙","💪","🏋️","🧘","🤸","📖","💊","🛏️","⛵","🏴‍☠️","🧭","⚓","🦜","🐚","🗺️","🏝️","🐶","🐕","🐩","🦮","🐕‍🦺","🐺","🐱","🐈","🐈‍⬛","🦁","💄","💅","💎","👑"];
+var APP_VERSION = "1.0+10c4b726";
+// Sorted into one logical sequence -- nature, sleep/wake, fitness/routine
+// (including female-presenting variants), pirate/nautical, animals (dogs'
+// own toys grouped right after the dog breeds), then beauty/spa/self-care
+// and royalty -- rather than grouped under separate UI headers.
+var EMOJI_CHOICES = ["🌴","🌱","☀️","🌊","🥥","🥕","🌙","😴","💤","⏰","🌅","💪","🏋️","🏋️‍♀️","🧘","🤸","🏃‍♀️","🚴‍♀️","📖","💊","🛏️","⛵","🏴‍☠️","🧭","⚓","🦜","🐚","🗺️","🏝️","🐶","🐕","🐩","🦮","🐕‍🦺","🦴","🎾","🐺","🐱","🐈","🐈‍⬛","🦁","💄","🧖","🛁","🧴","💆","💎","👑","👸","🤴","🏰"];
 
 var REWARDS = [
   {
@@ -1667,29 +1666,12 @@ function specialDayDueTomorrow(){
   return state.specialDays.concat(visibleGlobalHolidays()).some(function(sd){ return specialDayNextOccurrenceDays(sd)===1; });
 }
 
-// Flat cap available from the start -- daily habit slots are no longer
-// something to earn (see second_garden's starter unlock); may grow again
-// later, but for now 5 is just a fixed ceiling.
-function maxDailySlots(state){
-  return 5;
-}
 function countActive(state, type){
   return state.habits.filter(function(h){
     if(h.type!==type) return false;
     if(type==="onceoff") return h.completions.length===0;
     return true;
   }).length;
-}
-
-function canAddAnyHabit(state){
-  if(countActive(state,"daily") < maxDailySlots(state)) return true;
-  if(state.unlocks.second_garden){
-    if(countActive(state,"monthly") < 3) return true;
-    if(countActive(state,"onceoff") < 3) return true;
-    if(countActive(state,"weekly") < 3) return true;
-    if(countActive(state,"every") < 3) return true;
-  }
-  return false;
 }
 
 // Centralizes what a brand-new add-habit draft looks like -- used both by
@@ -1700,7 +1682,7 @@ function canAddAnyHabit(state){
 function freshHabitDraft(){
   return {
     name:"", emoji:"🌴",
-    type: countActive(state,"daily")<maxDailySlots(state) ? "daily" : (state.unlocks.second_garden ? "monthly":"daily"),
+    type: "daily",
     description:"",
     dueDate: todayStr(),
     everyUnit: "days",
@@ -2202,7 +2184,7 @@ function renderOnboarding(){
   return (
     '<div class="onb-screen">' +
       '<h2 style="color:var(--parchment-hi)">Let\'s get started!</h2>' +
-      '<p class="onb-copy">Choose one rHabbit you\'d like to track daily. Once you\'re in, you can add up to 5 rHabbits on any schedule -- daily, weekly, monthly, once-off, or custom.</p>' +
+      '<p class="onb-copy">Choose one rHabbit you\'d like to track daily. Once you\'re in, you can add as many rHabbits as you like, on any schedule -- daily, weekly, monthly, once-off, or custom.</p>' +
       '<div class="field"><label><span style="text-transform:lowercase">r</span>Habbit name</label><input type="text" id="firstHabitName" maxlength="40" placeholder="e.g. Drink 8 glasses of water" value="'+escapeAttr(d.name)+'"></div>' +
       '<div class="field"><input type="text" id="firstHabitDescription" maxlength="140" placeholder="rHabbit description (optional)" value="'+escapeAttr(d.description)+'"></div>' +
       '<div class="emoji-picker">'+EMOJI_CHOICES.map(function(e){return '<button class="emoji-opt '+(d.emoji===e?'selected':'')+'" data-action="pick-emoji" data-emoji="'+e+'">'+e+'</button>';}).join('')+'</div>' +
@@ -2246,11 +2228,10 @@ function renderTopbar(){
   if(dueCount>0){
     html += '  <button class="icon-btn due-today-btn" data-action="show-due-today" aria-label="'+dueCount+' rHabbit'+(dueCount===1?'':'s')+' due today">'+dueTodayIconHtml()+'<span class="due-today-badge">'+dueCount+'</span></button>';
   }
-  if(canAddAnyHabit(state)){
-    html += '  <button class="icon-btn add-habit-fab" data-action="open-add-habit" aria-label="Add a rHabbit" title="You have unlocked a new rHabbit">+</button>';
-  } else if(dueCount===0 && !cakeDue){
-    html += '  <span class="topbar-spacer"></span>';
-  }
+  // No cap on how many rHabbits can exist, of any type, so this button is
+  // always available -- no "topbar-spacer" fallback needed for a disabled
+  // state that no longer exists.
+  html += '  <button class="icon-btn add-habit-fab" data-action="open-add-habit" aria-label="Add a rHabbit">+</button>';
   html += '  </div>';
   html += '</div>';
   // On every main screen, the Install pill disappears entirely once
@@ -3170,24 +3151,20 @@ function renderModals(){
   return html;
 }
 
+// "None yet" or "3 already added" -- the type slider's sub-label under each
+// choice, now that there's no cap to show progress against (see
+// renderAddHabitModal()).
+function habitCountSub(count){
+  return count===0 ? "None yet" : count+" already added";
+}
+
 function renderAddHabitModal(){
   var d = state._draft;
-  var dailyCount = countActive(state,"daily"), dailyMax = maxDailySlots(state);
-  var typesUnlocked = !!state.unlocks.second_garden;
-  var monthlyCount = countActive(state,"monthly"), monthlyMax = 3;
-  var onceoffCount = countActive(state,"onceoff"), onceoffMax = 3;
-  var weeklyCount = countActive(state,"weekly"), weeklyMax = 3;
-  var everyCount = countActive(state,"every"), everyMax = 3;
-
-  var dailyDisabled = dailyCount >= dailyMax;
-  var monthlyDisabled = !typesUnlocked || monthlyCount >= monthlyMax;
-  var onceoffDisabled = !typesUnlocked || onceoffCount >= onceoffMax;
-  var weeklyDisabled = !typesUnlocked || weeklyCount >= weeklyMax;
-  var everyDisabled = !typesUnlocked || everyCount >= everyMax;
-
-  if(dailyDisabled && d.type==="daily"){
-    d.type = !monthlyDisabled ? "monthly" : (!onceoffDisabled ? "onceoff" : (!weeklyDisabled ? "weekly" : (!everyDisabled ? "every" : "daily")));
-  }
+  var dailyCount = countActive(state,"daily");
+  var monthlyCount = countActive(state,"monthly");
+  var onceoffCount = countActive(state,"onceoff");
+  var weeklyCount = countActive(state,"weekly");
+  var everyCount = countActive(state,"every");
 
   // Once/Daily/Weekly/Monthly/Every X used to be a stacked list of one
   // full-width button per type (see former typeOptRow()) -- a lot of
@@ -3195,25 +3172,15 @@ function renderAddHabitModal(){
   // ground in one row; steps[] is cached on the module so wireEvents() can
   // read it back (both for the live label update while dragging, and to map
   // the committed index to a type on release) without recomputing counts.
-  var steps;
-  if(!typesUnlocked){
-    // Pre-unlock: the original 3-way picker, unchanged in spirit -- just
-    // re-pointed at the reward that now actually gates it (see the
-    // second_garden REWARDS entry, which folded in the old 28-day gate).
-    steps = [
-      {type:"daily", title:"Daily", sub:dailyCount+"/"+dailyMax+" rHabbits used", disabled:dailyDisabled},
-      {type:"monthly", title:"Monthly", sub:"🔒 Unlocks at 7 carrots", disabled:true},
-      {type:"onceoff", title:"Once-off", sub:"🔒 Unlocks at 7 carrots", disabled:true}
-    ];
-  } else {
-    steps = [
-      {type:"onceoff", title:"Once", sub:onceoffCount+"/"+onceoffMax+" used", disabled:onceoffDisabled},
-      {type:"daily", title:"Daily", sub:dailyCount+"/"+dailyMax+" rHabbits used", disabled:dailyDisabled},
-      {type:"weekly", title:"Weekly", sub:weeklyCount+"/"+weeklyMax+" used", disabled:weeklyDisabled},
-      {type:"monthly", title:"Monthly", sub:monthlyCount+"/"+monthlyMax+" used", disabled:monthlyDisabled},
-      {type:"every", title:"Every X", sub:everyCount+"/"+everyMax+" used", disabled:everyDisabled}
-    ];
-  }
+  // No type is ever unavailable here -- there's no cap on how many rHabbits
+  // of any kind can exist, so every step is always reachable.
+  var steps = [
+    {type:"onceoff", title:"Once", sub:habitCountSub(onceoffCount)},
+    {type:"daily", title:"Daily", sub:habitCountSub(dailyCount)},
+    {type:"weekly", title:"Weekly", sub:habitCountSub(weeklyCount)},
+    {type:"monthly", title:"Monthly", sub:habitCountSub(monthlyCount)},
+    {type:"every", title:"Every X", sub:habitCountSub(everyCount)}
+  ];
   addHabitTypeStepsCache = steps;
   var curIndex = 0;
   for(var si=0; si<steps.length; si++){ if(steps[si].type===d.type){ curIndex=si; break; } }
@@ -3227,72 +3194,68 @@ function renderAddHabitModal(){
   html += '<div class="field"><input type="text" id="addHabitDescription" maxlength="140" placeholder="rHabbit description (optional)" value="'+escapeAttr(d.description)+'"></div>';
   html += '<div class="type-picker">';
   html += '<div class="freq-slider">';
-  html += '<div class="freq-slider-label'+(curStep.disabled?' disabled':'')+'"><span class="freq-slider-title">'+curStep.title+'</span><span class="freq-slider-sub">'+curStep.sub+'</span></div>';
+  html += '<div class="freq-slider-label"><span class="freq-slider-title">'+curStep.title+'</span><span class="freq-slider-sub">'+curStep.sub+'</span></div>';
   html += '<input type="range" id="addHabitTypeSlider" min="0" max="'+(steps.length-1)+'" step="1" value="'+curIndex+'">';
   // Buttons, not spans -- tapping a tick's label is a much bigger, easier
   // target than the 6px-tall range track itself, and jumps straight to that
   // step (see the "freq-slider-tick" click wiring in wireEvents()) rather
   // than requiring a drag.
-  html += '<div class="freq-slider-ticks">' + steps.map(function(s,i){return '<button type="button" class="freq-slider-tick'+(s.disabled?' disabled':'')+'" data-index="'+i+'">'+s.title+'</button>';}).join('') + '</div>';
+  html += '<div class="freq-slider-ticks">' + steps.map(function(s,i){return '<button type="button" class="freq-slider-tick" data-index="'+i+'">'+s.title+'</button>';}).join('') + '</div>';
   html += '</div>';
-  if(typesUnlocked){
-    if(d.type==="onceoff"){
-      html += '<div class="field freq-subfield"><label>Due date</label><input type="date" id="addHabitDueDate" value="'+escapeAttr(d.dueDate||todayStr())+'"></div>';
-    }
-    if(d.type==="weekly"){
-      // Compact single-letter MTWTFSS toggle row instead of a one-day
-      // dropdown -- lets a weekly rHabbit target any combination of days
-      // (e.g. gym on Mon/Wed/Fri) while taking up about as much room as
-      // the old single <select> did. Full weekday name lives in the title
-      // tooltip since bare letters alone don't disambiguate Tue/Thu or Sat/Sun.
-      var draftDays = Array.isArray(d.daysOfWeek) ? d.daysOfWeek : [];
-      html += '<div class="field freq-subfield"><label>Days of week</label><div class="weekday-picker">' +
-        WEEKDAY_MON_FIRST_ORDER.map(function(dayVal,i){
-          var selected = draftDays.indexOf(dayVal)!==-1;
-          return '<button type="button" class="weekday-opt'+(selected?' selected':'')+'" data-action="toggle-draft-weekday" data-day="'+dayVal+'" title="'+SPECIAL_DAY_WEEKDAY_ABBR[dayVal]+'">'+WEEKDAY_MON_FIRST_LETTERS[i]+'</button>';
-        }).join('') +
-      '</div></div>';
-    }
-    if(d.type==="monthly"){
-      html += '<div class="field freq-subfield"><label>Day of month</label><select id="addHabitDayOfMonth">' +
-        dayOfMonthOptionsHtml(d.dayOfMonth) +
-      '</select></div>';
-    }
-    if(d.type==="every"){
-      // "years" is the one unit where 1 is a meaningful, common value (an
-      // annual habit -- a checkup, a renewal) rather than a duplicate of
-      // one of the fixed daily/weekly/monthly types above, so its floor is
-      // 1 instead of the usual 2 (see everyMinN()).
-      html += '<div class="field freq-subfield"><label>Repeat every</label><div class="freq-every-inputs">' +
-        '<input type="number" id="addHabitEveryN" min="'+everyMinN(d.everyUnit)+'" max="365" value="'+(d.everyN||2)+'">' +
-        '<select id="addHabitEveryUnit">' +
-          '<option value="days"'+(d.everyUnit==="days"?' selected':'')+'>days</option>' +
-          '<option value="weeks"'+(d.everyUnit==="weeks"?' selected':'')+'>weeks</option>' +
-          '<option value="months"'+(d.everyUnit==="months"?' selected':'')+'>months</option>' +
-          '<option value="years"'+(d.everyUnit==="years"?' selected':'')+'>years</option>' +
+  if(d.type==="onceoff"){
+    html += '<div class="field freq-subfield"><label>Due date</label><input type="date" id="addHabitDueDate" value="'+escapeAttr(d.dueDate||todayStr())+'"></div>';
+  }
+  if(d.type==="weekly"){
+    // Compact single-letter MTWTFSS toggle row instead of a one-day
+    // dropdown -- lets a weekly rHabbit target any combination of days
+    // (e.g. gym on Mon/Wed/Fri) while taking up about as much room as
+    // the old single <select> did. Full weekday name lives in the title
+    // tooltip since bare letters alone don't disambiguate Tue/Thu or Sat/Sun.
+    var draftDays = Array.isArray(d.daysOfWeek) ? d.daysOfWeek : [];
+    html += '<div class="field freq-subfield"><label>Days of week</label><div class="weekday-picker">' +
+      WEEKDAY_MON_FIRST_ORDER.map(function(dayVal,i){
+        var selected = draftDays.indexOf(dayVal)!==-1;
+        return '<button type="button" class="weekday-opt'+(selected?' selected':'')+'" data-action="toggle-draft-weekday" data-day="'+dayVal+'" title="'+SPECIAL_DAY_WEEKDAY_ABBR[dayVal]+'">'+WEEKDAY_MON_FIRST_LETTERS[i]+'</button>';
+      }).join('') +
+    '</div></div>';
+  }
+  if(d.type==="monthly"){
+    html += '<div class="field freq-subfield"><label>Day of month</label><select id="addHabitDayOfMonth">' +
+      dayOfMonthOptionsHtml(d.dayOfMonth) +
+    '</select></div>';
+  }
+  if(d.type==="every"){
+    // "years" is the one unit where 1 is a meaningful, common value (an
+    // annual habit -- a checkup, a renewal) rather than a duplicate of
+    // one of the fixed daily/weekly/monthly types above, so its floor is
+    // 1 instead of the usual 2 (see everyMinN()).
+    html += '<div class="field freq-subfield"><label>Repeat every</label><div class="freq-every-inputs">' +
+      '<input type="number" id="addHabitEveryN" min="'+everyMinN(d.everyUnit)+'" max="365" value="'+(d.everyN||2)+'">' +
+      '<select id="addHabitEveryUnit">' +
+        '<option value="days"'+(d.everyUnit==="days"?' selected':'')+'>days</option>' +
+        '<option value="weeks"'+(d.everyUnit==="weeks"?' selected':'')+'>weeks</option>' +
+        '<option value="months"'+(d.everyUnit==="months"?' selected':'')+'>months</option>' +
+        '<option value="years"'+(d.everyUnit==="years"?' selected':'')+'>years</option>' +
+      '</select>' +
+    '</div></div>';
+    // Pins an "every N years" habit to an actual calendar date (see
+    // habitAnnualDueToday()) instead of the rolling ~365*N-day
+    // approximation the other units use -- so a birthday/renewal lands on
+    // the same date each year rather than drifting.
+    if(d.everyUnit==="years"){
+      html += '<div class="field freq-subfield"><label>On this date</label><div class="freq-every-inputs">' +
+        '<select id="addHabitAnnualMonth">' +
+          SPECIAL_DAY_MONTH_NAMES.map(function(name,i){return '<option value="'+(i+1)+'"'+(d.annualMonth===i+1?' selected':'')+'>'+name+'</option>';}).join('') +
+        '</select>' +
+        '<select id="addHabitAnnualDay">' +
+          dayOfMonthOptionsHtml(d.annualDay) +
         '</select>' +
       '</div></div>';
-      // Pins an "every N years" habit to an actual calendar date (see
-      // habitAnnualDueToday()) instead of the rolling ~365*N-day
-      // approximation the other units use -- so a birthday/renewal lands on
-      // the same date each year rather than drifting.
-      if(d.everyUnit==="years"){
-        html += '<div class="field freq-subfield"><label>On this date</label><div class="freq-every-inputs">' +
-          '<select id="addHabitAnnualMonth">' +
-            SPECIAL_DAY_MONTH_NAMES.map(function(name,i){return '<option value="'+(i+1)+'"'+(d.annualMonth===i+1?' selected':'')+'>'+name+'</option>';}).join('') +
-          '</select>' +
-          '<select id="addHabitAnnualDay">' +
-            dayOfMonthOptionsHtml(d.annualDay) +
-          '</select>' +
-        '</div></div>';
-      }
     }
   }
   html += '</div>';
   html += '<div class="field"><label>Icon</label><div class="emoji-picker">'+EMOJI_CHOICES.map(function(e){return '<button class="emoji-opt '+(d.emoji===e?'selected':'')+'" data-action="pick-emoji" data-emoji="'+e+'">'+e+'</button>';}).join('')+'</div></div>';
   var canSubmit = d.name.trim() &&
-    !(d.type==="daily"&&dailyDisabled) && !(d.type==="monthly"&&monthlyDisabled) &&
-    !(d.type==="onceoff"&&onceoffDisabled) && !(d.type==="weekly"&&weeklyDisabled) && !(d.type==="every"&&everyDisabled) &&
     !(d.type==="weekly" && !(Array.isArray(d.daysOfWeek) && d.daysOfWeek.length));
   html += '<button class="btn btn-block" data-action="confirm-add-habit" '+(canSubmit?'':'disabled')+'>Start tracking 🌴</button>';
   html += '</div></div>';
@@ -3527,7 +3490,6 @@ function wireEvents(){
       // it reveals, only commit on "change" below.
       var step = addHabitTypeStepsCache && addHabitTypeStepsCache[parseInt(e.target.value,10)];
       if(step && typeSliderLabel){
-        typeSliderLabel.className = "freq-slider-label"+(step.disabled?" disabled":"");
         typeSliderLabel.innerHTML = '<span class="freq-slider-title">'+step.title+'</span><span class="freq-slider-sub">'+step.sub+'</span>';
       }
     });
@@ -3719,7 +3681,13 @@ function onAction(e){
       var dayIdx = state._draft.daysOfWeek.indexOf(toggledDay);
       if(dayIdx===-1){ state._draft.daysOfWeek.push(toggledDay); }
       else { state._draft.daysOfWeek.splice(dayIdx,1); }
-      render();
+      // Same focus-theft bug renderPreservingModalScroll() fixes for the type
+      // slider (wireEvents() unconditionally refocuses #addHabitName on every
+      // render) -- reused here rather than a bare render() so the modal stays
+      // centered on the weekday picker (the next logical choice, working
+      // down toward the icon picker below it) instead of snapping back to
+      // the top on every tap.
+      renderPreservingModalScroll();
       break;
     case "pick-special-day-icon":
       state._specialDayDraft.icon = el.getAttribute("data-icon");
