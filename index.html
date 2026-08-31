@@ -157,9 +157,16 @@ img{max-width:100%; display:block;}
    option, rather than styled as a standalone .field, so it reads as part
    of that option rather than a separate form section. ---------- */
 .freq-subfield{max-width:none; margin:-4px 0 4px; padding:0 2px;}
-.freq-every-inputs{display:flex; gap:8px;}
+.freq-every-inputs{display:flex; gap:6px; align-items:center;}
 .freq-every-inputs input[type=number]{width:80px; flex-shrink:0;}
 .freq-every-inputs select{flex:1;}
+/* Shrunk from the plain days/weeks/months/years layout above so a "Start
+   date" picker can share the same row (see renderAddHabitModal()) instead
+   of pushing it below into its own field. */
+.freq-every-inputs.has-start-date input[type=number]{width:48px;}
+.freq-every-inputs.has-start-date select{flex:0.85; min-width:0;}
+.freq-every-start-label{flex-shrink:0; color:var(--wood); font-size:.72rem; font-weight:700; white-space:nowrap;}
+.freq-every-inputs input[type=date]{flex:1.5; min-width:0; padding-left:8px; padding-right:4px;}
 .emoji-picker{display:flex; flex-wrap:wrap; gap:0; max-width:340px; margin:0 auto 18px; justify-content:center;}
 .emoji-opt{
   width:22px; height:22px; border-radius:5px; border:1px solid transparent;
@@ -475,6 +482,10 @@ img{max-width:100%; display:block;}
 }
 .log-btn:active{transform:translateY(2px); box-shadow:0 1px 0 var(--wood-darker);}
 .log-btn.done{background:linear-gradient(180deg,#7c9c5e,var(--leaf-deep)); box-shadow:0 3px 0 #2c4019;}
+/* A pending "every" habit (Start Date not yet reached, see habitEveryPending())
+   is neither due (carrot) nor logged (green) -- muted wood tone instead so
+   it doesn't misread as either. */
+.log-btn.pending{background:linear-gradient(180deg,#a89173,#6b5a45); box-shadow:0 3px 0 var(--wood-darker); opacity:.85;}
 /* Habit Detail's Log/Delete row (see renderHabitDetailModal()) -- both
    buttons shrunk and pinned to opposite edges so a mistap while logging
    can't land on Delete. log-btn-sm must come after .log-btn/.log-btn.done
@@ -483,6 +494,7 @@ img{max-width:100%; display:block;}
 .log-btn-sm{width:auto; padding:8px 16px; font-size:.8rem; border-radius:10px;}
 .habit-meta{color:var(--wood); font-size:.78rem; margin-top:8px;}
 .habit-meta.done{color:var(--leaf-deep); font-weight:700;}
+.habit-meta.overdue{color:var(--carrot-deep); font-weight:700;}
 
 /* ---------- Habit log notes (see renderHabitNoteModal()) ---------- */
 .habit-note-daylabel{color:var(--wood); font-size:.78rem; font-weight:700; margin-bottom:4px;}
@@ -847,12 +859,12 @@ var STORAGE_KEY = "rhabbits_state_v1";
 // every future code change to this file so a reload can be visually
 // confirmed against what was actually deployed. Distinct from any
 // data-schema/localStorage version (this app has none yet).
-var APP_VERSION = "1.0+10c4b726";
+var APP_VERSION = "1.0+efc691f9";
 // Sorted into one logical sequence -- nature, sleep/wake, fitness/routine
 // (including female-presenting variants), pirate/nautical, animals (dogs'
 // own toys grouped right after the dog breeds), then beauty/spa/self-care
 // and royalty -- rather than grouped under separate UI headers.
-var EMOJI_CHOICES = ["🌴","🌱","☀️","🌊","🥥","🥕","🌙","😴","💤","⏰","🌅","💪","🏋️","🏋️‍♀️","🧘","🤸","🏃‍♀️","🚴‍♀️","📖","💊","🛏️","⛵","🏴‍☠️","🧭","⚓","🦜","🐚","🗺️","🏝️","🐶","🐕","🐩","🦮","🐕‍🦺","🦴","🎾","🐺","🐱","🐈","🐈‍⬛","🦁","💄","🧖","🛁","🧴","💆","💎","👑","👸","🤴","🏰"];
+var EMOJI_CHOICES = ["🌴","🌱","☀️","🌊","🥥","🥕","🌙","😴","💤","⏰","🌅","💪","🏋️","🏋️‍♀️","🧘","🤸","🏃‍♀️","🚴‍♀️","📖","💊","🛏️","⛵","🏴‍☠️","🧭","⚓","🦜","🐚","🗺️","🏝️","🐶","🐕","🐩","🦮","🐕‍🦺","🦴","🎾","🐺","🐱","🐈","🐈‍⬛","🦁","💄","🧖","🛁","🧴","💆","💎","👑","👸","🤴","🏰","🍳","🥘","🍲","🧑‍🍳","🔪","🍞","🧀","🥩","🥦","🍅","🥗","🍵","☕","🥤"];
 
 var REWARDS = [
   {
@@ -1408,6 +1420,15 @@ function habitAnnualDueToday(h){
   var now = new Date();
   return (now.getMonth()+1)===h.annualMonth && now.getDate()===habitAnnualDueDayThisYear(h, now.getFullYear());
 }
+// A freshly-created days/weeks/months "every" habit whose Start Date (see
+// the Repeat-every row in renderAddHabitModal()) hasn't arrived yet -- kept
+// distinct from the normal "logged, cooling down" not-due state (both make
+// habitEveryDue() false) so habitLogged() below doesn't count a habit that
+// was never actually logged as done, which would wrongly feed streaks/
+// rewards/sighting unlocks.
+function habitEveryPending(h){
+  return !h.completions.length && !habitHasAnnualDate(h) && h.everyStartDate && todayStr() < h.everyStartDate;
+}
 function habitEveryDue(h){
   if(habitHasAnnualDate(h)){
     if(!habitAnnualDueToday(h)) return false;
@@ -1415,6 +1436,7 @@ function habitEveryDue(h){
     var lastYear = parseInt(h.completions[h.completions.length-1].slice(0,4),10);
     return (new Date().getFullYear() - lastYear) >= h.everyN;
   }
+  if(habitEveryPending(h)) return false;
   if(!h.completions.length) return true;
   return daysSince(h.completions[h.completions.length-1]) >= habitEveryUnitDays(h);
 }
@@ -1591,6 +1613,12 @@ var SPECIAL_DAY_WEEKDAY_ABBR = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 var WEEKDAY_MON_FIRST_ORDER = [1,2,3,4,5,6,0];
 var WEEKDAY_MON_FIRST_LETTERS = ["M","T","W","T","F","S","S"];
 var SPECIAL_DAY_MONTH_ABBR = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+// "Aug 15" from a plain "YYYY-MM-DD" string -- used for a pending "every"
+// habit's Start Date (see habitEveryPending()) rather than the raw ISO form.
+function isoDateLabel(iso){
+  var d = new Date(iso+"T00:00:00");
+  return SPECIAL_DAY_MONTH_ABBR[d.getMonth()] + " " + d.getDate();
+}
 function specialDayDateLabel(sd){
   var year = new Date().getFullYear();
   var md = resolvedMonthDay(sd, year);
@@ -1687,6 +1715,7 @@ function freshHabitDraft(){
     dueDate: todayStr(),
     everyUnit: "days",
     everyN: 2,
+    everyStartDate: todayStr(),
     daysOfWeek: [new Date().getDay()],
     dayOfMonth: new Date().getDate(),
     annualMonth: new Date().getMonth()+1,
@@ -1796,7 +1825,7 @@ function defaultState(){
     screen:"logbook",
     pendingCelebration:null,
     toast:null,
-    _draft:{ name:"", emoji:"🌴", type:"daily", description:"", dueDate:todayStr(), everyUnit:"days", everyN:2, daysOfWeek:[new Date().getDay()], dayOfMonth:new Date().getDate(), annualMonth:new Date().getMonth()+1, annualDay:new Date().getDate() },
+    _draft: freshHabitDraft(),
     _detailHabitId:null,
     _detailEmojiPickerOpen:false,
     _detailRewardId:null,
@@ -2390,7 +2419,7 @@ function habitLogged(h){
   if(h.type==="daily") return h.completions.indexOf(todayStr())!==-1;
   if(h.type==="weekly") return h.completions.indexOf(isoWeekStr())!==-1;
   if(h.type==="monthly") return h.completions.indexOf(monthStr())!==-1;
-  if(h.type==="every") return !habitEveryDue(h);
+  if(h.type==="every") return !habitEveryDue(h) && !habitEveryPending(h);
   return h.completions.length>0; // onceoff
 }
 // "years" is the one everyUnit that can actually be 1 (see everyMinN()) --
@@ -2439,6 +2468,14 @@ function habitDueToday(h){
 }
 function dueTodayHabits(state){
   return state.habits.filter(habitDueToday);
+}
+// A once-off reminder that slipped past its due date without being
+// completed -- surfaced in its meta line (see renderHabitDetailModal())
+// and offered up for deletion (see maybeConfirmOnceoffPastDue()) at the
+// two points a user naturally stops needing it around: completing it late,
+// or dismissing its ringing alarm.
+function onceoffPastDue(h){
+  return h.type==="onceoff" && !h.completions.length && !!h.dueDate && h.dueDate<todayStr();
 }
 
 // Compact single-line row -- this is deliberately minimal (emoji, name, type,
@@ -2622,8 +2659,15 @@ function renderHabitDetailModal(id){
     metaHtml = '<div class="habit-meta">'+h.completions.length+' week'+(h.completions.length===1?'':'s')+' logged'+(wTargetLbl ? ' · Target: '+wTargetLbl : '')+'</div>';
   } else if(h.type==="every"){
     var everyDue = habitEveryDue(h);
+    var everyPending = habitEveryPending(h);
     html += habitProgressPipsHtml(h);
-    if(!everyDue){
+    if(everyPending){
+      // Never logged, just waiting on its chosen Start Date -- a plain
+      // disabled button rather than the "done"-styled one above, since
+      // nothing has actually been logged yet (see habitEveryPending()).
+      logBtnHtml = '<button class="log-btn log-btn-sm pending" disabled>Starts '+isoDateLabel(h.everyStartDate)+'</button>';
+      metaHtml = '<div class="habit-meta">Repeats every '+h.everyN+' '+everyUnitLabel(h)+'</div>';
+    } else if(!everyDue){
       logBtnHtml = '<button class="log-btn log-btn-sm done" data-action="open-habit-note" data-id="'+h.id+'">'+(habitHasNote(h)?'📝':'✓')+' Logged</button>';
       var remaining = habitEveryDaysRemaining(h);
       metaHtml = '<div class="habit-meta">Due again in '+remaining+' day'+(remaining===1?'':'s')+'</div>';
@@ -2640,7 +2684,8 @@ function renderHabitDetailModal(id){
       metaHtml = '<div class="habit-meta">'+h.completions[0]+'</div>';
     } else {
       logBtnHtml = '<button class="log-btn log-btn-sm" data-action="toggle-onceoff" data-id="'+h.id+'">Mark Complete  +1 🥕</button>';
-      metaHtml = h.dueDate ? '<div class="habit-meta">Due '+h.dueDate+'</div>' : '';
+      metaHtml = onceoffPastDue(h) ? '<div class="habit-meta overdue">Passed due</div>'
+        : (h.dueDate ? '<div class="habit-meta">Due '+h.dueDate+'</div>' : '');
     }
   }
   // Log and Delete sit in one row, pinned to opposite edges (justify-content:
@@ -3229,7 +3274,13 @@ function renderAddHabitModal(){
     // annual habit -- a checkup, a renewal) rather than a duplicate of
     // one of the fixed daily/weekly/monthly types above, so its floor is
     // 1 instead of the usual 2 (see everyMinN()).
-    html += '<div class="field freq-subfield"><label>Repeat every</label><div class="freq-every-inputs">' +
+    // "years" already pins to a fixed calendar date via the "On this date"
+    // fields below, so a separate Start Date here would be redundant --
+    // shown only for the rolling days/weeks/months units, where it lets a
+    // habit's first occurrence land on a chosen day (e.g. the upcoming
+    // Saturday) instead of always starting immediately on creation.
+    var showEveryStart = d.everyUnit!=="years";
+    html += '<div class="field freq-subfield"><label>Repeat every'+(showEveryStart?' / Start date':'')+'</label><div class="freq-every-inputs'+(showEveryStart?' has-start-date':'')+'">' +
       '<input type="number" id="addHabitEveryN" min="'+everyMinN(d.everyUnit)+'" max="365" value="'+(d.everyN||2)+'">' +
       '<select id="addHabitEveryUnit">' +
         '<option value="days"'+(d.everyUnit==="days"?' selected':'')+'>days</option>' +
@@ -3237,6 +3288,7 @@ function renderAddHabitModal(){
         '<option value="months"'+(d.everyUnit==="months"?' selected':'')+'>months</option>' +
         '<option value="years"'+(d.everyUnit==="years"?' selected':'')+'>years</option>' +
       '</select>' +
+      (showEveryStart ? '<input type="date" id="addHabitEveryStartDate" value="'+escapeAttr(d.everyStartDate||todayStr())+'">' : '') +
     '</div></div>';
     // Pins an "every N years" habit to an actual calendar date (see
     // habitAnnualDueToday()) instead of the rolling ~365*N-day
@@ -3543,6 +3595,10 @@ function wireEvents(){
       var min = everyMinN(state._draft.everyUnit);
       state._draft.everyN = (!n || n<min) ? min : n;
     });
+  }
+  var addEveryStartDateInput = root.querySelector("#addHabitEveryStartDate");
+  if(addEveryStartDateInput){
+    addEveryStartDateInput.addEventListener("input", function(e){ state._draft.everyStartDate = e.target.value; });
   }
   var addEveryUnitSelect = root.querySelector("#addHabitEveryUnit");
   if(addEveryUnitSelect){
@@ -3861,6 +3917,10 @@ function onAction(e){
       break;
     case "dismiss-alarm":
       stopBeepTone();
+      (state.pendingAlarmIds||[]).forEach(function(alarmId){
+        var alarmHabit = findHabit(alarmId);
+        if(alarmHabit && onceoffPastDue(alarmHabit)) maybeConfirmOnceoffPastDue(alarmHabit);
+      });
       state.pendingAlarmIds = [];
       save();
       render();
@@ -3970,6 +4030,8 @@ function addHabit(){
     if(d.everyUnit==="years"){
       habit.annualMonth = (typeof d.annualMonth==="number") ? d.annualMonth : new Date().getMonth()+1;
       habit.annualDay = (typeof d.annualDay==="number") ? d.annualDay : new Date().getDate();
+    } else {
+      habit.everyStartDate = d.everyStartDate || todayStr();
     }
   }
   if(d.type==="weekly") habit.daysOfWeek = (Array.isArray(d.daysOfWeek) && d.daysOfWeek.length) ? d.daysOfWeek.slice() : [new Date().getDay()];
@@ -4051,7 +4113,15 @@ function toggleOnceoff(id){
   // "today"/"this month" fallback exists for a once-off), so unlike
   // toggleDaily()/toggleMonthly() its note has to go too.
   if(h.completions.length){ deleteHabitNoteFor(h,h.completions[0]); h.completions=[]; state.carrots=Math.max(0,state.carrots-1); }
-  else { h.completions=[todayStr()]; state.carrots++; grantCocoLife(); grantTreasureMove(); }
+  else {
+    // Checked before completing, not after -- once completions is set,
+    // onceoffPastDue(h) would always read false and the prompt would never
+    // fire for the one moment it's meant for: marking a stale reminder
+    // done for the first time.
+    var wasPastDue = onceoffPastDue(h);
+    h.completions=[todayStr()]; state.carrots++; grantCocoLife(); grantTreasureMove();
+    if(wasPastDue) maybeConfirmOnceoffPastDue(h);
+  }
   markActiveToday();
   evaluateRewards();
   save(); render();
@@ -4175,6 +4245,17 @@ function renderHabitAlarmModal(id){
   }
   html += '</div></div>';
   return html;
+}
+// Offers to delete a once-off reminder right after it's been dismissed
+// while still past its due date -- either by completing it late (see
+// toggleOnceoff()) or by dismissing its ringing alarm (see the
+// "dismiss-alarm" case in onAction()). Answering No just leaves it in the
+// list; its meta line then reads "Passed due" instead of a plain due date
+// while it's still unlogged (see renderHabitDetailModal()).
+function maybeConfirmOnceoffPastDue(h){
+  if(confirm("Delete this once off reminder?")){
+    state.habits = state.habits.filter(function(hb){ return hb.id!==h.id; });
+  }
 }
 function deleteHabit(id){
   if(!confirm("Delete this rHabbit?")) return;
@@ -4717,7 +4798,7 @@ function validBackupShape(parsed){
 function applyRestoredState(parsed){
   var merged = Object.assign(defaultState(), parsed);
   merged.unlocks = Object.assign({}, parsed.unlocks || {});
-  merged._draft = { name:"", emoji:"🌴", type:"daily", description:"", dueDate:todayStr(), everyUnit:"days", everyN:2, daysOfWeek:[new Date().getDay()], dayOfMonth:new Date().getDate(), annualMonth:new Date().getMonth()+1, annualDay:new Date().getDate() };
+  merged._draft = freshHabitDraft();
   merged._specialDayDraft = freshSpecialDayDraft();
   merged._detailSpecialDayId = null;
   merged.toast = null;
