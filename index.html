@@ -385,11 +385,27 @@ img{max-width:100%; display:block;}
    the Logbook screen -- the flat Due Today/Special Days modal lists below
    render .habit-row directly, one per line, and keep their own spacing. */
 .habit-grid{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;}
-.habit-grid .habit-row{margin-bottom:0; min-height:64px;}
+/* Cards get their own stacked layout (top strip + name row) instead of
+   .habit-row's normal single-line flex -- see .habit-row-top/-main below.
+   min-height (sized for the top strip + up to 2 name lines) keeps every
+   card in the grid the same size, whether or not it has an alarm set and
+   whether its name wraps to 1 or 2 lines, rather than each grid row sizing
+   itself to its own tallest card. */
+.habit-grid .habit-row{
+  flex-direction:column; align-items:stretch; gap:2px;
+  margin-bottom:0; min-height:66px; padding:6px 8px 8px;
+}
+/* Alarm indicator (left) and the status/due-today circle (right, see
+   renderHabitCard()) sit in their own strip above the name instead of
+   sharing its row -- frees the full card width for the name below rather
+   than splitting it three ways. Always rendered (empty left slot when
+   there's no alarm) so status stays pinned right via space-between. */
+.habit-row-top{display:flex; align-items:flex-start; justify-content:space-between; min-height:17px;}
+.habit-row-main{display:flex; align-items:center; gap:6px;}
+.habit-grid .habit-emoji{font-size:1.2rem;}
 /* Long names get to wrap onto a second line instead of ellipsizing after
-   one -- min-height above (sized for 2 lines) keeps every card the same
-   height either way, rather than each grid row sizing itself to its own
-   tallest card. */
+   one, now that the name row isn't competing with the alarm/status icons
+   for width. */
 .habit-grid .habit-name{
   white-space:normal; line-height:1.2;
   display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
@@ -415,7 +431,7 @@ img{max-width:100%; display:block;}
    reset back down to nothing, same as .habit-emoji-btn, since the base
    `button{}` rule only resets font-family/cursor, not full button chrome. */
 .habit-status{
-  width:30px; flex-shrink:0; text-align:center; font-size:1rem;
+  width:22px; flex-shrink:0; text-align:center; font-size:1rem;
   background:none; border:none; padding:0; margin:0; cursor:pointer;
 }
 .habit-status.done{color:var(--leaf-bright); font-weight:800; font-size:1.15rem;}
@@ -874,7 +890,7 @@ var STORAGE_KEY = "rhabbits_state_v1";
 // every future code change to this file so a reload can be visually
 // confirmed against what was actually deployed. Distinct from any
 // data-schema/localStorage version (this app has none yet).
-var APP_VERSION = "1.0+47832aac";
+var APP_VERSION = "1.0+8ef9071c";
 // Sorted into one logical sequence -- nature, sleep/wake, fitness/routine
 // (including female-presenting variants), pirate/nautical, animals (dogs'
 // own toys grouped right after the dog breeds), then beauty/spa/self-care
@@ -2569,10 +2585,12 @@ function renderHabitCard(h){
     ? '<button class="'+statusCls+'" data-action="'+HABIT_TOGGLE_ACTION[h.type]+'" data-id="'+h.id+'" aria-label="'+(logged?'Mark not done':'Mark done')+'">'+statusInner+'</button>'
     : '<span class="'+statusCls+'">'+statusInner+'</span>';
   // Alarm is set from inside the habit detail modal (renderHabitDetailModal())
-  // -- this row only shows a small green indicator when one is set, and
-  // takes up no space at all when it isn't, so rows without an alarm stay
-  // exactly as compact as before.
-  var alarmIndicator = h.alarmTime ? '<span class="habit-alarm-indicator" aria-label="Alarm set for '+escapeAttr(formatAlarmTime(h.alarmTime))+'">'+alarmIconSvg("16")+'</span>' : '';
+  // -- this row only shows a small green indicator when one is set. Always
+  // rendered (empty span when there's no alarm) so it occupies the left slot
+  // of .habit-row-top and status stays pinned to the right via
+  // justify-content:space-between -- with only status present, a single flex
+  // child would sit at the *left* instead.
+  var alarmIndicator = h.alarmTime ? '<span class="habit-alarm-indicator" aria-label="Alarm set for '+escapeAttr(formatAlarmTime(h.alarmTime))+'">'+alarmIconSvg("15")+'</span>' : '<span></span>';
   // A <div>, not a <button>, now that it wraps the status circle's own
   // <button> above -- a button can't nest another button. Still carries
   // data-action/data-id so the existing generic [data-action] click wiring
@@ -2586,12 +2604,16 @@ function renderHabitCard(h){
   // every single card was redundant. habitTypeBadge() is still used by the
   // flat, ungrouped Due Today modal and the habit detail modal, where the
   // type isn't otherwise implied.
+  // Alarm/status sit in their own top strip (.habit-row-top) instead of
+  // sharing the emoji/name row -- .habit-row-main below gets the card's
+  // full width for the name instead of splitting it with two icons.
   return (
     '<div class="habit-row" data-action="show-habit-detail" data-id="'+h.id+'">' +
-      '<span class="habit-emoji">'+h.emoji+'</span>' +
-      '<span class="habit-name">'+escapeHtml(h.name)+'</span>' +
-      alarmIndicator +
-      status +
+      '<div class="habit-row-top">' + alarmIndicator + status + '</div>' +
+      '<div class="habit-row-main">' +
+        '<span class="habit-emoji">'+h.emoji+'</span>' +
+        '<span class="habit-name">'+escapeHtml(h.name)+'</span>' +
+      '</div>' +
     '</div>'
   );
 }
