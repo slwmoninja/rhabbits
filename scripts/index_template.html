@@ -384,7 +384,16 @@ img{max-width:100%; display:block;}
    odd habit out just leaves the second cell of its row empty. Only used on
    the Logbook screen -- the flat Due Today/Special Days modal lists below
    render .habit-row directly, one per line, and keep their own spacing. */
-.habit-grid{display:grid; grid-template-columns:1fr 1fr; gap:14px 8px; margin-bottom:8px;}
+/* minmax(0,1fr), not plain 1fr -- a bare 1fr track's minimum is "auto",
+   which is the largest min-content of anything in that column. Card names
+   are white-space:nowrap (see .habit-grid .habit-name), so their min-content
+   is their full unwrapped text width -- text-overflow:ellipsis doesn't
+   change that. Left as plain 1fr, a column holding a long name would
+   silently grow wider than one holding only short names, breaking equal
+   card widths both within a section and across sections that each get
+   their own habit-grid. minmax(0,1fr) floors that minimum at 0 so both
+   columns always split the row exactly evenly regardless of content. */
+.habit-grid{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:14px 8px; margin-bottom:8px;}
 /* Cards stay single-line (emoji + name, ellipsized -- see .habit-grid
    .habit-name) so height never changes with name length. Alarm/status
    aren't part of that line at all -- .habit-row-top below floats them as
@@ -394,7 +403,7 @@ img{max-width:100%; display:block;}
    has to be a bit taller than a normal card gap, so a badge popping above
    one card doesn't collide with the card sitting in the row above it. */
 .habit-grid .habit-row{
-  position:relative;
+  position:relative; min-width:0;
   flex-direction:row; align-items:center; gap:6px;
   margin-bottom:0; padding:7px 9px;
 }
@@ -428,7 +437,10 @@ img{max-width:100%; display:block;}
   font-size:.68rem; line-height:1;
 }
 .habit-grid .habit-status.done{background:var(--leaf-bright); border-color:var(--leaf-bright); color:#fff;}
-.habit-grid .habit-status.due{border-color:var(--gold);}
+/* Same filled red/gold treatment as the topbar's due-today-btn (see above)
+   instead of just an outlined circle, so a due card stands out at a glance
+   rather than blending into the parchment card background. */
+.habit-grid .habit-status.due{background:linear-gradient(180deg, var(--danger), #7a2318); border-color:var(--gold);}
 .habit-grid .habit-status.idle{border-color:var(--parchment-edge);}
 .habit-grid .habit-status.idle::after{width:6px; height:6px;}
 .habit-grid .due-today-cal{width:13px; height:13px; border-radius:2px;}
@@ -914,7 +926,7 @@ var STORAGE_KEY = "rhabbits_state_v1";
 // every future code change to this file so a reload can be visually
 // confirmed against what was actually deployed. Distinct from any
 // data-schema/localStorage version (this app has none yet).
-var APP_VERSION = "1.0+a7c956ff";
+var APP_VERSION = "1.0+b9bf39a0";
 // Sorted into one logical sequence -- nature, sleep/wake, fitness/routine
 // (including female-presenting variants), pirate/nautical, animals (dogs'
 // own toys grouped right after the dog breeds), then beauty/spa/self-care
