@@ -393,15 +393,16 @@ img{max-width:100%; display:block;}
    card widths both within a section and across sections that each get
    their own habit-grid. minmax(0,1fr) floors that minimum at 0 so both
    columns always split the row exactly evenly regardless of content. */
-.habit-grid{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:14px 8px; margin-bottom:8px;}
+.habit-grid{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:20px 8px; margin-bottom:8px;}
 /* Cards stay single-line (emoji + name, ellipsized -- see .habit-grid
-   .habit-name) so height never changes with name length. Alarm/status
-   aren't part of that line at all -- .habit-row-top below floats them as
-   corner badges outside the card's own box, popped half off its top edge
-   like a notification badge, via negative top/left/right. That keeps this
-   row snug (no reserved padding for them) and means .habit-grid's gap above
-   has to be a bit taller than a normal card gap, so a badge popping above
-   one card doesn't collide with the card sitting in the row above it. */
+   .habit-name) so height never changes with name length. Alarm/status/
+   next-due aren't part of that line at all -- .habit-row-top and
+   .habit-next-due below float them as corner badges outside the card's own
+   box, popped half off its top/bottom edge like a notification badge, via
+   negative top/bottom/left/right. That keeps this row snug (no reserved
+   padding for them) and means .habit-grid's row-gap above has to be taller
+   than a normal card gap, so a badge popping below one row's cards doesn't
+   collide with the next row's cards popping their own badges above. */
 .habit-grid .habit-row{
   position:relative; min-width:0;
   flex-direction:row; align-items:center; gap:6px;
@@ -446,6 +447,21 @@ img{max-width:100%; display:block;}
 .habit-grid .due-today-cal{width:13px; height:13px; border-radius:2px;}
 .habit-grid .due-today-cal-hdr{height:3.5px;}
 .habit-grid .due-today-cal-day{font-size:.5rem;}
+/* Weekly/monthly/annual/once-off next-due date (see habitNextDueDate()) --
+   same "corner badge popped half off the card" treatment as
+   .habit-alarm-indicator/.habit-status above, just bottom-right and text
+   instead of an icon, so it adds zero height/width to the card itself.
+   pointer-events:none since it's a plain label, not a control -- a tap on
+   its corner still falls through to .habit-row's own show-habit-detail
+   handler underneath. */
+.habit-grid .habit-next-due{
+  position:absolute; bottom:-6px; right:-3px;
+  font-size:.55rem; font-weight:700; line-height:1; white-space:nowrap;
+  padding:2px 5px; border-radius:7px;
+  background:var(--parchment-hi); border:1.5px solid var(--parchment-edge);
+  box-shadow:0 1px 3px rgba(0,0,0,.35);
+  color:var(--wood); pointer-events:none;
+}
 .habit-row{
   width:100%; display:flex; align-items:center; gap:8px; text-align:left;
   background:linear-gradient(180deg, var(--parchment-hi), var(--parchment));
@@ -926,7 +942,7 @@ var STORAGE_KEY = "rhabbits_state_v1";
 // every future code change to this file so a reload can be visually
 // confirmed against what was actually deployed. Distinct from any
 // data-schema/localStorage version (this app has none yet).
-var APP_VERSION = "1.0+0224a5b0";
+var APP_VERSION = "1.0+950a6e16";
 // Sorted into one logical sequence -- nature, sleep/wake, fitness/routine
 // (including female-presenting variants), pirate/nautical, animals (dogs'
 // own toys grouped right after the dog breeds), then beauty/spa/self-care
@@ -2598,6 +2614,61 @@ function habitDueToday(h){
 function dueTodayHabits(state){
   return state.habits.filter(habitDueToday);
 }
+// "Mon Aug 5" -- the exact format asked for on the card's next-due badge
+// (see habitNextDueDate()/renderHabitCard()), distinct from
+// specialDayDateLabel()'s "Mon, Aug 5" (comma) used elsewhere.
+function shortDateLabel(d){
+  return SPECIAL_DAY_WEEKDAY_ABBR[d.getDay()]+" "+SPECIAL_DAY_MONTH_ABBR[d.getMonth()]+" "+d.getDate();
+}
+// The next calendar date this habit will actually need action on, for the
+// small next-due badge on its Logbook card (see renderHabitCard()) --
+// weekly/monthly/annual only, the three fixed-schedule types plus once-off,
+// per the scope the badge shipped with. Not "the next date, whatever it
+// takes" for a rolling "every N days" habit (no fixed calendar slot to
+// report) or daily (due every day, a date would be redundant) -- those
+// return null and render no badge.
+// Once this period is already satisfied, rolls forward to the *next*
+// period's date rather than repeating today's/this month's/this year's,
+// since that one's done. Otherwise reports this period's own target date,
+// even if it's already passed (an overdue badge is still useful information,
+// same spirit as onceoffPastDue()'s "Passed due" meta line) -- only once
+// logged does it advance.
+function habitNextDueDate(h){
+  if(h.type==="onceoff"){
+    if(h.completions.length || !h.dueDate) return null;
+    return new Date(h.dueDate+"T00:00:00");
+  }
+  if(h.type==="monthly"){
+    if(typeof h.dayOfMonth!=="number") return null;
+    var now = new Date(); now.setHours(0,0,0,0);
+    var y = now.getFullYear(), m = now.getMonth();
+    if(habitCompletedThisPeriod(h)){ m++; if(m>11){ m=0; y++; } }
+    return new Date(y, m, Math.min(h.dayOfMonth, daysInMonth(y, m+1)));
+  }
+  if(h.type==="weekly"){
+    var wDays = habitWeeklyDays(h);
+    if(!wDays.length) return null;
+    var d = new Date(); d.setHours(0,0,0,0);
+    if(habitCompletedThisPeriod(h)){
+      // Jump past the rest of this week -- even an earlier scheduled day
+      // still to come this week isn't "next due" once this week's single
+      // completion is already banked (see habitCompletedThisPeriod()).
+      var mondayOffset = 7 - ((d.getDay()+6)%7);
+      d.setDate(d.getDate()+mondayOffset);
+    }
+    for(var i=0;i<7;i++){
+      if(wDays.indexOf(d.getDay())!==-1) return new Date(d);
+      d.setDate(d.getDate()+1);
+    }
+    return null;
+  }
+  if(h.type==="every" && habitHasAnnualDate(h)){
+    var year = new Date().getFullYear();
+    if(habitCompletedThisPeriod(h)) year++;
+    return new Date(year, h.annualMonth-1, habitAnnualDueDayThisYear(h, year));
+  }
+  return null;
+}
 // A once-off reminder that slipped past its due date without being
 // completed -- surfaced in its meta line (see renderHabitDetailModal())
 // and offered up for deletion (see maybeConfirmOnceoffPastDue()) the moment
@@ -2687,6 +2758,11 @@ function renderHabitCard(h){
   // justify-content:space-between -- with only status present, a single flex
   // child would sit at the *left* instead.
   var alarmIndicator = h.alarmTime ? '<span class="habit-alarm-indicator" aria-label="Alarm set for '+escapeAttr(formatAlarmTime(h.alarmTime))+'">'+alarmIconSvg("15")+'</span>' : '<span></span>';
+  // Weekly/monthly/annual/once-off only (see habitNextDueDate()) -- tucked
+  // into the bottom-right corner the same way alarm/status float off the
+  // top corners, so it costs the card no extra height/width of its own.
+  var nextDue = habitNextDueDate(h);
+  var nextDueHtml = nextDue ? '<span class="habit-next-due">'+shortDateLabel(nextDue)+'</span>' : '';
   // A <div>, not a <button>, now that it wraps the status circle's own
   // <button> above -- a button can't nest another button. Still carries
   // data-action/data-id so the existing generic [data-action] click wiring
@@ -2710,6 +2786,7 @@ function renderHabitCard(h){
         '<span class="habit-emoji">'+h.emoji+'</span>' +
         '<span class="habit-name">'+escapeHtml(h.name)+'</span>' +
       '</div>' +
+      nextDueHtml +
     '</div>'
   );
 }
