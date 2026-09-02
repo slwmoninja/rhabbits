@@ -926,7 +926,7 @@ var STORAGE_KEY = "rhabbits_state_v1";
 // every future code change to this file so a reload can be visually
 // confirmed against what was actually deployed. Distinct from any
 // data-schema/localStorage version (this app has none yet).
-var APP_VERSION = "1.0+08631065";
+var APP_VERSION = "1.0+0224a5b0";
 // Sorted into one logical sequence -- nature, sleep/wake, fitness/routine
 // (including female-presenting variants), pirate/nautical, animals (dogs'
 // own toys grouped right after the dog breeds), then beauty/spa/self-care
@@ -2600,9 +2600,12 @@ function dueTodayHabits(state){
 }
 // A once-off reminder that slipped past its due date without being
 // completed -- surfaced in its meta line (see renderHabitDetailModal())
-// and offered up for deletion (see maybeConfirmOnceoffPastDue()) at the
-// two points a user naturally stops needing it around: completing it late,
-// or dismissing its ringing alarm.
+// and offered up for deletion (see maybeConfirmOnceoffPastDue()) the moment
+// it's finally completed late, the one point a user naturally stops
+// needing it. Dismissing its ringing alarm does NOT trigger that offer --
+// see the "dismiss-alarm" case in onAction() -- so it keeps ringing on
+// schedule and reading as due indefinitely until actually done or deleted
+// by hand.
 function onceoffPastDue(h){
   return h.type==="onceoff" && !h.completions.length && !!h.dueDate && h.dueDate<todayStr();
 }
@@ -4060,11 +4063,12 @@ function onAction(e){
       saveHabitAlarm(el.getAttribute("data-id"), "");
       break;
     case "dismiss-alarm":
+      // Silencing a ringing alarm never offers to delete the reminder, even
+      // if it's already past due -- dismissing just means "not right now,"
+      // often at a genuinely inconvenient moment, not "I don't need this
+      // anymore." The habit stays exactly as due as it was; only actually
+      // completing it late (see toggleOnceoff()) still asks.
       stopBeepTone();
-      (state.pendingAlarmIds||[]).forEach(function(alarmId){
-        var alarmHabit = findHabit(alarmId);
-        if(alarmHabit && onceoffPastDue(alarmHabit)) maybeConfirmOnceoffPastDue(alarmHabit);
-      });
       state.pendingAlarmIds = [];
       save();
       render();
@@ -4390,12 +4394,13 @@ function renderHabitAlarmModal(id){
   html += '</div></div>';
   return html;
 }
-// Offers to delete a once-off reminder right after it's been dismissed
-// while still past its due date -- either by completing it late (see
-// toggleOnceoff()) or by dismissing its ringing alarm (see the
-// "dismiss-alarm" case in onAction()). Answering No just leaves it in the
-// list; its meta line then reads "Passed due" instead of a plain due date
-// while it's still unlogged (see renderHabitDetailModal()).
+// Offers to delete a once-off reminder right after it's finally been
+// completed late (see toggleOnceoff()) -- the one moment a user naturally
+// stops needing it. Deliberately NOT called from "dismiss-alarm" (see
+// onAction()) -- silencing an inconvenient alarm shouldn't also prompt to
+// delete the thing it was reminding about. Answering No just leaves it in
+// the list; its meta line then reads "Passed due" instead of a plain due
+// date while it's still unlogged (see renderHabitDetailModal()).
 function maybeConfirmOnceoffPastDue(h){
   if(confirm("Delete this once off reminder?")){
     state.habits = state.habits.filter(function(hb){ return hb.id!==h.id; });
