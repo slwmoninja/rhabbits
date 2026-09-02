@@ -926,7 +926,7 @@ var STORAGE_KEY = "rhabbits_state_v1";
 // every future code change to this file so a reload can be visually
 // confirmed against what was actually deployed. Distinct from any
 // data-schema/localStorage version (this app has none yet).
-var APP_VERSION = "1.0+b9bf39a0";
+var APP_VERSION = "1.0+08631065";
 // Sorted into one logical sequence -- nature, sleep/wake, fitness/routine
 // (including female-presenting variants), pirate/nautical, animals (dogs'
 // own toys grouped right after the dog breeds), then beauty/spa/self-care
@@ -2518,16 +2518,73 @@ function habitTypeBadge(h){
   }
   return "Once-off";
 }
+// Current period key for weekly/monthly/annual habits -- the same grain
+// habitLogged()/habitCompletedThisPeriod() key completions against, just
+// exposed standalone so checkMissedPeriodicHabits() below can compare
+// "yesterday's period" against "today's period" and tell a genuine miss
+// (still the same week/month/year) from a period that's simply already
+// rolled over. Optionally evaluated against an arbitrary date rather than
+// today, for that same yesterday-vs-today comparison. Not meaningful for
+// daily/onceoff/rolling "every N days" habits, which have no fixed
+// due-day to miss in the first place -- returns null for those.
+function habitPeriodToken(h, d){
+  if(h.type==="weekly") return isoWeekStr(d);
+  if(h.type==="monthly") return monthStr(d);
+  if(h.type==="every" && habitHasAnnualDate(h)) return String((d||new Date()).getFullYear());
+  return null;
+}
+// Whether h's fixed due-day (weekly day-of-week, monthly day-of-month, or
+// annual date) falls on calendar date d -- the same per-type day-match
+// habitDueToday() gates on below, factored out so checkMissedPeriodicHabits()
+// can ask the identical question about yesterday instead of today.
+function habitDueOnDate(h, d){
+  if(h.type==="weekly"){
+    var wDays = habitWeeklyDays(h);
+    return !wDays.length || wDays.indexOf(d.getDay())!==-1;
+  }
+  if(h.type==="monthly"){
+    if(typeof h.dayOfMonth!=="number") return true;
+    return Math.min(h.dayOfMonth, daysInMonth(d.getFullYear(), d.getMonth()+1))===d.getDate();
+  }
+  if(h.type==="every" && habitHasAnnualDate(h)){
+    return (d.getMonth()+1)===h.annualMonth && d.getDate()===habitAnnualDueDayThisYear(h, d.getFullYear());
+  }
+  return false;
+}
+// Already logged for the *current* week/month/year -- unlike habitLogged(),
+// which for an annual "every" habit reads true on any day that isn't its
+// exact due date (see habitEveryDue()), this only cares whether this
+// period specifically has a completion. That distinction matters once
+// h.periodOverride is active: the habit needs to keep reading as due on
+// off-days too, all the way up to an actual completion.
+function habitCompletedThisPeriod(h){
+  if(h.type==="weekly") return h.completions.indexOf(isoWeekStr())!==-1;
+  if(h.type==="monthly") return h.completions.indexOf(monthStr())!==-1;
+  if(h.type==="every" && habitHasAnnualDate(h)){
+    if(!h.completions.length) return false;
+    return parseInt(h.completions[h.completions.length-1].slice(0,4),10)===new Date().getFullYear();
+  }
+  return false;
+}
 // A habit is "due" right now if it's not currently satisfied for its
 // period/interval -- daily/weekly/monthly/every all reduce to "not
 // logged"; once-off additionally needs its due date to have arrived (a
 // future due date isn't due *yet*, though it's still tracked normally).
 // Legacy once-offs from before this feature has no dueDate at all -- those
 // stay "always due until done", matching how they behaved before.
+// h.periodOverride (set by checkMissedPeriodicHabits() when the player
+// opts to keep a missed weekly/monthly/annual habit active) bypasses the
+// day-of-week/day-of-month/annual-date gating below for the rest of that
+// same period -- the habit reads as due every day until either logged or
+// the period rolls over, at which point periodOverride no longer matches
+// habitPeriodToken(h) and this falls back to the normal fixed-day gating.
 function habitDueToday(h){
   if(h.type==="onceoff"){
     if(h.completions.length) return false;
     return !h.dueDate || h.dueDate<=todayStr();
+  }
+  if(h.periodOverride && h.periodOverride===habitPeriodToken(h)){
+    return !habitCompletedThisPeriod(h);
   }
   if(h.type==="weekly"){
     var wDays = habitWeeklyDays(h);
@@ -4344,6 +4401,45 @@ function maybeConfirmOnceoffPastDue(h){
     state.habits = state.habits.filter(function(hb){ return hb.id!==h.id; });
   }
 }
+// A weekly/monthly/annual habit ("every" with a fixed annualMonth/Day) whose
+// fixed due-day was yesterday, wasn't logged, and has already dropped back
+// out of habitDueToday() today because today isn't itself a scheduled day --
+// the one-day window in which asking "keep it active?" is still useful,
+// before the player has any reason to think the miss went unnoticed.
+function habitMissedYesterday(h){
+  var token = habitPeriodToken(h);
+  if(!token) return false;
+  if(habitCompletedThisPeriod(h)) return false;
+  if(h.periodOverride===token) return false; // already opted in this period
+  if(h.periodPrompted===token) return false; // already asked (yes or no) this period
+  var yesterday = new Date(); yesterday.setDate(yesterday.getDate()-1);
+  if(habitPeriodToken(h, yesterday)!==token) return false; // period already turned over
+  if(!habitDueOnDate(h, yesterday)) return false; // yesterday wasn't even a scheduled day
+  if(habitDueOnDate(h, new Date())) return false; // still due today anyway, nothing to offer
+  return true;
+}
+function periodNoun(h){
+  if(h.type==="weekly") return "week";
+  if(h.type==="monthly") return "month";
+  return "year";
+}
+// Run once per load (see BOOTSTRAP below): offers to keep a just-missed
+// weekly/monthly/annual habit reading as "due" for the rest of its period
+// -- see habitDueToday()'s h.periodOverride branch -- rather than letting it
+// silently vanish from the Logbook until its next scheduled day/month/year.
+// Answering No (or dismissing) just records h.periodPrompted so the same
+// habit doesn't ask again every day for the rest of this period; it can
+// still be logged normally on its next scheduled occurrence either way.
+function checkMissedPeriodicHabits(){
+  if(!state.onboarded) return;
+  state.habits.forEach(function(h){
+    if(!habitMissedYesterday(h)) return;
+    h.periodPrompted = habitPeriodToken(h);
+    if(confirm(h.emoji+" "+h.name+" -- looks like you missed it. Keep it active as due until the "+periodNoun(h)+" ends?")){
+      h.periodOverride = h.periodPrompted;
+    }
+  });
+}
 function deleteHabit(id){
   if(!confirm("Delete this rHabbit?")) return;
   var h = findHabit(id);
@@ -5874,6 +5970,7 @@ function stopBeepTone(){
    BOOTSTRAP
    ========================================================= */
 evaluateRewards();
+checkMissedPeriodicHabits();
 save();
 render();
 try{ history.replaceState(currentNavState(), ""); }catch(e){} // the first screen shown on load establishes the baseline
