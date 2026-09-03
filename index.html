@@ -558,6 +558,14 @@ img{max-width:100%; display:block;}
 .day-pip.done{background:var(--leaf); color:#fff;}
 .day-pip-note{position:absolute; top:-6px; right:-4px; font-size:.6rem; filter:drop-shadow(0 1px 1px rgba(0,0,0,.5));}
 .day-pip.today{outline:2px solid var(--carrot); outline-offset:1px;}
+/* Weekly's day-pip strip only (see renderHabitDetailModal()) -- each pip
+   sits in its own labeled column so a sparse, day-skipping row (e.g. just
+   Tue+Thu) still reads unambiguously as "which day is this pip." The
+   plain unlabeled .day-pip buttons used by the daily 7-day strip are
+   untouched -- .day-pip-col only wraps weekly's. */
+.day-pip-col{display:flex; flex-direction:column; align-items:center; gap:3px; flex:1;}
+.day-pip-col .day-pip{width:100%; flex:none;}
+.day-pip-label{font-size:.6rem; font-weight:700; text-transform:uppercase; letter-spacing:.03em; color:var(--wood);}
 /* A weekly day-pip that's past its scheduled date, still unlogged, and the
    player opted to keep it active (see habitWeeklyMissedYesterday()) -- same
    "passed due" warm-red language as .habit-meta.overdue, distinct from the
@@ -950,7 +958,7 @@ var STORAGE_KEY = "rhabbits_state_v1";
 // every future code change to this file so a reload can be visually
 // confirmed against what was actually deployed. Distinct from any
 // data-schema/localStorage version (this app has none yet).
-var APP_VERSION = "1.0+f3698210";
+var APP_VERSION = "1.0+a08f46d5";
 // Sorted into one logical sequence -- nature, sleep/wake, fitness/routine
 // (including female-presenting variants), pirate/nautical, animals (dogs'
 // own toys grouped right after the dog breeds), then beauty/spa/self-care
@@ -3013,8 +3021,15 @@ function renderHabitDetailModal(id){
         var pHasNote = h.notes && (pds in h.notes);
         var pipCls = 'day-pip '+(pdone?'done':'')+' '+(ptoday?'today':'')+' '+(pmissed?'missed-kept':'');
         var pipInner = (pdone?'✓':(pmissed?'⚠':''))+(pHasNote?'<span class="day-pip-note">📝</span>':'');
-        var pipLabel = SPECIAL_DAY_WEEKDAY_ABBR[pd.getDay()]+(pdone?' logged':(pmissed?' missed -- kept active':' not logged'));
-        weekPips += '<button class="'+pipCls+'" data-action="toggle-weekly-day" data-id="'+h.id+'" data-date="'+pds+'" aria-label="'+escapeAttr(pipLabel)+'">'+pipInner+'</button>';
+        var pipWeekdayAbbr = SPECIAL_DAY_WEEKDAY_ABBR[pd.getDay()];
+        var pipLabel = pipWeekdayAbbr+(pdone?' logged':(pmissed?' missed -- kept active':' not logged'));
+        // Each pip gets its own visible weekday label (unlike the daily
+        // strip's plain 7-in-a-row, where position alone already means
+        // "today, yesterday, ..." -- weekly's pips are sparse and skip
+        // non-scheduled days, so which pip is which day isn't otherwise
+        // obvious at a glance) -- wrapped in its own column since the
+        // label needs to sit outside the pip button itself.
+        weekPips += '<div class="day-pip-col"><span class="day-pip-label">'+pipWeekdayAbbr+'</span><button class="'+pipCls+'" data-action="toggle-weekly-day" data-id="'+h.id+'" data-date="'+pds+'" aria-label="'+escapeAttr(pipLabel)+'">'+pipInner+'</button></div>';
       }
     }
     html += '<div class="habit-week">'+weekPips+'</div>';
