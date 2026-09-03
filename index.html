@@ -558,6 +558,14 @@ img{max-width:100%; display:block;}
 .day-pip.done{background:var(--leaf); color:#fff;}
 .day-pip-note{position:absolute; top:-6px; right:-4px; font-size:.6rem; filter:drop-shadow(0 1px 1px rgba(0,0,0,.5));}
 .day-pip.today{outline:2px solid var(--carrot); outline-offset:1px;}
+/* A weekly day-pip that's past its scheduled date, still unlogged, and the
+   player opted to keep it active (see habitWeeklyMissedYesterday()) -- same
+   "passed due" warm-red language as .habit-meta.overdue, distinct from the
+   plain unfilled/.done states so it doesn't read as just another empty day. */
+.day-pip.missed-kept{background:rgba(198,93,45,.18); color:var(--carrot-deep); outline:2px solid var(--carrot-deep); outline-offset:1px;}
+/* Due Today list only (see renderDueTodayModal()) -- flags a row as a
+   missed-but-kept-active occurrence rather than a plain today-due one. */
+.habit-missed-icon{flex-shrink:0; color:var(--carrot-deep); font-size:.85rem;}
 .log-btn{
   width:100%; border:none; border-radius:9px; padding:11px; font-weight:700; font-size:.92rem;
   background:linear-gradient(180deg, var(--carrot), var(--carrot-deep)); color:#fff7ea;
@@ -942,7 +950,7 @@ var STORAGE_KEY = "rhabbits_state_v1";
 // every future code change to this file so a reload can be visually
 // confirmed against what was actually deployed. Distinct from any
 // data-schema/localStorage version (this app has none yet).
-var APP_VERSION = "1.0+950a6e16";
+var APP_VERSION = "1.0+f3698210";
 // Sorted into one logical sequence -- nature, sleep/wake, fitness/routine
 // (including female-presenting variants), pirate/nautical, animals (dogs'
 // own toys grouped right after the dog breeds), then beauty/spa/self-care
@@ -1447,6 +1455,25 @@ function isoWeekStr(d){
   var firstThursday = new Date(Date.UTC(dt.getUTCFullYear(), 0, 4));
   var week = 1 + Math.round(((dt - firstThursday) / 86400000 - 3 + ((firstThursday.getUTCDay()+6)%7)) / 7);
   return dt.getUTCFullYear() + "-W" + (week<10?"0":"") + week;
+}
+// Local-calendar Monday of the given ISO week ("2026", 36 -> the Date for
+// that week's Monday) -- inverse of isoWeekStr(), used only by
+// migrateWeeklyCompletions() below to reconstruct an approximate date from
+// a legacy week-token completion. Jan 4 always falls in ISO week 1, so
+// walking back to *its* Monday anchors week 1, then plain 7-day steps reach
+// any later week.
+function isoWeekMonday(year, week){
+  var jan4 = new Date(year,0,4);
+  var week1Monday = new Date(year,0,4-((jan4.getDay()+6)%7));
+  var d = new Date(week1Monday); d.setDate(week1Monday.getDate()+(week-1)*7);
+  return d;
+}
+// Local-calendar Monday of the CURRENT week -- used by renderHabitDetailModal()'s
+// weekly day-pip strip to walk that week's 7 dates in order.
+function currentWeekMonday(){
+  var d = new Date(); d.setHours(0,0,0,0);
+  d.setDate(d.getDate() - ((d.getDay()+6)%7));
+  return d;
 }
 
 function daysSince(iso){
@@ -1992,7 +2019,37 @@ function load(){
 // pagehide left a real gap.
 function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); scheduleExitBackup(); }
 
+// One-time migration for weekly habits whose completions predate per-day
+// tracking (Sept 2026: a weekly habit used to record a single ISO-week
+// token like "2026-W36" per logged week, so a habit scheduled for e.g.
+// Tue+Thu couldn't track those two days independently -- completing either
+// one satisfied the whole week and silently cleared any missed-day
+// catch-up for the other, see habitDueToday()). Converts each legacy
+// week-token into the LAST scheduled day-of-week on/before that week's end
+// (or that week's Monday if the habit has no recorded days) -- the closest
+// available guess, since which exact day was actually done was never
+// recorded. Completions already in YYYY-MM-DD form (including ones from
+// non-weekly habit types, unaffected by this bug) are left untouched.
+function migrateWeeklyCompletions(state){
+  var weekTokenRe = /^\d{4}-W\d{2}$/;
+  (state.habits||[]).forEach(function(h){
+    if(h.type!=="weekly" || !Array.isArray(h.completions)) return;
+    h.completions = h.completions.map(function(c){
+      if(!weekTokenRe.test(c)) return c;
+      var monday = isoWeekMonday(parseInt(c.slice(0,4),10), parseInt(c.slice(6),10));
+      var wDays = habitWeeklyDays(h);
+      var best = monday;
+      for(var i=0;i<7;i++){
+        var d = new Date(monday); d.setDate(monday.getDate()+i);
+        if(!wDays.length || wDays.indexOf(d.getDay())!==-1) best = d;
+      }
+      return localDateStr(best);
+    });
+  });
+}
+
 var state = load();
+migrateWeeklyCompletions(state);
 // Every fresh app open (icon tap, browser relaunch) lands on the Logbook --
 // that's the default view -- regardless of whatever screen/modal was open
 // when the user last left. Mid-session bottom-nav taps to Rewards/Profile
@@ -2123,11 +2180,10 @@ function evaluateStreakBonus(){
 // to cap discovery pacing at one credit per day regardless of how many
 // habits get completed that day.
 function hasCompletionToday(state){
-  var t = todayStr(), w = isoWeekStr(), m = monthStr();
+  var t = todayStr(), m = monthStr();
   return state.habits.some(function(h){
     if(h.type==="monthly") return h.completions.indexOf(m)!==-1;
-    if(h.type==="weekly") return h.completions.indexOf(w)!==-1;
-    return h.completions.indexOf(t)!==-1;
+    return h.completions.indexOf(t)!==-1; // weekly completions are per-date now, same check as daily/every
   });
 }
 
@@ -2332,7 +2388,7 @@ function renderTopbar(){
   // "logbook" in state.screen at that point (see onAction()'s
   // navigateTo() calls).
   var onLogbook = state.screen==="logbook";
-  var dueCount = onLogbook ? dueTodayHabits(state).length : 0;
+  var dueCount = onLogbook ? dueOccurrences(state).length : 0;
   var cakeDue = onLogbook && specialDayDueTomorrow();
   if(cakeDue){
     html += '  <button class="icon-btn special-day-btn" data-action="show-special-days" aria-label="A special day is tomorrow"><span>🎂</span></button>';
@@ -2505,7 +2561,11 @@ function sortHabitsForDisplay(type, habits){
 
 function habitLogged(h){
   if(h.type==="daily") return h.completions.indexOf(todayStr())!==-1;
-  if(h.type==="weekly") return h.completions.indexOf(isoWeekStr())!==-1;
+  // Weekly completions are per-scheduled-date now (see toggleWeekly()/
+  // migrateWeeklyCompletions()), same shape as daily -- "logged" means
+  // *today's* occurrence specifically, not "the week has any completion at
+  // all," so a multi-day habit's days track independently.
+  if(h.type==="weekly") return h.completions.indexOf(todayStr())!==-1;
   if(h.type==="monthly") return h.completions.indexOf(monthStr())!==-1;
   if(h.type==="every") return !habitEveryDue(h) && !habitEveryPending(h);
   return h.completions.length>0; // onceoff
@@ -2574,7 +2634,10 @@ function habitDueOnDate(h, d){
 // h.periodOverride is active: the habit needs to keep reading as due on
 // off-days too, all the way up to an actual completion.
 function habitCompletedThisPeriod(h){
-  if(h.type==="weekly") return h.completions.indexOf(isoWeekStr())!==-1;
+  // Weekly no longer has a single period-level "completed" flag -- each
+  // scheduled day tracks independently (see habitWeeklyMissedDaysDue()/
+  // habitDueToday()'s own weekly branch, which this function is no longer
+  // consulted for).
   if(h.type==="monthly") return h.completions.indexOf(monthStr())!==-1;
   if(h.type==="every" && habitHasAnnualDate(h)){
     if(!h.completions.length) return false;
@@ -2594,25 +2657,59 @@ function habitCompletedThisPeriod(h){
 // same period -- the habit reads as due every day until either logged or
 // the period rolls over, at which point periodOverride no longer matches
 // habitPeriodToken(h) and this falls back to the normal fixed-day gating.
+// True if this weekly habit has an earlier scheduled day this week that was
+// missed and the player opted (via checkMissedPeriodicHabits()) to keep it
+// reading as due -- and that specific day still has no completion. Each
+// missed day tracks its own entry in h.missedDaysOverride (a date string),
+// independent of any other scheduled day in the same week, so e.g. a missed
+// Tuesday stays outstanding even after Thursday gets logged.
+function habitWeeklyMissedDaysDue(h){
+  return !!(h.missedDaysOverride && h.missedDaysOverride.some(function(ds){
+    return h.completions.indexOf(ds)===-1;
+  }));
+}
 function habitDueToday(h){
   if(h.type==="onceoff"){
     if(h.completions.length) return false;
     return !h.dueDate || h.dueDate<=todayStr();
   }
-  if(h.periodOverride && h.periodOverride===habitPeriodToken(h)){
-    return !habitCompletedThisPeriod(h);
-  }
   if(h.type==="weekly"){
+    if(habitWeeklyMissedDaysDue(h)) return true;
     var wDays = habitWeeklyDays(h);
     if(wDays.length && wDays.indexOf(new Date().getDay())===-1) return false;
+    return !habitLogged(h);
+  }
+  if(h.periodOverride && h.periodOverride===habitPeriodToken(h)){
+    return !habitCompletedThisPeriod(h);
   }
   if(h.type==="monthly" && typeof h.dayOfMonth==="number" && habitMonthlyDueDayThisMonth(h)!==new Date().getDate()){
     return false;
   }
   return !habitLogged(h);
 }
-function dueTodayHabits(state){
-  return state.habits.filter(habitDueToday);
+// Every currently-due occurrence, one entry per occurrence rather than per
+// habit -- a weekly habit with both a missed-but-kept-active day AND a
+// genuinely due day today produces two separate entries, each flagged
+// independently via `missed`, so the Due Today list (renderDueTodayModal())
+// and its topbar badge count both reflect actual outstanding occurrences.
+function dueOccurrences(state){
+  var out = [], t = todayStr();
+  state.habits.forEach(function(h){
+    if(h.type==="weekly"){
+      (h.missedDaysOverride||[]).forEach(function(ds){
+        if(h.completions.indexOf(ds)===-1) out.push({habit:h, date:ds, missed:true});
+      });
+      var wDays = habitWeeklyDays(h);
+      if(wDays.indexOf(new Date().getDay())!==-1 && h.completions.indexOf(t)===-1){
+        out.push({habit:h, date:t, missed:false});
+      }
+      return;
+    }
+    if(!habitDueToday(h)) return;
+    var missed = !!(h.periodOverride && h.periodOverride===habitPeriodToken(h));
+    out.push({habit:h, date:t, missed:missed});
+  });
+  return out;
 }
 // "Mon Aug 5" -- the exact format asked for on the card's next-due badge
 // (see habitNextDueDate()/renderHabitCard()), distinct from
@@ -2648,16 +2745,14 @@ function habitNextDueDate(h){
   if(h.type==="weekly"){
     var wDays = habitWeeklyDays(h);
     if(!wDays.length) return null;
+    // Each scheduled day tracks its own completion now (see toggleWeekly()),
+    // so "next due" is simply the earliest upcoming scheduled date -- today
+    // included, if today is scheduled and not yet logged -- that has no
+    // completion recorded, searching up to two weeks out so it always finds
+    // one even if every remaining day this week is already done.
     var d = new Date(); d.setHours(0,0,0,0);
-    if(habitCompletedThisPeriod(h)){
-      // Jump past the rest of this week -- even an earlier scheduled day
-      // still to come this week isn't "next due" once this week's single
-      // completion is already banked (see habitCompletedThisPeriod()).
-      var mondayOffset = 7 - ((d.getDay()+6)%7);
-      d.setDate(d.getDate()+mondayOffset);
-    }
-    for(var i=0;i<7;i++){
-      if(wDays.indexOf(d.getDay())!==-1) return new Date(d);
+    for(var i=0;i<14;i++){
+      if(wDays.indexOf(d.getDay())!==-1 && h.completions.indexOf(localDateStr(d))===-1) return new Date(d);
       d.setDate(d.getDate()+1);
     }
     return null;
@@ -2729,8 +2824,27 @@ function alarmIconSvg(size){
 // status circle (see renderHabitCard()) can check/uncheck a habit through
 // the exact same, already-correct toggle logic.
 var HABIT_TOGGLE_ACTION = {daily:"toggle-daily", weekly:"toggle-weekly", monthly:"toggle-monthly", onceoff:"toggle-onceoff", every:"toggle-every"};
+// A multi-day weekly habit (more than one scheduled day-of-week) has no
+// single "today" that represents the whole habit, so its card-level
+// checkmark means something different from a single-day habit's: not
+// "today's occurrence is done" but "every one of this week's scheduled
+// occurrences is done" -- earned automatically once each day-pip in the
+// detail modal (see renderHabitDetailModal()) is individually checked off,
+// never toggleable directly from here (see canToggle below).
+function habitWeekFullyLogged(h){
+  var wDays = habitWeeklyDays(h);
+  if(wDays.length<=1) return h.completions.indexOf(todayStr())!==-1;
+  var mon = currentWeekMonday();
+  for(var i=0;i<7;i++){
+    var d = new Date(mon); d.setDate(mon.getDate()+i);
+    if(wDays.indexOf(d.getDay())===-1) continue;
+    if(h.completions.indexOf(localDateStr(d))===-1) return false;
+  }
+  return true;
+}
 function renderHabitCard(h){
-  var logged = habitLogged(h);
+  var multiDayWeekly = h.type==="weekly" && habitWeeklyDays(h).length>1;
+  var logged = multiDayWeekly ? habitWeekFullyLogged(h) : habitLogged(h);
   // Reuses the same habitDueToday() check that drives the topbar's due-today
   // count/icon (see dueTodayIconHtml()) so a due-but-unlogged habit gets the
   // same mini-calendar glyph here on its own row -- it disappears the moment
@@ -2747,7 +2861,12 @@ function renderHabitCard(h){
   // swapping to a plain note button once logged). Every other type's toggle
   // operates on a period key (today/this week/this month/ever), not a
   // specific date, so it's unambiguous to flip either direction any time.
-  var canToggle = h.type!=="every" || habitEveryDue(h);
+  // Multi-day weekly is excluded outright -- see habitWeekFullyLogged()'s
+  // comment -- and single-day weekly only toggles while its one day is
+  // actually due or already logged, same stray-completion guard as "every".
+  var canToggle = (h.type!=="every" || habitEveryDue(h))
+    && !multiDayWeekly
+    && (h.type!=="weekly" || habitDueToday(h) || logged);
   var status = canToggle
     ? '<button class="'+statusCls+'" data-action="'+HABIT_TOGGLE_ACTION[h.type]+'" data-id="'+h.id+'" aria-label="'+(logged?'Mark not done':'Mark done')+'">'+statusInner+'</button>'
     : '<span class="'+statusCls+'">'+statusInner+'</span>';
@@ -2871,16 +2990,45 @@ function renderHabitDetailModal(id){
     }
     metaHtml = '<div class="habit-meta">'+h.completions.length+' month'+(h.completions.length===1?'':'s')+' logged'+(typeof h.dayOfMonth==="number" ? ' · Target: '+h.dayOfMonth : '')+'</div>';
   } else if(h.type==="weekly"){
-    var w = isoWeekStr();
-    var doneWeek = h.completions.indexOf(w)!==-1;
-    html += habitProgressPipsHtml(h);
-    if(doneWeek){
-      logBtnHtml = '<button class="log-btn log-btn-sm done" data-action="open-habit-note" data-id="'+h.id+'">'+(habitHasNote(h)?'📝':'✓')+' Logged this week</button>';
+    // One pip per scheduled day-of-week THIS week (not a fixed 7, unlike
+    // the daily strip above) -- each independently tappable via
+    // toggle-weekly-day, so e.g. a missed Tuesday and an already-logged
+    // Thursday show and act on their own, exactly the independent-per-day
+    // tracking this whole redesign exists for (see toggleWeeklyDate()).
+    var wDaysSorted = habitWeeklyDaysSorted(h);
+    var todayDs = todayStr();
+    var weekPips = '';
+    if(wDaysSorted.length){
+      var mon = currentWeekMonday();
+      for(var wi=0; wi<7; wi++){
+        var pd = new Date(mon); pd.setDate(mon.getDate()+wi);
+        if(wDaysSorted.indexOf(pd.getDay())===-1) continue;
+        var pds = localDateStr(pd);
+        var pdone = h.completions.indexOf(pds)!==-1;
+        // "Missed -- kept active": an earlier scheduled day this week that
+        // went unlogged and the player opted to keep due (see
+        // checkMissedPeriodicHabits()) rather than let it quietly lapse.
+        var pmissed = !pdone && pds<todayDs && (h.missedDaysOverride||[]).indexOf(pds)!==-1;
+        var ptoday = pds===todayDs;
+        var pHasNote = h.notes && (pds in h.notes);
+        var pipCls = 'day-pip '+(pdone?'done':'')+' '+(ptoday?'today':'')+' '+(pmissed?'missed-kept':'');
+        var pipInner = (pdone?'✓':(pmissed?'⚠':''))+(pHasNote?'<span class="day-pip-note">📝</span>':'');
+        var pipLabel = SPECIAL_DAY_WEEKDAY_ABBR[pd.getDay()]+(pdone?' logged':(pmissed?' missed -- kept active':' not logged'));
+        weekPips += '<button class="'+pipCls+'" data-action="toggle-weekly-day" data-id="'+h.id+'" data-date="'+pds+'" aria-label="'+escapeAttr(pipLabel)+'">'+pipInner+'</button>';
+      }
+    }
+    html += '<div class="habit-week">'+weekPips+'</div>';
+    var primaryDate = weeklyPrimaryActionDate(h);
+    var primaryDone = h.completions.indexOf(primaryDate)!==-1;
+    if(primaryDone){
+      var primaryHasNote = h.notes && (primaryDate in h.notes);
+      logBtnHtml = '<button class="log-btn log-btn-sm done" data-action="open-habit-note" data-id="'+h.id+'" data-date="'+primaryDate+'">'+(primaryHasNote?'📝':'✓')+' Logged</button>';
     } else {
-      logBtnHtml = '<button class="log-btn log-btn-sm" data-action="toggle-weekly" data-id="'+h.id+'">Log this Week  +1 🥕</button>';
+      var primaryLabel = primaryDate===todayDs ? 'Today' : SPECIAL_DAY_WEEKDAY_ABBR[new Date(primaryDate+"T00:00:00").getDay()]+' (missed)';
+      logBtnHtml = '<button class="log-btn log-btn-sm" data-action="toggle-weekly-day" data-id="'+h.id+'" data-date="'+primaryDate+'">Log '+primaryLabel+'  +1 🥕</button>';
     }
     var wTargetLbl = habitWeeklyDaysLabel(h);
-    metaHtml = '<div class="habit-meta">'+h.completions.length+' week'+(h.completions.length===1?'':'s')+' logged'+(wTargetLbl ? ' · Target: '+wTargetLbl : '')+'</div>';
+    metaHtml = '<div class="habit-meta">'+h.completions.length+' occurrence'+(h.completions.length===1?'':'s')+' logged'+(wTargetLbl ? ' · Target: '+wTargetLbl : '')+'</div>';
   } else if(h.type==="every"){
     var everyDue = habitEveryDue(h);
     var everyPending = habitEveryPending(h);
@@ -3282,7 +3430,12 @@ function renderRewardDetailModal(id){
 // top-right topbar tap, not a bottom-nav/inline action, so a bottom sheet
 // would visually run away from where the tap happened.
 function renderDueTodayModal(){
-  var due = dueTodayHabits(state);
+  // One row per outstanding OCCURRENCE, not per habit (see dueOccurrences())
+  // -- a weekly habit with both a missed-but-kept-active day and a
+  // genuinely due day today lists twice, the missed one wearing the
+  // "passed due" icon so it reads as a separate, distinguishable item
+  // rather than looking like a duplicate.
+  var due = dueOccurrences(state);
   var html = '<div class="modal-backdrop center" data-backdrop="due-today">';
   html += '<div class="modal">';
   html += '<button class="modal-close" data-action="close-modal">✕</button>';
@@ -3290,10 +3443,12 @@ function renderDueTodayModal(){
   if(due.length===0){
     html += '<p class="due-today-empty">Nothing due right now -- nice work!</p>';
   } else {
-    due.forEach(function(h){
+    due.forEach(function(o){
+      var h = o.habit;
       html += '<button class="habit-row" data-action="show-habit-detail" data-id="'+h.id+'">' +
         '<span class="habit-emoji">'+h.emoji+'</span>' +
         '<span class="habit-name">'+escapeHtml(h.name)+'</span>' +
+        (o.missed ? '<span class="habit-missed-icon" title="Missed -- kept active" aria-label="Missed, kept active">⚠</span>' : '') +
         '<span class="habit-type-badge">'+habitTypeBadge(h)+'</span>' +
       '</button>';
     });
@@ -4105,6 +4260,15 @@ function onAction(e){
       e.stopPropagation();
       toggleWeekly(el.getAttribute("data-id"));
       break;
+    // Detail modal's per-scheduled-day pip strip (see renderHabitDetailModal())
+    // -- unlike toggle-weekly above, targets the exact date tapped rather
+    // than resolving one via weeklyPrimaryActionDate(), since each pip
+    // already IS a specific date.
+    case "toggle-weekly-day":
+      e.stopPropagation();
+      var weeklyDayHabit = findHabit(el.getAttribute("data-id"));
+      if(weeklyDayHabit){ toggleWeeklyDate(weeklyDayHabit, el.getAttribute("data-date")); save(); render(); }
+      break;
     case "toggle-every":
       e.stopPropagation();
       toggleEvery(el.getAttribute("data-id"));
@@ -4305,15 +4469,37 @@ function toggleMonthly(id){
   evaluateRewards();
   save(); render();
 }
-function toggleWeekly(id){
-  var h = findHabit(id); if(!h) return;
-  var w = isoWeekStr();
-  var idx = h.completions.indexOf(w);
-  // Same reasoning as toggleMonthly() -- period key, note goes with it.
-  if(idx===-1){ h.completions.push(w); state.carrots++; grantCocoLife(); grantTreasureMove(); }
-  else { h.completions.splice(idx,1); state.carrots=Math.max(0,state.carrots-1); deleteHabitNoteFor(h,w); }
+// Which specific date the card-level status circle (see renderHabitCard(),
+// single-day weekly only -- multi-day never reaches here, canToggle is
+// false for it) or a no-date-specified toggle should act on: today's own
+// entry if today already has one (so un-checking removes exactly that),
+// else today itself if today is the scheduled day, else the oldest
+// outstanding missed-day catch-up if one is active, else today as a last
+// resort (unreachable in practice since canToggle already gates this out).
+function weeklyPrimaryActionDate(h){
+  var t = todayStr();
+  if(h.completions.indexOf(t)!==-1) return t;
+  if(habitWeeklyDays(h).indexOf(new Date().getDay())!==-1) return t;
+  var missed = (h.missedDaysOverride||[]).filter(function(ds){ return h.completions.indexOf(ds)===-1; });
+  if(missed.length) return missed[0];
+  return t;
+}
+// Toggles one specific scheduled occurrence's completion -- shared by the
+// card's status circle (toggleWeekly() below, always today's/the primary
+// date) and the detail modal's per-day pips (toggle-weekly-day, any date in
+// the current week, see renderHabitDetailModal()). Each date is independent
+// (see migrateWeeklyCompletions()), so completing one scheduled day never
+// affects any other day's own completion state.
+function toggleWeeklyDate(h, ds){
+  var idx = h.completions.indexOf(ds);
+  if(idx===-1){ h.completions.push(ds); state.carrots++; grantCocoLife(); grantTreasureMove(); }
+  else { h.completions.splice(idx,1); state.carrots=Math.max(0,state.carrots-1); deleteHabitNoteFor(h,ds); }
   markActiveToday();
   evaluateRewards();
+}
+function toggleWeekly(id){
+  var h = findHabit(id); if(!h) return;
+  toggleWeeklyDate(h, weeklyPrimaryActionDate(h));
   save(); render();
 }
 function toggleEvery(id){
@@ -4364,7 +4550,11 @@ function toggleOnceoff(id){
    just see an array of strings) so nothing else has to change shape. */
 function habitNoteKey(h){
   if(h.type==="daily") return todayStr();
-  if(h.type==="weekly") return isoWeekStr();
+  // Weekly notes are keyed per specific date now (see toggleWeekly()), same
+  // as daily -- this generic fallback (today) is rarely hit in practice
+  // since the detail modal's per-day pips and "Logged" button both pass an
+  // explicit data-date, see "open-habit-note" in onAction().
+  if(h.type==="weekly") return todayStr();
   if(h.type==="monthly") return monthStr();
   if(h.type==="every") return h.completions[h.completions.length-1]; // most recently logged date
   return h.completions[0]; // onceoff -- undefined if not yet completed
@@ -4483,12 +4673,16 @@ function maybeConfirmOnceoffPastDue(h){
     state.habits = state.habits.filter(function(hb){ return hb.id!==h.id; });
   }
 }
-// A weekly/monthly/annual habit ("every" with a fixed annualMonth/Day) whose
-// fixed due-day was yesterday, wasn't logged, and has already dropped back
-// out of habitDueToday() today because today isn't itself a scheduled day --
-// the one-day window in which asking "keep it active?" is still useful,
-// before the player has any reason to think the miss went unnoticed.
+// A monthly/annual habit ("every" with a fixed annualMonth/Day) whose fixed
+// due-day was yesterday, wasn't logged, and has already dropped back out of
+// habitDueToday() today because today isn't itself a scheduled day -- the
+// one-day window in which asking "keep it active?" is still useful, before
+// the player has any reason to think the miss went unnoticed. Weekly is
+// excluded -- it has its own per-day equivalent, habitWeeklyMissedYesterday()
+// below, since a single period-level flag can't represent "which of several
+// scheduled days this week was missed."
 function habitMissedYesterday(h){
+  if(h.type==="weekly") return false;
   var token = habitPeriodToken(h);
   if(!token) return false;
   if(habitCompletedThisPeriod(h)) return false;
@@ -4500,21 +4694,64 @@ function habitMissedYesterday(h){
   if(habitDueOnDate(h, new Date())) return false; // still due today anyway, nothing to offer
   return true;
 }
+// Weekly equivalent of habitMissedYesterday() above, but per specific missed
+// date rather than per period -- so a habit scheduled Tue+Thu can be asked
+// about (and independently keep active) a missed Tuesday without that
+// swallowing a later missed Thursday's own prompt, and vice versa.
+function habitWeeklyMissedYesterday(h){
+  var yesterday = new Date(); yesterday.setDate(yesterday.getDate()-1);
+  if(!habitDueOnDate(h, yesterday)) return false; // yesterday wasn't a scheduled day
+  var ds = localDateStr(yesterday);
+  if(h.completions.indexOf(ds)!==-1) return false; // already logged (possibly backdated via catch-up)
+  if((h.missedDaysPrompted||[]).indexOf(ds)!==-1) return false; // already asked (yes or no) about this date
+  if(habitDueOnDate(h, new Date())) return false; // today's already its own due day, nothing extra to offer
+  return true;
+}
 function periodNoun(h){
   if(h.type==="weekly") return "week";
   if(h.type==="monthly") return "month";
   return "year";
 }
+// Run once per load, before checkMissedPeriodicHabits() -- drops any
+// missedDaysOverride/missedDaysPrompted date left over from a prior week
+// (the week rolled over without that day ever getting logged) so it can't
+// keep marking the habit "due" forever, and so the exact same date-of-week
+// can be prompted about again next time it's missed. Any date still within
+// the current ISO week is left alone.
+function pruneWeeklyMissedDays(){
+  var w = isoWeekStr();
+  state.habits.forEach(function(h){
+    if(h.type!=="weekly") return;
+    if(Array.isArray(h.missedDaysOverride)){
+      h.missedDaysOverride = h.missedDaysOverride.filter(function(ds){ return isoWeekStr(new Date(ds+"T00:00:00"))===w; });
+    }
+    if(Array.isArray(h.missedDaysPrompted)){
+      h.missedDaysPrompted = h.missedDaysPrompted.filter(function(ds){ return isoWeekStr(new Date(ds+"T00:00:00"))===w; });
+    }
+  });
+}
 // Run once per load (see BOOTSTRAP below): offers to keep a just-missed
 // weekly/monthly/annual habit reading as "due" for the rest of its period
-// -- see habitDueToday()'s h.periodOverride branch -- rather than letting it
-// silently vanish from the Logbook until its next scheduled day/month/year.
-// Answering No (or dismissing) just records h.periodPrompted so the same
-// habit doesn't ask again every day for the rest of this period; it can
-// still be logged normally on its next scheduled occurrence either way.
+// -- see habitDueToday()'s h.periodOverride branch, or for weekly,
+// h.missedDaysOverride -- rather than letting it silently vanish from the
+// Logbook until its next scheduled day/month/year. Answering No (or
+// dismissing) just records the prompt so the same habit/date doesn't ask
+// again; it can still be logged normally (or caught up late) either way.
 function checkMissedPeriodicHabits(){
   if(!state.onboarded) return;
   state.habits.forEach(function(h){
+    if(h.type==="weekly"){
+      if(!habitWeeklyMissedYesterday(h)) return;
+      var yesterday = new Date(); yesterday.setDate(yesterday.getDate()-1);
+      var ds = localDateStr(yesterday);
+      if(!h.missedDaysPrompted) h.missedDaysPrompted = [];
+      h.missedDaysPrompted.push(ds);
+      if(confirm(h.emoji+" "+h.name+" -- looks like you missed it. Keep it active as due until the week ends?")){
+        if(!h.missedDaysOverride) h.missedDaysOverride = [];
+        h.missedDaysOverride.push(ds);
+      }
+      return;
+    }
     if(!habitMissedYesterday(h)) return;
     h.periodPrompted = habitPeriodToken(h);
     if(confirm(h.emoji+" "+h.name+" -- looks like you missed it. Keep it active as due until the "+periodNoun(h)+" ends?")){
@@ -6052,6 +6289,7 @@ function stopBeepTone(){
    BOOTSTRAP
    ========================================================= */
 evaluateRewards();
+pruneWeeklyMissedDays();
 checkMissedPeriodicHabits();
 save();
 render();
