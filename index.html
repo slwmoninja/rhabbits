@@ -958,7 +958,7 @@ var STORAGE_KEY = "rhabbits_state_v1";
 // every future code change to this file so a reload can be visually
 // confirmed against what was actually deployed. Distinct from any
 // data-schema/localStorage version (this app has none yet).
-var APP_VERSION = "1.0+a08f46d5";
+var APP_VERSION = "1.0+aef3291b";
 // Sorted into one logical sequence -- nature, sleep/wake, fitness/routine
 // (including female-presenting variants), pirate/nautical, animals (dogs'
 // own toys grouped right after the dog breeds), then beauty/spa/self-care
@@ -4713,13 +4713,20 @@ function habitMissedYesterday(h){
 // date rather than per period -- so a habit scheduled Tue+Thu can be asked
 // about (and independently keep active) a missed Tuesday without that
 // swallowing a later missed Thursday's own prompt, and vice versa.
+// Unlike habitMissedYesterday() above, this deliberately has NO "still due
+// today anyway, nothing to offer" guard -- for monthly/annual that guard is
+// effectively a no-op (there's only one due day per period, so it can't
+// also be true the day right after a miss), but for weekly it would be a
+// real bug: a Wed+Thu habit missing Wed has today (Thu) genuinely due at
+// the same time, and both need their own independent prompt/surface (see
+// dueOccurrences()) rather than the Wed miss being silently swallowed just
+// because Thu also happens to be due.
 function habitWeeklyMissedYesterday(h){
   var yesterday = new Date(); yesterday.setDate(yesterday.getDate()-1);
   if(!habitDueOnDate(h, yesterday)) return false; // yesterday wasn't a scheduled day
   var ds = localDateStr(yesterday);
   if(h.completions.indexOf(ds)!==-1) return false; // already logged (possibly backdated via catch-up)
   if((h.missedDaysPrompted||[]).indexOf(ds)!==-1) return false; // already asked (yes or no) about this date
-  if(habitDueOnDate(h, new Date())) return false; // today's already its own due day, nothing extra to offer
   return true;
 }
 function periodNoun(h){
