@@ -962,7 +962,7 @@ var STORAGE_KEY = "rhabbits_state_v1";
 // every future code change to this file so a reload can be visually
 // confirmed against what was actually deployed. Distinct from any
 // data-schema/localStorage version (this app has none yet).
-var APP_VERSION = "1.0+c2f47486";
+var APP_VERSION = "1.0+5ea138d3";
 // Sorted into one logical sequence -- nature, sleep/wake, fitness/routine
 // (including female-presenting variants), pirate/nautical, animals (dogs'
 // own toys grouped right after the dog breeds), then beauty/spa/self-care
@@ -1809,11 +1809,16 @@ function specialDaysSorted(){
     return specialDaySortKey(a) - specialDaySortKey(b);
   });
 }
-// Powers the topbar cake icon -- deliberately "exactly tomorrow" only (not
-// "tomorrow or today"), so it reads as an advance heads-up to still go get
-// a card/gift, not a same-day notice once that window's already passed.
-function specialDayDueTomorrow(){
-  return state.specialDays.concat(visibleGlobalHolidays()).some(function(sd){ return specialDayNextOccurrenceDays(sd)===1; });
+// Powers the topbar cake icon -- fires the day before (an advance heads-up
+// to still go get a card/gift) *and* stays lit through the day itself,
+// rather than disappearing the moment "tomorrow" rolls over into "today".
+function specialDayDueSoon(){
+  return state.specialDays.concat(visibleGlobalHolidays()).some(function(sd){ var n = specialDayNextOccurrenceDays(sd); return n===0 || n===1; });
+}
+// True only for an occurrence happening today specifically, used just to
+// pick the right wording for the cake icon's aria-label below.
+function specialDayDueToday(){
+  return state.specialDays.concat(visibleGlobalHolidays()).some(function(sd){ return specialDayNextOccurrenceDays(sd)===0; });
 }
 
 function countActive(state, type){
@@ -1955,7 +1960,7 @@ function defaultState(){
     // every year (month+day only, no year stored) rather than tied to a
     // specific completion like everything else in this file. Reached via
     // the 🎂 chip in Profile > Settings (renderSpecialDaysModal()), and
-    // specialDayDueTomorrow() for the topbar cake icon.
+    // specialDayDueSoon() for the topbar cake icon.
     // Pre-seeded with Russ's own family anniversaries as starting examples.
     specialDays:[
       { id: uid(), names:"Cindy & Russ", occasion:"anniversary", occasionCustom:"", month:1, day:1 },
@@ -2401,9 +2406,10 @@ function renderTopbar(){
   // navigateTo() calls).
   var onLogbook = state.screen==="logbook";
   var dueCount = onLogbook ? dueOccurrences(state).length : 0;
-  var cakeDue = onLogbook && specialDayDueTomorrow();
+  var cakeDue = onLogbook && specialDayDueSoon();
   if(cakeDue){
-    html += '  <button class="icon-btn special-day-btn" data-action="show-special-days" aria-label="A special day is tomorrow"><span>🎂</span></button>';
+    var cakeLabel = specialDayDueToday() ? "A special day is today" : "A special day is tomorrow";
+    html += '  <button class="icon-btn special-day-btn" data-action="show-special-days" aria-label="'+cakeLabel+'"><span>🎂</span></button>';
   }
   if(dueCount>0){
     html += '  <button class="icon-btn due-today-btn" data-action="show-due-today" aria-label="'+dueCount+' rHabbit'+(dueCount===1?'':'s')+' due today">'+dueTodayIconHtml()+'<span class="due-today-badge">'+dueCount+'</span></button>';
@@ -4752,20 +4758,30 @@ function periodNoun(h){
   return "year";
 }
 // Run once per load, before checkMissedPeriodicHabits() -- drops any
-// missedDaysOverride/missedDaysPrompted date left over from a prior week
-// (the week rolled over without that day ever getting logged) so it can't
-// keep marking the habit "due" forever, and so the exact same date-of-week
-// can be prompted about again next time it's missed. Any date still within
-// the current ISO week is left alone.
+// missedDaysOverride/missedDaysPrompted date older than a rolling 7 days
+// so it can't keep marking the habit "due" forever, and so the exact same
+// date-of-week can be prompted about again next time it's missed.
+//
+// Deliberately NOT "still within the current ISO week" (Mon-Sun) as this
+// used to compare -- that broke Sat/Sun misses specifically: you're always
+// asked about a miss the *next* day (see habitWeeklyMissedYesterday()), so
+// a Sunday miss is only ever prompted on Monday, which is already a new
+// ISO week -- answering "yes, keep it active" recorded an override that
+// was stale the instant it was created, wiped on the very next load. A
+// Saturday miss fared only slightly better, surviving a single day
+// (Sunday) before Monday's load pruned it too. A flat 7-day-old cutoff
+// gives every day of the week the same real grace period regardless of
+// where it falls relative to the ISO week boundary.
 function pruneWeeklyMissedDays(){
-  var w = isoWeekStr();
+  var cutoff = new Date(); cutoff.setDate(cutoff.getDate()-6);
+  var cutoffStr = localDateStr(cutoff);
   state.habits.forEach(function(h){
     if(h.type!=="weekly") return;
     if(Array.isArray(h.missedDaysOverride)){
-      h.missedDaysOverride = h.missedDaysOverride.filter(function(ds){ return isoWeekStr(new Date(ds+"T00:00:00"))===w; });
+      h.missedDaysOverride = h.missedDaysOverride.filter(function(ds){ return ds>=cutoffStr; });
     }
     if(Array.isArray(h.missedDaysPrompted)){
-      h.missedDaysPrompted = h.missedDaysPrompted.filter(function(ds){ return isoWeekStr(new Date(ds+"T00:00:00"))===w; });
+      h.missedDaysPrompted = h.missedDaysPrompted.filter(function(ds){ return ds>=cutoffStr; });
     }
   });
 }
