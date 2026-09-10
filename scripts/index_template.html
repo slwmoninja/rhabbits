@@ -216,14 +216,17 @@ img{max-width:100%; display:block;}
 }
 .add-habit-fab:active{transform:translateY(1px);}
 .topbar-right{display:flex; align-items:center; gap:8px; flex-shrink:0;}
-.due-today-btn{
-  position:relative; width:40px; height:40px; border-radius:50%; flex-shrink:0;
+/* Opens the All rHabbits modal (see renderAllHabitsModal()) -- the Logbook
+   itself now only ever shows what's Missed/Due Today, so this is the one
+   way back to a complete, ungrouped-by-urgency view of every rHabbit. */
+.view-all-btn{
+  width:40px; height:40px; border-radius:50%; flex-shrink:0;
   background:linear-gradient(180deg, var(--danger), #7a2318);
   font-size:1.1rem; line-height:1;
   display:flex; align-items:center; justify-content:center;
   border:2px solid var(--gold); box-shadow:var(--shadow);
 }
-.due-today-btn:active{transform:translateY(1px);}
+.view-all-btn:active{transform:translateY(1px);}
 /* Hand-built rather than the 📅 emoji -- most emoji fonts bake in a fixed
    date (commonly the 17th or 31st) that never matches the real date, which
    read as a stale/wrong day. This actually shows today's day-of-month (see
@@ -255,7 +258,7 @@ img{max-width:100%; display:block;}
 /* Shown whenever an alarm is ringing (state.pendingAlarmIds non-empty, see
    checkAlarms()) regardless of which screen is active -- an alarm can fire
    while the user is on Rewards or inside a modal, not just the Logbook, so
-   unlike due-today-btn/special-day-btn above this isn't gated to onLogbook.
+   unlike view-all-btn/special-day-btn above this isn't gated to onLogbook.
    Pulses until "dismiss-alarm" is tapped, independent of the beep itself
    (see startBeep()'s own 30s cutoff) -- the beep can time out while this
    keeps pulsing to show there's still an unacknowledged alarm. */
@@ -378,22 +381,21 @@ img{max-width:100%; display:block;}
    background, e.g. Profile's "Manage"/"Holidays shown" labels), that same
    color would be near-invisible low-contrast, so darken it in that context. */
 .modal .section-label{color:var(--wood);}
-/* Two rHabbits per row (see renderHabitGroup()) so more fit on screen before
-   scrolling -- gap handles the spacing between cards, so .habit-row's own
-   margin-bottom is zeroed out inside here (below) to avoid doubling it. An
-   odd habit out just leaves the second cell of its row empty. Only used on
-   the Logbook screen -- the flat Due Today/Special Days modal lists below
-   render .habit-row directly, one per line, and keep their own spacing. */
+/* One rHabbit per row (see renderHabitGroup()) -- gap handles the spacing
+   between cards, so .habit-row's own margin-bottom is zeroed out inside here
+   (below) to avoid doubling it. Used on both the Logbook's Missed/Due Today
+   groups and the All rHabbits modal's type groups -- the flat Special Days
+   modal list below renders .habit-row directly instead, and keeps its own
+   spacing. */
 /* minmax(0,1fr), not plain 1fr -- a bare 1fr track's minimum is "auto",
    which is the largest min-content of anything in that column. Card names
    are white-space:nowrap (see .habit-grid .habit-name), so their min-content
    is their full unwrapped text width -- text-overflow:ellipsis doesn't
-   change that. Left as plain 1fr, a column holding a long name would
-   silently grow wider than one holding only short names, breaking equal
-   card widths both within a section and across sections that each get
-   their own habit-grid. minmax(0,1fr) floors that minimum at 0 so both
-   columns always split the row exactly evenly regardless of content. */
-.habit-grid{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:20px 8px; margin-bottom:8px;}
+   change that. Left as plain 1fr, the track would silently grow wider than
+   the card's own container to fit an unwrapped long name; minmax(0,1fr)
+   floors that minimum at 0 so the ellipsis actually gets a chance to kick
+   in instead. */
+.habit-grid{display:grid; grid-template-columns:minmax(0,1fr); gap:20px; margin-bottom:8px;}
 /* Cards stay single-line (emoji + name, ellipsized -- see .habit-grid
    .habit-name) so height never changes with name length. Alarm/status/
    next-due aren't part of that line at all -- .habit-row-top and
@@ -438,7 +440,7 @@ img{max-width:100%; display:block;}
   font-size:.68rem; line-height:1;
 }
 .habit-grid .habit-status.done{background:var(--leaf-bright); border-color:var(--leaf-bright); color:#fff;}
-/* Same filled red/gold treatment as the topbar's due-today-btn (see above)
+/* Same filled red/gold treatment as the topbar's view-all-btn (see above)
    instead of just an outlined circle, so a due card stands out at a glance
    rather than blending into the parchment card background. */
 .habit-grid .habit-status.due{background:linear-gradient(180deg, var(--danger), #7a2318); border-color:var(--gold);}
@@ -571,13 +573,6 @@ img{max-width:100%; display:block;}
    "passed due" warm-red language as .habit-meta.overdue, distinct from the
    plain unfilled/.done states so it doesn't read as just another empty day. */
 .day-pip.missed-kept{background:rgba(198,93,45,.18); color:var(--carrot-deep); outline:2px solid var(--carrot-deep); outline-offset:1px;}
-/* Due Today list only (see renderDueTodayModal()) -- flags a row as a
-   missed-but-kept-active occurrence rather than a plain today-due one.
-   Bolder/larger than a plain badge on purpose -- it's the one visual cue
-   telling the missed-Wed row apart from the due-Thu row for the same
-   habit, now that both also carry their own single-day badge text (see
-   dueOccurrenceBadge()). */
-.habit-missed-icon{flex-shrink:0; color:var(--carrot-deep); font-size:1.05rem; font-weight:700;}
 .log-btn{
   width:100%; border:none; border-radius:9px; padding:11px; font-weight:700; font-size:.92rem;
   background:linear-gradient(180deg, var(--carrot), var(--carrot-deep)); color:#fff7ea;
@@ -887,7 +882,7 @@ img.reward-hero{max-height:240px; max-width:100%; margin:0 auto 10px; border-rad
 }
 .coco-btn:active{transform:translateY(2px); box-shadow:0 1px 0 var(--wood-darker);}
 /* Plain red 3D button, no icon -- same red-gradient-plus-solid-offset-
-   shadow language as .add-habit-fab/.due-today-btn elsewhere, just bigger
+   shadow language as .add-habit-fab/.view-all-btn elsewhere, just bigger
    and circular so it reads as the primary action next to the smaller
    rounded-rect move buttons either side. Previously a 🥥 coconut emoji on
    an orange .coco-btn; a plain red button reads more like an actual "fire"
@@ -962,7 +957,7 @@ var STORAGE_KEY = "rhabbits_state_v1";
 // every future code change to this file so a reload can be visually
 // confirmed against what was actually deployed. Distinct from any
 // data-schema/localStorage version (this app has none yet).
-var APP_VERSION = "1.0+5ea138d3";
+var APP_VERSION = "1.0+a5293ada";
 // Sorted into one logical sequence -- nature, sleep/wake, fitness/routine
 // (including female-presenting variants), pirate/nautical, animals (dogs'
 // own toys grouped right after the dog breeds), then beauty/spa/self-care
@@ -2156,12 +2151,16 @@ function activeDayStreak(){
 // (see renderStreakRecordModal()) the moment a fresh streak actually
 // exceeds the *previous* best. Gated on longestActiveStreak already being
 // >0 so day one of ever using the app (0 -> 1) doesn't read as "beating"
-// a streak that never existed.
+// a streak that never existed. The record itself still updates with
+// Rewards off (the Logbook plaque that displays it is hidden, not the
+// tracking), but the celebration modal is reward-economy messaging, same
+// as the plaque -- only the pendingStreakRecord flag is gated, so it stays
+// accurate if Rewards gets switched back on later.
 function evaluateLongestStreak(){
   if(!state.onboarded) return;
   var streak = activeDayStreak();
   if(streak > state.longestActiveStreak){
-    if(state.longestActiveStreak > 0) state.pendingStreakRecord = true;
+    if(state.longestActiveStreak > 0 && state.rewardsEnabled) state.pendingStreakRecord = true;
     state.longestActiveStreak = streak;
   }
 }
@@ -2399,20 +2398,23 @@ function renderTopbar(){
     var alarmCount = state.pendingAlarmIds.length;
     html += '  <button class="icon-btn alarm-ringing-btn" data-action="dismiss-alarm" aria-label="'+alarmCount+' rHabbit alarm'+(alarmCount===1?'':'s')+' ringing -- tap to dismiss"><span>⏰</span>'+(alarmCount>1?'<span class="due-today-badge">'+alarmCount+'</span>':'')+'</button>';
   }
-  // Due-today/special-day icons only on the Logbook itself (not Rewards,
+  // Special-day/view-all icons only on the Logbook itself (not Rewards,
   // not while a modal is layered over it) -- Rewards has nothing to do
   // with today's habits, and a modal's own screen value already overwrote
   // "logbook" in state.screen at that point (see onAction()'s
   // navigateTo() calls).
   var onLogbook = state.screen==="logbook";
-  var dueCount = onLogbook ? dueOccurrences(state).length : 0;
   var cakeDue = onLogbook && specialDayDueSoon();
   if(cakeDue){
     var cakeLabel = specialDayDueToday() ? "A special day is today" : "A special day is tomorrow";
     html += '  <button class="icon-btn special-day-btn" data-action="show-special-days" aria-label="'+cakeLabel+'"><span>🎂</span></button>';
   }
-  if(dueCount>0){
-    html += '  <button class="icon-btn due-today-btn" data-action="show-due-today" aria-label="'+dueCount+' rHabbit'+(dueCount===1?'':'s')+' due today">'+dueTodayIconHtml()+'<span class="due-today-badge">'+dueCount+'</span></button>';
+  // Opens the complete, ungrouped-by-urgency habit list (renderAllHabitsModal())
+  // now that the Logbook itself (renderLogbookScreen()) only ever shows
+  // what's Missed/Due Today -- scroll, not the due-today calendar glyph,
+  // since it's no longer a due-count indicator.
+  if(onLogbook){
+    html += '  <button class="icon-btn view-all-btn" data-action="show-all-habits" aria-label="Show all rHabbits"><span>📜</span></button>';
   }
   // No cap on how many rHabbits can exist, of any type, so this button is
   // always available -- no "topbar-spacer" fallback needed for a disabled
@@ -2481,6 +2483,32 @@ function habitProgressPipsHtml(h){
   return '<div class="habit-progress-pips">'+carrotPipsHtml(Math.min(h.completions.length,7), 7)+'</div>';
 }
 
+// Every outstanding occurrence from dueOccurrences() (see there), collapsed
+// from one-row-per-occurrence down to one-row-per-HABIT -- the Logbook
+// below renders full habit cards (renderHabitCard()), not the flat
+// per-occurrence rows the old Due Today modal used, so a weekly habit with
+// both a missed day and a due-today day this week only needs the one card,
+// filed under Missed since that's the more urgent bucket. Once-off habits
+// past their due date are folded in as Missed too -- dueOccurrences() never
+// flags those `missed` itself (see its own comment), so onceoffPastDue()
+// covers that case here.
+function homeMissedAndDue(){
+  var missedIds = {}, dueIds = {};
+  dueOccurrences(state).forEach(function(o){
+    if(o.missed) missedIds[o.habit.id] = true; else dueIds[o.habit.id] = true;
+  });
+  var missed = [], due = [];
+  state.habits.forEach(function(h){
+    if(missedIds[h.id] || (h.type==="onceoff" && onceoffPastDue(h))) missed.push(h);
+    else if(dueIds[h.id]) due.push(h);
+  });
+  return {missed:missed, due:due};
+}
+
+// Default landing view -- only ever shows what's actionable right now
+// (Missed, then Due Today), not the full Daily/Weekly/Monthly/etc. roster --
+// see renderAllHabitsModal() (reached via the topbar's view-all-btn) for the
+// complete list.
 function renderLogbookScreen(){
   var html = '<section class="screen">';
   // "Carrots earned" plaque is entirely reward-economy UI (the count itself,
@@ -2505,6 +2533,40 @@ function renderLogbookScreen(){
     html += '</div></div>';
   }
 
+  var md = homeMissedAndDue();
+  if(md.missed.length){
+    html += '<div class="section-label">Missed</div><div class="habit-grid">';
+    md.missed.forEach(function(h){ html += renderHabitCard(h); });
+    html += '</div>';
+  }
+  html += '<div class="section-label">Due Today</div>';
+  if(md.due.length){
+    html += '<div class="habit-grid">';
+    md.due.forEach(function(h){ html += renderHabitCard(h); });
+    html += '</div>';
+  } else {
+    html += '<p class="due-today-empty">'+(md.missed.length ? 'Nothing else due today.' : 'Nothing due right now -- nice work!')+'</p>';
+  }
+
+  html += '</section>';
+  return html;
+}
+
+// Complete, ungrouped-by-urgency roster -- every rHabbit, grouped by type
+// the same way the Logbook itself used to be before it narrowed to just
+// Missed/Due Today (see renderLogbookScreen()). Reached via the topbar's
+// view-all-btn (see renderTopbar()), not the bottombar, so it's a modal
+// rather than its own peer screen.
+// Centered (not bottom-sheet) like the install-prompt popups -- see the
+// .modal-backdrop.center comment above -- since this is reached from a
+// top-right topbar tap, not a bottom-nav/inline action, so a bottom sheet
+// would visually run away from where the tap happened.
+function renderAllHabitsModal(){
+  var html = '<div class="modal-backdrop center" data-backdrop="all-habits">';
+  html += '<div class="modal">';
+  html += '<button class="modal-close" data-action="close-modal">✕</button>';
+  html += '<h3>All rHabbits</h3>';
+
   html += renderHabitGroup("daily", 'Daily <span style="text-transform:lowercase">r</span>Habbits');
   if(state.unlocks.second_garden || countActive(state,"weekly")>0){
     html += renderHabitGroup("weekly", 'Weekly <span style="text-transform:lowercase">r</span>Habbits');
@@ -2519,7 +2581,7 @@ function renderLogbookScreen(){
     html += renderHabitGroup("onceoff","Once-off Tasks");
   }
 
-  html += '</section>';
+  html += '</div></div>';
   return html;
 }
 
@@ -2528,9 +2590,7 @@ function renderHabitGroup(type, label){
   if(habits.length===0) return '';
   habits = sortHabitsForDisplay(type, habits);
   var html = '<div class="section-label">'+label+'</div>';
-  // Two-column grid (see .habit-grid) so more rHabbits fit on screen at once
-  // without scrolling -- an odd habit out just leaves the last cell empty
-  // rather than stretching to fill the row.
+  // One rHabbit per row (see .habit-grid), used from renderAllHabitsModal().
   html += '<div class="habit-grid">';
   habits.forEach(function(h){ html += renderHabitCard(h); });
   html += '</div>';
@@ -2611,19 +2671,6 @@ function habitTypeBadge(h){
     return "Every "+h.everyN+" "+everyUnitLabel(h);
   }
   return "Once-off";
-}
-// Per-occurrence variant of habitTypeBadge() above, for renderDueTodayModal()
-// only. habitTypeBadge() always lists every scheduled day of a weekly habit
-// ("Weekly · Wed, Thu"), which is right for the habit as a whole (habit
-// cards, detail view) but wrong here: a Wed+Thu habit that's missed Wed
-// while Thu is also due today produces two rows for the *same* habit (see
-// dueOccurrences()), and both showing "Wed, Thu" makes them read as
-// duplicates. Swap in just that occurrence's own day so the missed row
-// says "Wed" and the due-today row says "Thu".
-function dueOccurrenceBadge(o){
-  if(o.habit.type!=="weekly") return habitTypeBadge(o.habit);
-  var dv = new Date(o.date+"T00:00:00").getDay();
-  return "Weekly · "+SPECIAL_DAY_WEEKDAY_ABBR[dv];
 }
 // Current period key for weekly/monthly/annual habits -- the same grain
 // habitLogged()/habitCompletedThisPeriod() key completions against, just
@@ -2721,8 +2768,9 @@ function habitDueToday(h){
 // Every currently-due occurrence, one entry per occurrence rather than per
 // habit -- a weekly habit with both a missed-but-kept-active day AND a
 // genuinely due day today produces two separate entries, each flagged
-// independently via `missed`, so the Due Today list (renderDueTodayModal())
-// and its topbar badge count both reflect actual outstanding occurrences.
+// independently via `missed`, so the Logbook's Missed/Due Today grouping
+// (see homeMissedAndDue()) reflects actual outstanding occurrences even
+// when they belong to the same habit.
 function dueOccurrences(state){
   var out = [], t = todayStr();
   state.habits.forEach(function(h){
@@ -2876,11 +2924,12 @@ function habitWeekFullyLogged(h){
 function renderHabitCard(h){
   var multiDayWeekly = h.type==="weekly" && habitWeeklyDays(h).length>1;
   var logged = multiDayWeekly ? habitWeekFullyLogged(h) : habitLogged(h);
-  // Reuses the same habitDueToday() check that drives the topbar's due-today
-  // count/icon (see dueTodayIconHtml()) so a due-but-unlogged habit gets the
-  // same mini-calendar glyph here on its own row -- it disappears the moment
-  // the habit is logged (statusInner falls back to the done checkmark), so
-  // there's no separate "clear the icon" step needed.
+  // Reuses the same habitDueToday() check that drives the Logbook's Due
+  // Today grouping (see homeMissedAndDue()) so a due-but-unlogged habit gets
+  // the same mini-calendar glyph here on its own row (see dueTodayIconHtml())
+  // -- it disappears the moment the habit is logged (statusInner falls back
+  // to the done checkmark), so there's no separate "clear the icon" step
+  // needed.
   var dueToday = !logged && habitDueToday(h);
   var statusCls = 'habit-status '+(logged?'done':(dueToday?'due':'idle'));
   var statusInner = logged ? '✓' : (dueToday ? dueTodayIconHtml() : '');
@@ -2920,11 +2969,12 @@ function renderHabitCard(h){
   // anywhere else on the row (see the toggle-* cases' e.stopPropagation()
   // in onAction(), which keeps a status-circle tap from also bubbling up
   // and opening detail).
-  // No type-badge span here -- these rows only ever render inside a
+  // No type-badge span here -- these rows either render inside a
   // renderHabitGroup() section already headed "Daily rHabbits" / "Weekly
-  // rHabbits" / etc. (see renderHabitsScreen()), so repeating the type on
-  // every single card was redundant. habitTypeBadge() is still used by the
-  // flat, ungrouped Due Today modal and the habit detail modal, where the
+  // rHabbits" / etc. (see renderAllHabitsModal()), or inside the Logbook's
+  // own Missed/Due Today grouping (see renderLogbookScreen()), so repeating
+  // the type on every single card would be redundant either way.
+  // habitTypeBadge() is still used by the habit detail modal, where the
   // type isn't otherwise implied.
   // Alarm/status sit in their own top strip (.habit-row-top) instead of
   // sharing the emoji/name row -- .habit-row-main below gets the card's
@@ -3463,41 +3513,9 @@ function renderRewardDetailModal(id){
   return html;
 }
 
-// Centered (not bottom-sheet) like the install-prompt popups -- see the
-// .modal-backdrop.center comment above -- since this is reached from a
-// top-right topbar tap, not a bottom-nav/inline action, so a bottom sheet
-// would visually run away from where the tap happened.
-function renderDueTodayModal(){
-  // One row per outstanding OCCURRENCE, not per habit (see dueOccurrences())
-  // -- a weekly habit with both a missed-but-kept-active day and a
-  // genuinely due day today lists twice, the missed one wearing the
-  // "passed due" icon so it reads as a separate, distinguishable item
-  // rather than looking like a duplicate.
-  var due = dueOccurrences(state);
-  var html = '<div class="modal-backdrop center" data-backdrop="due-today">';
-  html += '<div class="modal">';
-  html += '<button class="modal-close" data-action="close-modal">✕</button>';
-  html += '<h3>Due Today</h3>';
-  if(due.length===0){
-    html += '<p class="due-today-empty">Nothing due right now -- nice work!</p>';
-  } else {
-    due.forEach(function(o){
-      var h = o.habit;
-      html += '<button class="habit-row" data-action="show-habit-detail" data-id="'+h.id+'">' +
-        '<span class="habit-emoji">'+h.emoji+'</span>' +
-        '<span class="habit-name">'+escapeHtml(h.name)+'</span>' +
-        (o.missed ? '<span class="habit-missed-icon" title="Missed -- kept active" aria-label="Missed, kept active">⚠</span>' : '') +
-        '<span class="habit-type-badge">'+dueOccurrenceBadge(o)+'</span>' +
-      '</button>';
-    });
-  }
-  html += '</div></div>';
-  return html;
-}
-
 // List popup for the "Special days" card -- bottom sheet like habit-detail/
 // add-habit (reached from an inline row tap, not a top-right topbar icon,
-// so unlike renderDueTodayModal() above it doesn't need the centered
+// so unlike renderAllHabitsModal() above it doesn't need the centered
 // variant). The "+" sits in the header next to close, same layout renderProfileModal()
 // already uses for pairing an extra header action with the close button.
 function renderSpecialDaysModal(){
@@ -3598,7 +3616,7 @@ function renderModals(){
   if(state.screen==="habit-alarm-modal"){ html += renderHabitAlarmModal(state._detailHabitId); }
   if(state.screen==="reward-detail-modal"){ html += renderRewardDetailModal(state._detailRewardId); }
   if(state.screen==="sightings-gallery-modal"){ html += renderSightingsGalleryModal(); }
-  if(state.screen==="due-today-modal"){ html += renderDueTodayModal(); }
+  if(state.screen==="all-habits-modal"){ html += renderAllHabitsModal(); }
   if(state.screen==="special-days-modal"){ html += renderSpecialDaysModal(); }
   if(state.screen==="special-day-form-modal"){ html += renderSpecialDayFormModal(); }
   if(state.screen==="next-rewards-detail-modal"){ html += renderNextRewardsDetailModal(); }
@@ -4204,8 +4222,8 @@ function onAction(e){
     case "show-sightings-gallery":
       navigateTo(function(){ state.screen = "sightings-gallery-modal"; });
       break;
-    case "show-due-today":
-      navigateTo(function(){ state.screen = "due-today-modal"; });
+    case "show-all-habits":
+      navigateTo(function(){ state.screen = "all-habits-modal"; });
       break;
     case "show-special-days":
       navigateTo(function(){ state.screen = "special-days-modal"; });
