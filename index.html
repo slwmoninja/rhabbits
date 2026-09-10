@@ -957,7 +957,7 @@ var STORAGE_KEY = "rhabbits_state_v1";
 // every future code change to this file so a reload can be visually
 // confirmed against what was actually deployed. Distinct from any
 // data-schema/localStorage version (this app has none yet).
-var APP_VERSION = "1.0+29b33e1d";
+var APP_VERSION = "1.0+3ada5857";
 // Sorted into one logical sequence -- nature, sleep/wake, fitness/routine
 // (including female-presenting variants), pirate/nautical, animals (dogs'
 // own toys grouped right after the dog breeds), then beauty/spa/self-care
@@ -2422,7 +2422,7 @@ function renderTopbar(){
   // without this, turning Rewards off while on this screen would strand the
   // user here with no visible way back at all.
   if(state.screen==="all-habits"){
-    html += '  <button class="icon-btn view-all-btn" data-action="show-logbook" aria-label="Back to Logbook"><span>&#8249;</span></button>';
+    html += '  <button class="icon-btn view-all-btn" data-action="show-logbook" aria-label="Back to Logbook"><span>&#128281;</span></button>';
   }
   // No cap on how many rHabbits can exist, of any type, so this button is
   // always available -- no "topbar-spacer" fallback needed for a disabled
