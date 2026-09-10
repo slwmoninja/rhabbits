@@ -216,9 +216,9 @@ img{max-width:100%; display:block;}
 }
 .add-habit-fab:active{transform:translateY(1px);}
 .topbar-right{display:flex; align-items:center; gap:8px; flex-shrink:0;}
-/* Opens the All rHabbits modal (see renderAllHabitsModal()) -- the Logbook
-   itself now only ever shows what's Missed/Due Today, so this is the one
-   way back to a complete, ungrouped-by-urgency view of every rHabbit. */
+/* Opens the All rHabbits screen (see renderAllHabitsScreen()) -- the
+   Logbook itself now only ever shows what's Missed/Due Today, so this is
+   the one way to a complete, ungrouped-by-urgency view of every rHabbit. */
 .view-all-btn{
   width:40px; height:40px; border-radius:50%; flex-shrink:0;
   background:linear-gradient(180deg, var(--danger), #7a2318);
@@ -957,7 +957,7 @@ var STORAGE_KEY = "rhabbits_state_v1";
 // every future code change to this file so a reload can be visually
 // confirmed against what was actually deployed. Distinct from any
 // data-schema/localStorage version (this app has none yet).
-var APP_VERSION = "1.0+a5293ada";
+var APP_VERSION = "1.0+29b33e1d";
 // Sorted into one logical sequence -- nature, sleep/wake, fitness/routine
 // (including female-presenting variants), pirate/nautical, animals (dogs'
 // own toys grouped right after the dog breeds), then beauty/spa/self-care
@@ -2398,23 +2398,31 @@ function renderTopbar(){
     var alarmCount = state.pendingAlarmIds.length;
     html += '  <button class="icon-btn alarm-ringing-btn" data-action="dismiss-alarm" aria-label="'+alarmCount+' rHabbit alarm'+(alarmCount===1?'':'s')+' ringing -- tap to dismiss"><span>⏰</span>'+(alarmCount>1?'<span class="due-today-badge">'+alarmCount+'</span>':'')+'</button>';
   }
-  // Special-day/view-all icons only on the Logbook itself (not Rewards,
-  // not while a modal is layered over it) -- Rewards has nothing to do
-  // with today's habits, and a modal's own screen value already overwrote
-  // "logbook" in state.screen at that point (see onAction()'s
-  // navigateTo() calls).
+  // Special-day/view-all icons only on the Logbook itself -- not Rewards,
+  // not the All rHabbits screen (view-all navigating to itself would be
+  // pointless), not while a modal is layered over it, either (a modal's own
+  // screen value already overwrote "logbook" in state.screen at that point,
+  // see onAction()'s navigateTo() calls).
   var onLogbook = state.screen==="logbook";
   var cakeDue = onLogbook && specialDayDueSoon();
   if(cakeDue){
     var cakeLabel = specialDayDueToday() ? "A special day is today" : "A special day is tomorrow";
     html += '  <button class="icon-btn special-day-btn" data-action="show-special-days" aria-label="'+cakeLabel+'"><span>🎂</span></button>';
   }
-  // Opens the complete, ungrouped-by-urgency habit list (renderAllHabitsModal())
+  // Opens the complete, ungrouped-by-urgency habit list (renderAllHabitsScreen())
   // now that the Logbook itself (renderLogbookScreen()) only ever shows
   // what's Missed/Due Today -- scroll, not the due-today calendar glyph,
   // since it's no longer a due-count indicator.
   if(onLogbook){
     html += '  <button class="icon-btn view-all-btn" data-action="show-all-habits" aria-label="Show all rHabbits"><span>📜</span></button>';
+  }
+  // Same topbar slot, opposite direction: the All rHabbits screen needs its
+  // own way back to the Logbook that doesn't depend on the bottombar, which
+  // is hidden entirely whenever Rewards is off (see syncBottombarUI()) --
+  // without this, turning Rewards off while on this screen would strand the
+  // user here with no visible way back at all.
+  if(state.screen==="all-habits"){
+    html += '  <button class="icon-btn view-all-btn" data-action="show-logbook" aria-label="Back to Logbook"><span>&#8249;</span></button>';
   }
   // No cap on how many rHabbits can exist, of any type, so this button is
   // always available -- no "topbar-spacer" fallback needed for a disabled
@@ -2440,7 +2448,9 @@ function renderApp(){
   if(state.screen==="rewards" && !state.rewardsEnabled){ state.screen = "logbook"; }
   var html = '';
   html += renderTopbar();
-  html += state.screen==="rewards" ? renderRewardsScreen() : renderLogbookScreen();
+  html += state.screen==="rewards" ? renderRewardsScreen()
+    : state.screen==="all-habits" ? renderAllHabitsScreen()
+    : renderLogbookScreen();
   html += renderModals();
   return html;
 }
@@ -2507,8 +2517,8 @@ function homeMissedAndDue(){
 
 // Default landing view -- only ever shows what's actionable right now
 // (Missed, then Due Today), not the full Daily/Weekly/Monthly/etc. roster --
-// see renderAllHabitsModal() (reached via the topbar's view-all-btn) for the
-// complete list.
+// see renderAllHabitsScreen() (reached via the topbar's view-all-btn) for
+// the complete list.
 function renderLogbookScreen(){
   var html = '<section class="screen">';
   // "Carrots earned" plaque is entirely reward-economy UI (the count itself,
@@ -2554,19 +2564,13 @@ function renderLogbookScreen(){
 
 // Complete, ungrouped-by-urgency roster -- every rHabbit, grouped by type
 // the same way the Logbook itself used to be before it narrowed to just
-// Missed/Due Today (see renderLogbookScreen()). Reached via the topbar's
-// view-all-btn (see renderTopbar()), not the bottombar, so it's a modal
-// rather than its own peer screen.
-// Centered (not bottom-sheet) like the install-prompt popups -- see the
-// .modal-backdrop.center comment above -- since this is reached from a
-// top-right topbar tap, not a bottom-nav/inline action, so a bottom sheet
-// would visually run away from where the tap happened.
-function renderAllHabitsModal(){
-  var html = '<div class="modal-backdrop center" data-backdrop="all-habits">';
-  html += '<div class="modal">';
-  html += '<button class="modal-close" data-action="close-modal">✕</button>';
-  html += '<h3>All rHabbits</h3>';
-
+// Missed/Due Today (see renderLogbookScreen()). A peer screen reached via
+// the topbar's view-all-btn (see renderTopbar()), not a modal -- same
+// <section class="screen"> wrapper as the Logbook, so it renders under the
+// same topbar (including the "+" add-habit button) rather than as a popup
+// layered over it.
+function renderAllHabitsScreen(){
+  var html = '<section class="screen">';
   html += renderHabitGroup("daily", 'Daily <span style="text-transform:lowercase">r</span>Habbits');
   if(state.unlocks.second_garden || countActive(state,"weekly")>0){
     html += renderHabitGroup("weekly", 'Weekly <span style="text-transform:lowercase">r</span>Habbits');
@@ -2580,8 +2584,7 @@ function renderAllHabitsModal(){
   if(state.unlocks.second_garden || countActive(state,"onceoff")>0 || state.habits.some(function(h){return h.type==="onceoff";})){
     html += renderHabitGroup("onceoff","Once-off Tasks");
   }
-
-  html += '</div></div>';
+  html += '</section>';
   return html;
 }
 
@@ -2590,7 +2593,7 @@ function renderHabitGroup(type, label){
   if(habits.length===0) return '';
   habits = sortHabitsForDisplay(type, habits);
   var html = '<div class="section-label">'+label+'</div>';
-  // One rHabbit per row (see .habit-grid), used from renderAllHabitsModal().
+  // One rHabbit per row (see .habit-grid), used from renderAllHabitsScreen().
   html += '<div class="habit-grid">';
   habits.forEach(function(h){ html += renderHabitCard(h); });
   html += '</div>';
@@ -2971,7 +2974,7 @@ function renderHabitCard(h){
   // and opening detail).
   // No type-badge span here -- these rows either render inside a
   // renderHabitGroup() section already headed "Daily rHabbits" / "Weekly
-  // rHabbits" / etc. (see renderAllHabitsModal()), or inside the Logbook's
+  // rHabbits" / etc. (see renderAllHabitsScreen()), or inside the Logbook's
   // own Missed/Due Today grouping (see renderLogbookScreen()), so repeating
   // the type on every single card would be redundant either way.
   // habitTypeBadge() is still used by the habit detail modal, where the
@@ -3515,9 +3518,10 @@ function renderRewardDetailModal(id){
 
 // List popup for the "Special days" card -- bottom sheet like habit-detail/
 // add-habit (reached from an inline row tap, not a top-right topbar icon,
-// so unlike renderAllHabitsModal() above it doesn't need the centered
-// variant). The "+" sits in the header next to close, same layout renderProfileModal()
-// already uses for pairing an extra header action with the close button.
+// so it doesn't need the centered variant -- see the .modal-backdrop.center
+// comment above). The "+" sits in the header next to close, same layout
+// renderProfileModal() already uses for pairing an extra header action with
+// the close button.
 function renderSpecialDaysModal(){
   var html = '<div class="modal-backdrop" data-backdrop="special-days">';
   html += '<div class="modal">';
@@ -3616,7 +3620,6 @@ function renderModals(){
   if(state.screen==="habit-alarm-modal"){ html += renderHabitAlarmModal(state._detailHabitId); }
   if(state.screen==="reward-detail-modal"){ html += renderRewardDetailModal(state._detailRewardId); }
   if(state.screen==="sightings-gallery-modal"){ html += renderSightingsGalleryModal(); }
-  if(state.screen==="all-habits-modal"){ html += renderAllHabitsModal(); }
   if(state.screen==="special-days-modal"){ html += renderSpecialDaysModal(); }
   if(state.screen==="special-day-form-modal"){ html += renderSpecialDayFormModal(); }
   if(state.screen==="next-rewards-detail-modal"){ html += renderNextRewardsDetailModal(); }
@@ -4223,7 +4226,10 @@ function onAction(e){
       navigateTo(function(){ state.screen = "sightings-gallery-modal"; });
       break;
     case "show-all-habits":
-      navigateTo(function(){ state.screen = "all-habits-modal"; });
+      navigateTo(function(){ state.screen = "all-habits"; });
+      break;
+    case "show-logbook":
+      navigateTo(function(){ state.screen = "logbook"; });
       break;
     case "show-special-days":
       navigateTo(function(){ state.screen = "special-days-modal"; });
