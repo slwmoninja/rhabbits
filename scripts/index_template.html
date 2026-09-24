@@ -422,6 +422,18 @@ img{max-width:100%; display:block;}
    shrink below the text's natural width") -- without it the name refuses
    to shrink at all and the ellipsis below never actually kicks in. */
 .habit-grid .habit-name{white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0;}
+/* Marks which specific occurrence this row is for (see renderHabitCard()'s
+   occDate param) -- only present when a weekly habit has more than one
+   outstanding occurrence at once (e.g. a missed Tuesday and a due Thursday
+   each get their own row/checkbox in the Logbook), so the two rows don't
+   read as duplicates of each other. Sits inline after the name rather than
+   popped off the card corner like .habit-next-due, since it's read as part
+   of "what is this row" rather than a secondary detail. */
+.habit-grid .habit-occ-label{
+  flex-shrink:0; font-size:.62rem; font-weight:700; line-height:1; white-space:nowrap;
+  padding:2px 6px; border-radius:7px; color:var(--wood);
+  background:var(--parchment-hi); border:1.5px solid var(--parchment-edge);
+}
 /* Badge look for both corner icons -- filled circle, its own border and
    drop shadow -- so they read as notifications sitting on top of the card
    rather than card content, matching how an unread-count badge sits on an
@@ -569,7 +581,7 @@ img{max-width:100%; display:block;}
 .day-pip-col .day-pip{width:100%; flex:none;}
 .day-pip-label{font-size:.6rem; font-weight:700; text-transform:uppercase; letter-spacing:.03em; color:var(--wood);}
 /* A weekly day-pip that's past its scheduled date, still unlogged, and the
-   player opted to keep it active (see habitWeeklyMissedYesterday()) -- same
+   player opted to keep it active (see habitWeeklyMissedDatesToPrompt()) -- same
    "passed due" warm-red language as .habit-meta.overdue, distinct from the
    plain unfilled/.done states so it doesn't read as just another empty day. */
 .day-pip.missed-kept{background:rgba(198,93,45,.18); color:var(--carrot-deep); outline:2px solid var(--carrot-deep); outline-offset:1px;}
@@ -957,7 +969,7 @@ var STORAGE_KEY = "rhabbits_state_v1";
 // every future code change to this file so a reload can be visually
 // confirmed against what was actually deployed. Distinct from any
 // data-schema/localStorage version (this app has none yet).
-var APP_VERSION = "1.0+3ada5857";
+var APP_VERSION = "1.0+9ef7f719";
 // Sorted into one logical sequence -- nature, sleep/wake, fitness/routine
 // (including female-presenting variants), pirate/nautical, animals (dogs'
 // own toys grouped right after the dog breeds), then beauty/spa/self-care
@@ -2493,24 +2505,24 @@ function habitProgressPipsHtml(h){
   return '<div class="habit-progress-pips">'+carrotPipsHtml(Math.min(h.completions.length,7), 7)+'</div>';
 }
 
-// Every outstanding occurrence from dueOccurrences() (see there), collapsed
-// from one-row-per-occurrence down to one-row-per-HABIT -- the Logbook
-// below renders full habit cards (renderHabitCard()), not the flat
-// per-occurrence rows the old Due Today modal used, so a weekly habit with
-// both a missed day and a due-today day this week only needs the one card,
-// filed under Missed since that's the more urgent bucket. Once-off habits
-// past their due date are folded in as Missed too -- dueOccurrences() never
-// flags those `missed` itself (see its own comment), so onceoffPastDue()
-// covers that case here.
+// Every outstanding occurrence from dueOccurrences() (see there), one row
+// per occurrence rather than collapsed to one row per habit -- users check
+// things off from this default Logbook view, so a weekly habit with both a
+// missed Tuesday and a due-today Thursday needs two independent rows here,
+// each its own checkbox (see renderLogbookScreen()/renderHabitCard()'s
+// occDate param), not folded into a single card the way the roster view
+// (renderAllHabitsScreen()) still does. Monthly/annual never have more than
+// one outstanding occurrence at once (a fixed single due-day per period), so
+// this naturally still produces just one row for those -- filed under
+// Missed instead of Due Today, same as before. Once-off habits past their
+// due date are folded in as Missed too -- dueOccurrences() never flags those
+// `missed` itself (see its own comment), so onceoffPastDue() covers that
+// case here.
 function homeMissedAndDue(){
-  var missedIds = {}, dueIds = {};
-  dueOccurrences(state).forEach(function(o){
-    if(o.missed) missedIds[o.habit.id] = true; else dueIds[o.habit.id] = true;
-  });
   var missed = [], due = [];
-  state.habits.forEach(function(h){
-    if(missedIds[h.id] || (h.type==="onceoff" && onceoffPastDue(h))) missed.push(h);
-    else if(dueIds[h.id]) due.push(h);
+  dueOccurrences(state).forEach(function(o){
+    var isMissed = o.missed || (o.habit.type==="onceoff" && onceoffPastDue(o.habit));
+    (isMissed ? missed : due).push(o);
   });
   return {missed:missed, due:due};
 }
@@ -2546,13 +2558,13 @@ function renderLogbookScreen(){
   var md = homeMissedAndDue();
   if(md.missed.length){
     html += '<div class="section-label">Missed</div><div class="habit-grid">';
-    md.missed.forEach(function(h){ html += renderHabitCard(h); });
+    md.missed.forEach(function(o){ html += renderHabitCard(o.habit, o.habit.type==="weekly" ? o.date : undefined); });
     html += '</div>';
   }
   html += '<div class="section-label">Due Today</div>';
   if(md.due.length){
     html += '<div class="habit-grid">';
-    md.due.forEach(function(h){ html += renderHabitCard(h); });
+    md.due.forEach(function(o){ html += renderHabitCard(o.habit, o.habit.type==="weekly" ? o.date : undefined); });
     html += '</div>';
   } else {
     html += '<p class="due-today-empty">'+(md.missed.length ? 'Nothing else due today.' : 'Nothing due right now -- nice work!')+'</p>';
@@ -2924,16 +2936,28 @@ function habitWeekFullyLogged(h){
   }
   return true;
 }
-function renderHabitCard(h){
-  var multiDayWeekly = h.type==="weekly" && habitWeeklyDays(h).length>1;
-  var logged = multiDayWeekly ? habitWeekFullyLogged(h) : habitLogged(h);
+// occDate is only passed for a weekly habit's row in the Logbook's Missed/
+// Due Today lists (see homeMissedAndDue()/renderLogbookScreen()) -- it makes
+// this ONE specific outstanding occurrence (a missed Tuesday, say) its own
+// row/checkbox, independent of any other occurrence the same habit has this
+// week (an already-due Thursday), rather than collapsing them into a single
+// per-habit row the way every other call site here (the "all habits" roster,
+// see renderAllHabitsScreen()) still does. Every other habit type only ever
+// has one outstanding occurrence at a time, so they don't need this.
+function renderHabitCard(h, occDate){
+  var isOcc = h.type==="weekly" && !!occDate;
+  var multiDayWeekly = h.type==="weekly" && habitWeeklyDays(h).length>1 && !isOcc;
+  var logged = isOcc ? (h.completions.indexOf(occDate)!==-1)
+    : (multiDayWeekly ? habitWeekFullyLogged(h) : habitLogged(h));
   // Reuses the same habitDueToday() check that drives the Logbook's Due
   // Today grouping (see homeMissedAndDue()) so a due-but-unlogged habit gets
   // the same mini-calendar glyph here on its own row (see dueTodayIconHtml())
   // -- it disappears the moment the habit is logged (statusInner falls back
   // to the done checkmark), so there's no separate "clear the icon" step
-  // needed.
-  var dueToday = !logged && habitDueToday(h);
+  // needed. An occurrence row is definitionally due/missed by construction
+  // (it only exists because dueOccurrences() flagged that exact date
+  // outstanding), so it skips the habitDueToday() re-check entirely.
+  var dueToday = !logged && (isOcc || habitDueToday(h));
   var statusCls = 'habit-status '+(logged?'done':(dueToday?'due':'idle'));
   var statusInner = logged ? '✓' : (dueToday ? dueTodayIconHtml() : '');
   // "every" only toggles safely from here while due -- toggleEvery() always
@@ -2947,11 +2971,22 @@ function renderHabitCard(h){
   // Multi-day weekly is excluded outright -- see habitWeekFullyLogged()'s
   // comment -- and single-day weekly only toggles while its one day is
   // actually due or already logged, same stray-completion guard as "every".
-  var canToggle = (h.type!=="every" || habitEveryDue(h))
+  // An occurrence row always toggles -- occDate is always a real scheduled/
+  // missed date by construction, same guarantee canToggle exists to enforce
+  // for the non-occurrence path.
+  var canToggle = isOcc || (
+    (h.type!=="every" || habitEveryDue(h))
     && !multiDayWeekly
-    && (h.type!=="weekly" || habitDueToday(h) || logged);
+    && (h.type!=="weekly" || habitDueToday(h) || logged)
+  );
+  // toggle-weekly-day (see onAction()) targets the exact date tapped, same
+  // action the detail modal's per-day pips already use -- toggle-weekly
+  // instead resolves one date itself via weeklyPrimaryActionDate(), which is
+  // right for a plain per-habit row but would ignore occDate here.
+  var toggleAction = isOcc ? 'toggle-weekly-day' : HABIT_TOGGLE_ACTION[h.type];
+  var dateAttr = isOcc ? ' data-date="'+occDate+'"' : '';
   var status = canToggle
-    ? '<button class="'+statusCls+'" data-action="'+HABIT_TOGGLE_ACTION[h.type]+'" data-id="'+h.id+'" aria-label="'+(logged?'Mark not done':'Mark done')+'">'+statusInner+'</button>'
+    ? '<button class="'+statusCls+'" data-action="'+toggleAction+'" data-id="'+h.id+'"'+dateAttr+' aria-label="'+(logged?'Mark not done':'Mark done')+'">'+statusInner+'</button>'
     : '<span class="'+statusCls+'">'+statusInner+'</span>';
   // Alarm is set from inside the habit detail modal (renderHabitDetailModal())
   // -- this row only shows a small green indicator when one is set. Always
@@ -2963,8 +2998,22 @@ function renderHabitCard(h){
   // Weekly/monthly/annual/once-off only (see habitNextDueDate()) -- tucked
   // into the bottom-right corner the same way alarm/status float off the
   // top corners, so it costs the card no extra height/width of its own.
-  var nextDue = habitNextDueDate(h);
+  // Suppressed on an occurrence row -- occLabelHtml below already states
+  // this row's own date, and habitNextDueDate() answers a different
+  // question ("next upcoming scheduled date") that would just read as a
+  // second, confusing date badge next to it.
+  var nextDue = isOcc ? null : habitNextDueDate(h);
   var nextDueHtml = nextDue ? '<span class="habit-next-due">'+shortDateLabel(nextDue)+'</span>' : '';
+  // Distinguishes this row from any sibling occurrence row of the SAME
+  // habit (e.g. a missed Tuesday next to today's Thursday) -- without it,
+  // two rows with the same emoji/name would be indistinguishable at a
+  // glance. "Missed" mirrors weeklyPrimaryActionDate()'s "(missed)" suffix
+  // used elsewhere for the same concept.
+  var occLabelHtml = '';
+  if(isOcc){
+    var occLbl = occDate===todayStr() ? 'Today' : SPECIAL_DAY_WEEKDAY_ABBR[new Date(occDate+"T00:00:00").getDay()]+' (missed)';
+    occLabelHtml = '<span class="habit-occ-label">'+occLbl+'</span>';
+  }
   // A <div>, not a <button>, now that it wraps the status circle's own
   // <button> above -- a button can't nest another button. Still carries
   // data-action/data-id so the existing generic [data-action] click wiring
@@ -2988,6 +3037,7 @@ function renderHabitCard(h){
       '<div class="habit-row-main">' +
         '<span class="habit-emoji">'+h.emoji+'</span>' +
         '<span class="habit-name">'+escapeHtml(h.name)+'</span>' +
+        occLabelHtml +
       '</div>' +
       nextDueHtml +
     '</div>'
@@ -4737,10 +4787,14 @@ function maybeConfirmOnceoffPastDue(h){
 }
 // A monthly/annual habit ("every" with a fixed annualMonth/Day) whose fixed
 // due-day was yesterday, wasn't logged, and has already dropped back out of
-// habitDueToday() today because today isn't itself a scheduled day -- the
-// one-day window in which asking "keep it active?" is still useful, before
-// the player has any reason to think the miss went unnoticed. Weekly is
-// excluded -- it has its own per-day equivalent, habitWeeklyMissedYesterday()
+// habitDueToday() today because today isn't itself a scheduled day. Scans
+// back to the start of the CURRENT period (not just yesterday) so a catch-up
+// offer still surfaces even if the app wasn't opened the day right after the
+// miss -- e.g. only opening the app on Saturday still offers to keep a
+// Tuesday miss active, same as opening it Wednesday would have. The period
+// itself is what naturally resets this: once the month/year rolls over,
+// habitPeriodToken() no longer matches and the old miss is moot. Weekly is
+// excluded -- it has its own per-day equivalent, habitWeeklyMissedDatesToPrompt()
 // below, since a single period-level flag can't represent "which of several
 // scheduled days this week was missed."
 function habitMissedYesterday(h){
@@ -4750,31 +4804,41 @@ function habitMissedYesterday(h){
   if(habitCompletedThisPeriod(h)) return false;
   if(h.periodOverride===token) return false; // already opted in this period
   if(h.periodPrompted===token) return false; // already asked (yes or no) this period
-  var yesterday = new Date(); yesterday.setDate(yesterday.getDate()-1);
-  if(habitPeriodToken(h, yesterday)!==token) return false; // period already turned over
-  if(!habitDueOnDate(h, yesterday)) return false; // yesterday wasn't even a scheduled day
   if(habitDueOnDate(h, new Date())) return false; // still due today anyway, nothing to offer
-  return true;
+  // Walk backward from yesterday to the start of the period, stopping as
+  // soon as we leave the current period token (a prior month/year's due
+  // date is already moot, not a catch-up candidate).
+  for(var back=1; back<=366; back++){
+    var d = new Date(); d.setDate(d.getDate()-back);
+    if(habitPeriodToken(h, d)!==token) return false; // walked out of the current period
+    if(habitDueOnDate(h, d)) return true; // found this period's missed due date
+  }
+  return false;
 }
-// Weekly equivalent of habitMissedYesterday() above, but per specific missed
-// date rather than per period -- so a habit scheduled Tue+Thu can be asked
-// about (and independently keep active) a missed Tuesday without that
-// swallowing a later missed Thursday's own prompt, and vice versa.
-// Unlike habitMissedYesterday() above, this deliberately has NO "still due
-// today anyway, nothing to offer" guard -- for monthly/annual that guard is
-// effectively a no-op (there's only one due day per period, so it can't
-// also be true the day right after a miss), but for weekly it would be a
-// real bug: a Wed+Thu habit missing Wed has today (Thu) genuinely due at
-// the same time, and both need their own independent prompt/surface (see
-// dueOccurrences()) rather than the Wed miss being silently swallowed just
-// because Thu also happens to be due.
-function habitWeeklyMissedYesterday(h){
-  var yesterday = new Date(); yesterday.setDate(yesterday.getDate()-1);
-  if(!habitDueOnDate(h, yesterday)) return false; // yesterday wasn't a scheduled day
-  var ds = localDateStr(yesterday);
-  if(h.completions.indexOf(ds)!==-1) return false; // already logged (possibly backdated via catch-up)
-  if((h.missedDaysPrompted||[]).indexOf(ds)!==-1) return false; // already asked (yes or no) about this date
-  return true;
+// Weekly equivalent of habitMissedYesterday() above, but returns every
+// missed scheduled date so far this week (oldest first) rather than a single
+// yes/no -- so a habit scheduled Tue+Thu can be asked about (and
+// independently keep active) a missed Tuesday without that swallowing a
+// later missed Thursday's own prompt, and vice versa. Scans from this week's
+// Monday rather than just yesterday, for the same "app wasn't opened the
+// very next day" reason as habitMissedYesterday() above -- opening the app
+// for the first time on Saturday still surfaces both a missed Tuesday and a
+// missed Thursday. Today itself is deliberately excluded: today's own due
+// date isn't a "miss" yet, it's just normally due (see dueOccurrences()).
+function habitWeeklyMissedDatesToPrompt(h){
+  var out = [];
+  var mon = currentWeekMonday();
+  var todayDs = todayStr();
+  for(var i=0;i<7;i++){
+    var d = new Date(mon); d.setDate(mon.getDate()+i);
+    var ds = localDateStr(d);
+    if(ds>=todayDs) break; // stop before today -- not a miss yet
+    if(!habitDueOnDate(h, d)) continue;
+    if(h.completions.indexOf(ds)!==-1) continue; // already logged (possibly backdated)
+    if((h.missedDaysPrompted||[]).indexOf(ds)!==-1) continue; // already asked about this date
+    out.push(ds);
+  }
+  return out;
 }
 function periodNoun(h){
   if(h.type==="weekly") return "week";
@@ -4787,12 +4851,12 @@ function periodNoun(h){
 // date-of-week can be prompted about again next time it's missed.
 //
 // Deliberately NOT "still within the current ISO week" (Mon-Sun) as this
-// used to compare -- that broke Sat/Sun misses specifically: you're always
-// asked about a miss the *next* day (see habitWeeklyMissedYesterday()), so
-// a Sunday miss is only ever prompted on Monday, which is already a new
-// ISO week -- answering "yes, keep it active" recorded an override that
-// was stale the instant it was created, wiped on the very next load. A
-// Saturday miss fared only slightly better, surviving a single day
+// used to compare -- that broke Sat/Sun misses specifically: even now that
+// habitWeeklyMissedDatesToPrompt() scans back to Monday instead of just
+// yesterday, a Sunday miss can still only ever be prompted starting Monday,
+// which is already a new ISO week -- answering "yes, keep it active" would
+// record an override that's stale the instant it's created, wiped on the
+// very next load. A Saturday miss fared only slightly better, surviving a single day
 // (Sunday) before Monday's load pruned it too. A flat 7-day-old cutoff
 // gives every day of the week the same real grace period regardless of
 // where it falls relative to the ISO week boundary.
@@ -4832,9 +4896,13 @@ function checkMissedPeriodicHabits(afterward){
   var queue = [];
   state.habits.forEach(function(h){
     if(h.type==="weekly"){
-      if(!habitWeeklyMissedYesterday(h)) return;
-      var yesterday = new Date(); yesterday.setDate(yesterday.getDate()-1);
-      queue.push({h:h, weekly:true, ds:localDateStr(yesterday)});
+      // One queue entry per missed date, not per habit -- a Tue+Thu habit
+      // first opened Saturday after missing both needs two independent
+      // yes/no offers (see habitWeeklyMissedDatesToPrompt()), same as it
+      // would have gotten one at a time on consecutive days.
+      habitWeeklyMissedDatesToPrompt(h).forEach(function(ds){
+        queue.push({h:h, weekly:true, ds:ds});
+      });
       return;
     }
     if(!habitMissedYesterday(h)) return;
@@ -4846,9 +4914,13 @@ function runMissedPeriodicQueue(queue, afterward){
   if(!queue.length){ if(afterward) afterward(); return; }
   var item = queue.shift();
   var h = item.h;
-  var title = h.emoji+" "+escapeHtml(h.name);
   if(item.weekly){
     var ds = item.ds;
+    // Weekday abbreviation in the title disambiguates back-to-back prompts
+    // for the same habit (e.g. a Tue miss followed by a Thu miss) since the
+    // message text alone doesn't name which date it's asking about.
+    var wLabel = SPECIAL_DAY_WEEKDAY_ABBR[new Date(ds+"T00:00:00").getDay()];
+    var title = h.emoji+" "+escapeHtml(h.name)+" ("+wLabel+")";
     if(!h.missedDaysPrompted) h.missedDaysPrompted = [];
     h.missedDaysPrompted.push(ds);
     confirmYesNo(title, "Looks like you missed it. Keep it active as due until the week ends?", function(yes){
@@ -4861,6 +4933,7 @@ function runMissedPeriodicQueue(queue, afterward){
     });
     return;
   }
+  var title = h.emoji+" "+escapeHtml(h.name);
   h.periodPrompted = habitPeriodToken(h);
   confirmYesNo(title, "Looks like you missed it. Keep it active as due until the "+periodNoun(h)+" ends?", function(yes){
     if(yes) h.periodOverride = h.periodPrompted;
