@@ -969,7 +969,7 @@ var STORAGE_KEY = "rhabbits_state_v1";
 // every future code change to this file so a reload can be visually
 // confirmed against what was actually deployed. Distinct from any
 // data-schema/localStorage version (this app has none yet).
-var APP_VERSION = "1.0+9ef7f719";
+var APP_VERSION = "1.0+8ecd633a";
 // Sorted into one logical sequence -- nature, sleep/wake, fitness/routine
 // (including female-presenting variants), pirate/nautical, animals (dogs'
 // own toys grouped right after the dog breeds), then beauty/spa/self-care
@@ -4846,23 +4846,27 @@ function periodNoun(h){
   return "year";
 }
 // Run once per load, before checkMissedPeriodicHabits() -- drops any
-// missedDaysOverride/missedDaysPrompted date older than a rolling 7 days
-// so it can't keep marking the habit "due" forever, and so the exact same
-// date-of-week can be prompted about again next time it's missed.
+// missedDaysOverride/missedDaysPrompted date from a now-finished week, so a
+// missed Tue/Thu stops showing in Missed once the week it belongs to ends
+// (Monday morning), not days later, and so the exact same date-of-week can
+// be prompted about again next time it's missed.
 //
-// Deliberately NOT "still within the current ISO week" (Mon-Sun) as this
-// used to compare -- that broke Sat/Sun misses specifically: even now that
-// habitWeeklyMissedDatesToPrompt() scans back to Monday instead of just
-// yesterday, a Sunday miss can still only ever be prompted starting Monday,
-// which is already a new ISO week -- answering "yes, keep it active" would
-// record an override that's stale the instant it's created, wiped on the
-// very next load. A Saturday miss fared only slightly better, surviving a single day
-// (Sunday) before Monday's load pruned it too. A flat 7-day-old cutoff
-// gives every day of the week the same real grace period regardless of
-// where it falls relative to the ISO week boundary.
+// This used to compare against a flat rolling 7-day-old cutoff instead of
+// the current ISO week (Mon-Sun), specifically to dodge a Sat/Sun bug: an
+// override's date always comes from habitWeeklyMissedDatesToPrompt()'s scan,
+// which at the time only checked yesterday, so a Sunday miss could only
+// ever be prompted on Monday -- already a new ISO week -- making "yes, keep
+// it active" stale the instant it was recorded. That scan was later widened
+// to cover the whole week-so-far (see habitWeeklyMissedDatesToPrompt()),
+// which guarantees an override's date is always still within the *current*
+// week at the moment it's created -- so that staleness can no longer
+// happen, and the flat 7-day cutoff was just overshooting the real week
+// boundary by up to 6 days instead (a missed Tuesday lingering until the
+// following Tuesday rather than clearing out the preceding Monday). Back to
+// a straight ISO-week cutoff, via the same currentWeekMonday() the scan
+// itself uses.
 function pruneWeeklyMissedDays(){
-  var cutoff = new Date(); cutoff.setDate(cutoff.getDate()-6);
-  var cutoffStr = localDateStr(cutoff);
+  var cutoffStr = localDateStr(currentWeekMonday());
   state.habits.forEach(function(h){
     if(h.type!=="weekly") return;
     if(Array.isArray(h.missedDaysOverride)){
